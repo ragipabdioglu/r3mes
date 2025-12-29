@@ -1,0 +1,92 @@
+syntax = "proto3";
+package remes.remes.v1;
+
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "remes/x/remes/types";
+
+// SlashingAppeal represents an appeal for a slashing decision
+message SlashingAppeal {
+  // appeal_id is the unique identifier for this appeal
+  string appeal_id = 1;
+  
+  // slashed_node is the address of the slashed node
+  string slashed_node = 2;
+  
+  // slashing_reason is the original reason for slashing
+  string slashing_reason = 3;
+  
+  // appeal_reason is the reason for the appeal
+  string appeal_reason = 4;
+  
+  // evidence_ipfs_hash is the IPFS hash of evidence supporting the appeal
+  string evidence_ipfs_hash = 5;
+  
+  // created_at_height is the block height when appeal was created
+  int64 created_at_height = 6;
+  
+  // status is the appeal status (pending, approved, rejected)
+  string status = 7;
+  
+  // cpu_verification_result is the result of CPU Iron Sandbox verification
+  bool cpu_verification_result = 8;
+  
+  // resolution_height is the block height when appeal was resolved
+  int64 resolution_height = 9;
+}
+
+// ValidatorVerificationRecord tracks validator verification activity
+message ValidatorVerificationRecord {
+  // validator_address is the address of the validator
+  string validator_address = 1;
+  
+  // total_verifications is the total number of verifications performed
+  uint64 total_verifications = 2;
+  
+  // successful_verifications is the number of successful verifications
+  uint64 successful_verifications = 3;
+  
+  // false_verdicts is the number of false verdicts (malicious validation)
+  uint64 false_verdicts = 4;
+  
+  // lazy_validation_count is the number of lazy validation incidents
+  uint64 lazy_validation_count = 5;
+  
+  // last_verification_height is the block height of the last verification
+  int64 last_verification_height = 6;
+}
+
+// ProposerCensorshipRecord tracks proposer censorship activity
+message ProposerCensorshipRecord {
+  // proposer_address is the address of the proposer
+  string proposer_address = 1;
+  
+  // total_aggregations is the total number of aggregations proposed
+  uint64 total_aggregations = 2;
+  
+  // censored_gradients is the number of valid gradients excluded from aggregations
+  uint64 censored_gradients = 3;
+  
+  // last_aggregation_height is the block height of the last aggregation
+  int64 last_aggregation_height = 4;
+}
+
+// MentorRelationship represents a mentor-mentee relationship
+message MentorRelationship {
+  // mentor_address is the address of the mentor
+  string mentor_address = 1;
+  
+  // mentee_address is the address of the mentee (new miner)
+  string mentee_address = 2;
+  
+  // reduced_stake_percentage is the reduced stake requirement for mentee (e.g., 50% = 0.5)
+  string reduced_stake_percentage = 3;
+  
+  // created_at_height is the block height when relationship was created
+  int64 created_at_height = 4;
+  
+  // status is the relationship status (active, completed, terminated)
+  string status = 5;
+}
+

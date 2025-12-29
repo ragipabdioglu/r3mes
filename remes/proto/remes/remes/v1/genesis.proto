@@ -1,0 +1,44 @@
+syntax = "proto3";
+package remes.remes.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+import "remes/remes/v1/params.proto";
+import "remes/remes/v1/stored_gradient.proto";
+import "remes/remes/v1/model.proto";
+import "remes/remes/v1/genesis_vault.proto";
+
+option go_package = "remes/x/remes/types";
+
+// GenesisState defines the remes module's genesis state.
+message GenesisState {
+  // params defines all the parameters of the module.
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+
+  // model_hash is the IPFS hash of the initial BitNet model parameters
+  // DEPRECATED: Use model_registry_list instead. Kept for backward compatibility.
+  string model_hash = 2;
+
+  // model_version is the initial model version (e.g., "v1.0.0")
+  // DEPRECATED: Use model_registry_list instead. Kept for backward compatibility.
+  string model_version = 3;
+
+  // initial_participants are the addresses of initial mining participants
+  repeated string initial_participants = 4;
+
+  // stored_gradient_list is the list of stored gradients at genesis
+  repeated StoredGradient stored_gradient_list = 5 [(gogoproto.nullable) = false];
+
+  // model_registry_list is the list of approved model configurations
+  // This replaces the hard-coded BitNet model_hash and model_version
+  // Genesis handler will automatically create ModelRegistry from model_hash/model_version if model_registry_list is empty (backward compatibility)
+  repeated ModelRegistry model_registry_list = 6 [(gogoproto.nullable) = false];
+
+  // genesis_vault_list is the list of initial trap job entries in the genesis vault
+  // Used for Proof of Reuse + Ghost Jobs system (Tolerant Verification)
+  // These entries are pre-computed trap jobs that can be used for lazy mining detection
+  repeated GenesisVaultEntry genesis_vault_list = 7 [(gogoproto.nullable) = false];
+}

@@ -1,0 +1,32 @@
+syntax = "proto3";
+package remes.remes.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "remes/x/remes/types";
+
+// Treasury manages protocol revenue and buy-back operations
+message Treasury {
+  option (amino.name) = "remes/x/remes/Treasury";
+  option (gogoproto.equal) = true;
+
+  // balance is the current treasury balance
+  string balance = 1; // sdk.Coin format
+
+  // buy_back_threshold is the minimum balance before triggering buy-back
+  string buy_back_threshold = 2; // e.g., "1000000remes"
+
+  // burn_fraction is the fraction of buy-back to burn (e.g., "1.0" = 100%)
+  string burn_fraction = 3;
+
+  // last_buy_back_height is when the last buy-back occurred
+  int64 last_buy_back_height = 4;
+
+  // buy_back_interval is the minimum blocks between buy-backs
+  int64 buy_back_interval = 5; // e.g., 10000 blocks (~14 hours at 5s/block)
+
+  // total_burned tracks cumulative burned tokens
+  string total_burned = 6; // sdk.Coin format
+}
+
