@@ -1,0 +1,67 @@
+{
+  "name": "@r3mes/sdk",
+  "version": "0.1.0",
+  "description": "Official JavaScript/TypeScript SDK for R3MES - Decentralized AI Training Network",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc && tsc -p tsconfig.esm.json",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "r3mes",
+    "blockchain",
+    "ai",
+    "sdk",
+    "cosmos",
+    "decentralized",
+    "machine-learning",
+    "federated-learning"
+  ],
+  "author": "R3MES Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/r3mes/sdk-js"
+  },
+  "bugs": {
+    "url": "https://github.com/r3mes/sdk-js/issues"
+  },
+  "homepage": "https://r3mes.network",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "@types/jest": "^29.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  },
+  "peerDependencies": {
+    "@cosmjs/stargate": "^0.32.0"
+  },
+  "peerDependenciesMeta": {
+    "@cosmjs/stargate": {
+      "optional": true
+    }
+  }
+}
+

@@ -1,0 +1,52 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Version to rollback to (leave empty for previous version)'
+        required: false
+        type: string
+
+jobs:
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Determine rollback version
+        id: version
+        run: |
+          if [ -z "${{ github.event.inputs.version }}" ]; then
+            # Get previous version from deployment history
+            VERSION="previous"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Create backup before rollback
+        run: |
+          echo "Creating backup before rollback..."
+          # Add backup commands here
+      
+      - name: Rollback deployment
+        run: |
+          echo "Rolling back to version ${{ steps.version.outputs.version }}..."
+          # Add rollback commands here
+      
+      - name: Verify rollback
+        run: |
+          echo "Verifying rollback..."
+          # Add verification commands here

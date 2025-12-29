@@ -1,0 +1,14 @@
+name: Security Scan
+
+# Devre dışı - sadece manuel tetikleme
+on:
+  workflow_dispatch:
+
+jobs:
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Info
+        run: echo "Security scan workflow - manual trigger only"

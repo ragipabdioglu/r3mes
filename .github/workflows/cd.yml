@@ -1,0 +1,33 @@
+name: CD
+
+# Sadece manuel tetikleme
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+# Tag push devre dışı
+# on:
+#   push:
+#     tags:
+#       - 'v*'
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy info
+        run: |
+          echo "Manual deployment triggered for ${{ github.event.inputs.environment }}"
+          echo "This workflow is currently disabled for automatic deployments."

@@ -1,0 +1,19 @@
+name: Build Engine Executable
+
+# Devre dışı - sadece manuel tetikleme
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Engine version'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  build:
+    name: Build Engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Info
+        run: echo "Engine build workflow - manual trigger only"

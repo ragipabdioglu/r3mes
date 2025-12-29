@@ -1,0 +1,3 @@
+{{- with secret "secret/data/r3mes/postgres" -}}
+postgresql://{{ .Data.data.user }}:{{ .Data.data.password }}@{{ .Data.data.host }}:{{ .Data.data.port }}/{{ .Data.data.database }}
+{{- end -}}

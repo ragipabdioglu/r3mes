@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: r3mes-backend
+  namespace: r3mes
+  labels:
+    app: r3mes-backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: r3mes-backend
+

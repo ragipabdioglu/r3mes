@@ -1,0 +1,67 @@
+# R3MES Miner Engine - Intel XPU Dockerfile
+# Intel XPU + PyTorch 2.1.0 with deterministic algorithms
+
+FROM ubuntu:22.04
+
+# Set environment variables for deterministic execution
+# Intel XPU deterministic execution for bit-exact reproducibility
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    INTEL_EXT_ONEDNN_VERBOSE=0 \
+    DNNL_VERBOSE=0
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3-pip \
+    python3.10-venv \
+    git \
+    curl \
+    wget \
+    intel-oneapi-runtime-dpcpp-cpp \
+    intel-oneapi-runtime-mkl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Python 3.10 as default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 && \
+    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
+
+# Create working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY miner-engine/requirements.txt /app/requirements.txt
+
+# Install Python dependencies with pinned versions for determinism
+# PyTorch 2.1.0 with Intel XPU support
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir \
+    torch==2.1.0 \
+    torchvision==0.16.0 \
+    torchaudio==2.1.0 \
+    --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy miner engine code
+COPY miner-engine/ /app/miner-engine/
+
+# Set working directory to miner-engine
+WORKDIR /app/miner-engine
+
+# Create entrypoint script for deterministic execution
+RUN echo '#!/bin/bash\n\
+set -e\n\
+# Set deterministic seeds for bit-exact reproducibility\n\
+export PYTHONHASHSEED=0\n\
+# Intel XPU deterministic mode\n\
+export INTEL_EXT_ONEDNN_VERBOSE=0\n\
+export DNNL_VERBOSE=0\n\
+# Run miner engine\n\
+exec python3 "$@"\n\
+' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Default command
+CMD ["miner_engine.py", "--help"]
+

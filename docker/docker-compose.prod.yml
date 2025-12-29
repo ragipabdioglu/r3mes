@@ -1,0 +1,694 @@
+version: '3.8'
+
+# Production Docker Compose - Unified Stack with Docker Secrets
+# Usage: docker-compose -f docker-compose.prod.yml up -d
+# With miner: docker-compose -f docker-compose.prod.yml --profile miner up -d
+#
+# IMPORTANT: Create secrets first using:
+#   bash scripts/create_secrets.sh
+# or
+#   bash scripts/create_secrets_from_env.sh
+#
+# IMPORTANT: Set R3MES_NETWORK environment variable (testnet or mainnet)
+#   export R3MES_NETWORK=testnet  # or mainnet
+#   docker-compose -f docker-compose.prod.yml up -d
+#
+# IMPORTANT: Use the correct .env file:
+#   - For testnet: Copy env.testnet.example to .env.production
+#   - For mainnet: Copy env.production.example to .env.production
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: r3mes-postgres-prod
+    secrets:
+      - postgres_password
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-r3mes}
+      POSTGRES_DB: ${POSTGRES_DB:-r3mes}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - postgres_backup:/backups
+    networks:
+      - r3mes-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-r3mes}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+    entrypoint: >
+      sh -c "
+        export POSTGRES_PASSWORD=$$(cat /run/secrets/postgres_password);
+        exec docker-entrypoint.sh postgres
+        -c shared_buffers=256MB
+        -c effective_cache_size=1GB
+        -c maintenance_work_mem=64MB
+        -c checkpoint_completion_target=0.9
+        -c wal_buffers=16MB
+        -c default_statistics_target=100
+        -c random_page_cost=1.1
+        -c effective_io_concurrency=200
+        -c work_mem=4MB
+        -c min_wal_size=1GB
+        -c max_wal_size=4GB
+        -c max_connections=200
+      "
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: r3mes-redis-prod
+    secrets:
+      - redis_password
+    command: >
+      sh -c "
+        REDIS_PASS=$$(cat /run/secrets/redis_password);
+        exec redis-server
+        --appendonly yes
+        --requirepass $$REDIS_PASS
+        --maxmemory 512mb
+        --maxmemory-policy allkeys-lru
+      "
+    volumes:
+      - redis_data:/data
+    networks:
+      - r3mes-network
+    healthcheck:
+      test: [ "CMD", "sh", "-c", "REDIS_PASS=$$(cat /run/secrets/redis_password) && redis-cli -a $$REDIS_PASS --raw incr ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # IPFS Daemon
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: r3mes-ipfs-prod
+    # Ports are not exposed externally for security
+    # Services access IPFS via internal network (ipfs:5001)
+    volumes:
+      - ipfs_data:/data/ipfs
+    environment:
+      - IPFS_PROFILE=server
+    networks:
+      - r3mes-network
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:${R3MES_IPFS_PORT:-5001}/api/v0/version" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # Blockchain Node (remesd)
+  # Genesis auto-initialization is handled by entrypoint.sh in Dockerfile.go
+  # First start will create genesis, subsequent starts will use existing data
+  remesd:
+    build:
+      context: ..
+      dockerfile: miner-engine/docker/Dockerfile.go
+      args:
+        TARGETOS: linux
+        TARGETARCH: ${TARGETARCH:-amd64}
+    container_name: r3mes-blockchain-prod
+    working_dir: /app
+    ports:
+      # Port mappings - can be customized via environment variables
+      # P2P port (default: 26656)
+      - "${BLOCKCHAIN_P2P_PORT:-26656}:26656"
+      # RPC port (default: 26657)
+      - "${BLOCKCHAIN_RPC_PORT:-26657}:26657"
+      # gRPC port (default: 9090)
+      - "${BLOCKCHAIN_GRPC_PORT:-9090}:9090"
+      # REST port (default: 1317)
+      - "${BLOCKCHAIN_REST_PORT:-1317}:1317"
+    volumes:
+      - blockchain_data:/app/.remesd
+    environment:
+      # Network type (testnet or mainnet) - required in production
+      # Set R3MES_NETWORK=testnet or R3MES_NETWORK=mainnet before running docker-compose
+      - R3MES_NETWORK=${R3MES_NETWORK:-}
+      # CHAIN_ID: Must be set explicitly via CHAIN_ID env var or .env.production file
+      # For testnet: CHAIN_ID=remes-testnet-1
+      # For mainnet: CHAIN_ID=remes-mainnet-1
+      # If not set, will default to testnet (safer default)
+      - CHAIN_ID=${CHAIN_ID:-remes-testnet-1}
+      - R3MES_GRPC_ADDR=0.0.0.0:9090
+      - R3MES_TENDERMINT_RPC_ADDR=http://0.0.0.0:26657
+    networks:
+      - r3mes-network
+    depends_on:
+      ipfs:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:${BLOCKCHAIN_RPC_PORT:-26657}/status" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: always
+    # Command removed - entrypoint.sh handles initialization and start
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # Backend API (FastAPI)
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: r3mes-backend-prod
+    secrets:
+      - postgres_password
+      - redis_password
+    environment:
+      R3MES_ENV: production
+      DATABASE_TYPE: postgresql
+      POSTGRES_USER: ${POSTGRES_USER:-r3mes}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-r3mes}
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      BLOCKCHAIN_RPC_URL: http://remesd:26657
+      BLOCKCHAIN_GRPC_URL: remesd:9090
+      R3MES_IPFS_URL: http://ipfs:5001
+      DATABASE_POOL_MIN_SIZE: 20
+      DATABASE_POOL_MAX_SIZE: 100
+      LOG_LEVEL: INFO
+      # CORS: Must be set explicitly via CORS_ALLOWED_ORIGINS env var or .env.production file
+      # For testnet: CORS_ALLOWED_ORIGINS=https://testnet.r3mes.network,https://testnet-www.r3mes.network
+      # For mainnet: CORS_ALLOWED_ORIGINS=https://r3mes.network,https://www.r3mes.network
+      # If not set, will default to mainnet (for backward compatibility)
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://r3mes.network,https://www.r3mes.network}
+      CORS_ALLOW_ALL: "false"
+    networks:
+      - r3mes-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      remesd:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${BACKEND_PORT:-8000}/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '2'
+          memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ../web-dashboard
+      dockerfile: Dockerfile
+      args:
+        FRONTEND_PORT: ${FRONTEND_PORT:-3000}
+        NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-${CHAIN_ID:-remes-mainnet-1}}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.r3mes.network}
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-https://r3mes.network/api}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://r3mes.network}
+        NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:-https://rpc.r3mes.network}
+        NEXT_PUBLIC_REST_URL: ${NEXT_PUBLIC_REST_URL:-https://api.r3mes.network}
+        NEXT_PUBLIC_BLOCKCHAIN_RPC_URL: ${NEXT_PUBLIC_BLOCKCHAIN_RPC_URL:-${NEXT_PUBLIC_RPC_URL:-https://rpc.r3mes.network}}
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    container_name: r3mes-frontend-prod
+    environment:
+      NODE_ENV: production
+      # Network type (testnet or mainnet) - required in production
+      R3MES_NETWORK: ${R3MES_NETWORK:-}
+      # Frontend URLs: Must be set explicitly via env vars or .env.production file
+      # For testnet: Use testnet-specific URLs (see env.testnet.example)
+      # For mainnet: Use mainnet-specific URLs (see env.production.example)
+      # If not set, will default to mainnet URLs (for backward compatibility)
+      NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-${CHAIN_ID:-remes-testnet-1}}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.r3mes.network}
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-https://r3mes.network/api}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://r3mes.network}
+      NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:-https://rpc.r3mes.network}
+      NEXT_PUBLIC_REST_URL: ${NEXT_PUBLIC_REST_URL:-https://api.r3mes.network}
+      NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
+      NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    networks:
+      - r3mes-network
+    depends_on:
+      - backend
+    restart: always
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:${FRONTEND_PORT:-3000}/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # Nginx Reverse Proxy + SSL
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: r3mes-nginx-prod
+    environment:
+      DOMAIN: ${DOMAIN:-r3mes.network}
+    ports:
+      # HTTP port (default: 80)
+      - "${NGINX_HTTP_PORT:-80}:80"
+      # HTTPS port (default: 443)
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - nginx_certs:/etc/letsencrypt
+      - nginx_www:/var/www/certbot
+    networks:
+      - r3mes-network
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Certbot for Let's Encrypt (runs renewal every 12 hours)
+  certbot:
+    image: certbot/certbot:latest
+    container_name: r3mes-certbot-prod
+    volumes:
+      - nginx_certs:/etc/letsencrypt
+      - nginx_www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet --no-self-upgrade; sleep 12h & wait $${!}; done;'"
+    restart: always
+    depends_on:
+      - nginx
+
+  # Miner Engine (NVIDIA GPU) - Optional, use --profile miner
+  miner:
+    profiles:
+      - miner
+    build:
+      context: ..
+      dockerfile: miner-engine/docker/Dockerfile.nvidia
+    container_name: r3mes-miner-prod
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - BLOCKCHAIN_URL=remesd:9090
+      - BLOCKCHAIN_RPC_URL=http://remesd:26657
+      - IPFS_API_URL=http://ipfs:5001
+      - R3MES_IPFS_URL=http://ipfs:5001
+      - CHAIN_ID=${CHAIN_ID:-remes-testnet-1}
+      - R3MES_ENV=production
+    volumes:
+      - miner_data:/app/miner-engine/data
+      - miner_checkpoints:/app/miner-engine/checkpoints
+    networks:
+      - r3mes-network
+    depends_on:
+      remesd:
+        condition: service_healthy
+      ipfs:
+        condition: service_healthy
+    restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: r3mes-prometheus-prod
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--storage.tsdb.retention.size=25GB'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ../monitoring/prometheus/prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/prometheus/alerts.prod.yml:/etc/prometheus/alerts/r3mes_alerts.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - r3mes-network
+    depends_on:
+      - backend
+    restart: always
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:${PROMETHEUS_PORT:-9090}/-/healthy" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # Grafana - Metrics Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: r3mes-grafana-prod
+    secrets:
+      - grafana_admin_password
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3001}
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    networks:
+      - r3mes-network
+    depends_on:
+      - prometheus
+    restart: always
+    entrypoint: >
+      sh -c "
+        export GF_SECURITY_ADMIN_PASSWORD=$$(cat /run/secrets/grafana_admin_password);
+        exec /run.sh
+      "
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:${GRAFANA_PORT:-3000}/api/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # Alertmanager - Alert Routing
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: r3mes-alertmanager-prod
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    volumes:
+      - ./alertmanager/alertmanager.prod.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    networks:
+      - r3mes-network
+    depends_on:
+      - prometheus
+    restart: always
+    environment:
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
+      - ALERT_EMAIL_FROM=${ALERT_EMAIL_FROM:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:${ALERTMANAGER_PORT:-9093}/-/healthy" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # Node Exporter - System Metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: r3mes-node-exporter-prod
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - r3mes-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # Redis Exporter - Redis Metrics
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: r3mes-redis-exporter-prod
+    secrets:
+      - redis_password
+    environment:
+      - REDIS_ADDR=redis:6379
+    networks:
+      - r3mes-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+    entrypoint: >
+      sh -c "
+        export REDIS_PASSWORD=$$(cat /run/secrets/redis_password);
+        exec /bin/redis_exporter
+      "
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # PostgreSQL Exporter - Database Metrics
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: r3mes-postgres-exporter-prod
+    secrets:
+      - postgres_password
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-r3mes}
+      - POSTGRES_DB=${POSTGRES_DB:-r3mes}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+    networks:
+      - r3mes-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+    entrypoint: >
+      sh -c "
+        export POSTGRES_PASSWORD=$$(cat /run/secrets/postgres_password);
+        export DATA_SOURCE_NAME=postgresql://$${POSTGRES_USER:-r3mes}:$$POSTGRES_PASSWORD@postgres:5432/$${POSTGRES_DB:-r3mes}?sslmode=disable;
+        exec /bin/postgres_exporter
+      "
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # Database Backup Service - Automated Backups
+  postgres-backup:
+    image: postgres:16-alpine
+    container_name: r3mes-postgres-backup-prod
+    secrets:
+      - postgres_password
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-r3mes}
+      - POSTGRES_DB=${POSTGRES_DB:-r3mes}
+    volumes:
+      - postgres_backup:/backups
+    networks:
+      - r3mes-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+    command: >
+      sh -c " export PGPASSWORD=$$(cat /run/secrets/postgres_password) echo 'Starting automated backup service...' while true; do
+        echo \"Creating backup at $$(date)\"
+        pg_dump -h postgres -U $${POSTGRES_USER:-r3mes} -d $${POSTGRES_DB:-r3mes} 
+          -F c 
+          -f /backups/backup_$$(date +%Y%m%d_%H%M%S).dump
+        echo \"Backup completed\"
+        # Keep backups dynamically based on disk usage (minimum 7 days, maximum 14 days)
+        # Check disk usage and adjust retention accordingly
+        DISK_USAGE=$(df /backups | tail -1 | awk '{print $5}' | sed 's/%//')
+        if [ "$DISK_USAGE" -gt 80 ]; then
+          # High disk usage: keep only 7 days
+          RETENTION_DAYS=7
+        elif [ "$DISK_USAGE" -gt 60 ]; then
+          # Medium disk usage: keep 10 days
+          RETENTION_DAYS=10
+        else
+          # Low disk usage: keep 14 days
+          RETENTION_DAYS=14
+        fi
+        find /backups -name 'backup_*.dump' -mtime +$RETENTION_DAYS -delete
+        echo \"Cleaned old backups (retention: $RETENTION_DAYS days, disk usage: $DISK_USAGE%)\"
+        # Wait 24 hours before next backup
+        sleep 86400
+      done "
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+  grafana_admin_password:
+    file: ./secrets/grafana_admin_password.txt
+
+volumes:
+  postgres_data:
+    driver: local
+  postgres_backup:
+    driver: local
+  redis_data:
+    driver: local
+  ipfs_data:
+    driver: local
+  blockchain_data:
+    driver: local
+  miner_data:
+    driver: local
+  miner_checkpoints:
+    driver: local
+  nginx_certs:
+    driver: local
+  nginx_www:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+
+networks:
+  r3mes-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
