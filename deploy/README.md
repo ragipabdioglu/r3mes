@@ -62,18 +62,18 @@ Publish directory: web-dashboard/.next
 Netlify Dashboard > Site settings > Environment variables:
 
 ```
-NEXT_PUBLIC_API_URL = https://api.remes.network
-NEXT_PUBLIC_BACKEND_URL = https://api.remes.network
-NEXT_PUBLIC_SITE_URL = https://remes.network
-NEXT_PUBLIC_RPC_URL = https://rpc.remes.network
-NEXT_PUBLIC_CHAIN_ID = remes-testnet-1
+NEXT_PUBLIC_API_URL = https://api.r3mes.network
+NEXT_PUBLIC_BACKEND_URL = https://api.r3mes.network
+NEXT_PUBLIC_SITE_URL = https://r3mes.network
+NEXT_PUBLIC_RPC_URL = https://rpc.r3mes.network
+NEXT_PUBLIC_CHAIN_ID = r3mes-testnet-1
 NODE_VERSION = 20
 ```
 
 ### Adım 4: Custom Domain
 
 1. Domain settings > Add custom domain
-2. `remes.network` ekle
+2. `r3mes.network` ekle
 3. DNS'i Netlify'a yönlendir veya:
 
 ```
@@ -138,10 +138,10 @@ docker compose -f /opt/r3mes/deploy/docker-compose.production.yml run --rm certb
 
 | Servis  | URL                           |
 |---------|-------------------------------|
-| Website | https://remes.network         |
-| API     | https://api.remes.network     |
-| Testnet | https://testnet.remes.network |
-| RPC     | https://rpc.remes.network     |
+| Website | https://r3mes.network         |
+| API     | https://api.r3mes.network     |
+| Testnet | https://testnet.r3mes.network |
+| RPC     | https://rpc.r3mes.network     |
 
 ---
 
@@ -150,14 +150,14 @@ docker compose -f /opt/r3mes/deploy/docker-compose.production.yml run --rm certb
 ### SSL Sertifikası Alınamıyor
 ```bash
 # DNS'in doğru ayarlandığını kontrol et
-dig api.remes.network
+dig api.r3mes.network
 
 # Manuel SSL al
 docker run --rm -v "/opt/r3mes/deploy/certbot/conf:/etc/letsencrypt" \
   -v "/opt/r3mes/deploy/certbot/www:/var/www/certbot" \
   certbot/certbot certonly --webroot --webroot-path=/var/www/certbot \
-  --email admin@remes.network --agree-tos --no-eff-email \
-  -d remes.network -d api.remes.network
+  --email admin@r3mes.network --agree-tos --no-eff-email \
+  -d r3mes.network -d api.r3mes.network
 ```
 
 ### Backend Başlamıyor

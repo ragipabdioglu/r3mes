@@ -74,7 +74,7 @@ services:
       API_SECRET_KEY: ${API_SECRET_KEY}
       
       # CORS
-      CORS_ALLOWED_ORIGINS: https://remes.network,https://www.remes.network,https://testnet.remes.network
+      CORS_ALLOWED_ORIGINS: https://r3mes.network,https://www.r3mes.network,https://testnet.r3mes.network
     ports:
       - "8000:8000"
     depends_on:

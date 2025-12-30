@@ -2,7 +2,7 @@
 
 # ============================================================================
 # R3MES One-Click Production Deployment Script
-# Domain: remes.network
+# Domain: r3mes.network
 # VPS IP: 38.242.246.6
 # ============================================================================
 
@@ -16,12 +16,12 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-DOMAIN="remes.network"
-API_DOMAIN="api.remes.network"
-TESTNET_DOMAIN="testnet.remes.network"
-RPC_DOMAIN="rpc.remes.network"
+DOMAIN="r3mes.network"
+API_DOMAIN="api.r3mes.network"
+TESTNET_DOMAIN="testnet.r3mes.network"
+RPC_DOMAIN="rpc.r3mes.network"
 VPS_IP="38.242.246.6"
-SSL_EMAIL="admin@remes.network"
+SSL_EMAIL="admin@r3mes.network"
 INSTALL_DIR="/opt/r3mes"
 
 echo -e "${BLUE}"
@@ -169,7 +169,7 @@ echo -e "\n${GREEN}[6/8] Obtaining SSL certificates...${NC}"
 cat > $INSTALL_DIR/deploy/nginx/conf.d/temp-ssl.conf << 'TEMPSSL'
 server {
     listen 80;
-    server_name remes.network www.remes.network api.remes.network testnet.remes.network rpc.remes.network;
+    server_name r3mes.network www.r3mes.network api.r3mes.network testnet.r3mes.network rpc.r3mes.network;
 
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
@@ -278,12 +278,12 @@ echo -e "${NC}"
 echo -e "${BLUE}Your R3MES backend is now running!${NC}"
 echo ""
 echo -e "${YELLOW}URLs:${NC}"
-echo "  API:     https://api.remes.network"
-echo "  Testnet: https://testnet.remes.network"
-echo "  RPC:     https://rpc.remes.network"
+echo "  API:     https://api.r3mes.network"
+echo "  Testnet: https://testnet.r3mes.network"
+echo "  RPC:     https://rpc.r3mes.network"
 echo ""
 echo -e "${YELLOW}Health Check:${NC}"
-curl -s https://api.remes.network/health 2>/dev/null || curl -s http://localhost:8000/health || echo "  Waiting for backend to start..."
+curl -s https://api.r3mes.network/health 2>/dev/null || curl -s http://localhost:8000/health || echo "  Waiting for backend to start..."
 echo ""
 echo -e "${YELLOW}DNS Configuration Required:${NC}"
 echo "  Add these DNS records to your domain registrar:"
@@ -299,11 +299,11 @@ echo ""
 echo -e "${YELLOW}Netlify Configuration:${NC}"
 echo "  Set these environment variables in Netlify:"
 echo ""
-echo "  NEXT_PUBLIC_API_URL=https://api.remes.network"
-echo "  NEXT_PUBLIC_BACKEND_URL=https://api.remes.network"
-echo "  NEXT_PUBLIC_SITE_URL=https://remes.network"
-echo "  NEXT_PUBLIC_RPC_URL=https://rpc.remes.network"
-echo "  NEXT_PUBLIC_CHAIN_ID=remes-testnet-1"
+echo "  NEXT_PUBLIC_API_URL=https://api.r3mes.network"
+echo "  NEXT_PUBLIC_BACKEND_URL=https://api.r3mes.network"
+echo "  NEXT_PUBLIC_SITE_URL=https://r3mes.network"
+echo "  NEXT_PUBLIC_RPC_URL=https://rpc.r3mes.network"
+echo "  NEXT_PUBLIC_CHAIN_ID=r3mes-testnet-1"
 echo ""
 echo -e "${YELLOW}Useful Commands:${NC}"
 echo "  View logs:    docker compose -f $INSTALL_DIR/deploy/docker-compose.production.yml logs -f"
