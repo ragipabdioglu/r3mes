@@ -21,6 +21,7 @@ WORKDIR /app
 
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y \
+    bash \
     curl \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
@@ -30,6 +31,7 @@ COPY --from=builder /root/.local /root/.local
 
 # Make sure scripts in .local are usable
 ENV PATH=/root/.local/bin:$PATH
+ENV PYTHONPATH=/app
 
 # Copy application code (no volume mount for production)
 COPY . .
@@ -41,11 +43,8 @@ RUN chmod +x /app/scripts/init_db.sh
 # Create necessary directories
 RUN mkdir -p checkpoints logs
 
-# Create non-root user for security
-RUN useradd -m -u 1000 r3mes && \
-    chown -R r3mes:r3mes /app
-
-USER r3mes
+# Keep running as root for now (alembic needs access to .local/bin)
+# TODO: Fix permissions for non-root user later
 
 # Expose port
 EXPOSE 8000
