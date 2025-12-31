@@ -303,3 +303,49 @@ def get_cache_manager() -> CacheManager:
         _cache_manager = CacheManager()
     return _cache_manager
 
+
+def cache_response(ttl: int = 300):
+    """
+    Decorator for caching API responses.
+    
+    Args:
+        ttl: Time to live in seconds (default: 5 minutes)
+        
+    Returns:
+        Decorator function
+    """
+    from functools import wraps
+    import hashlib
+    
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Generate cache key from function name and arguments
+            key_parts = [func.__name__]
+            key_parts.extend(str(arg) for arg in args)
+            key_parts.extend(f"{k}={v}" for k, v in sorted(kwargs.items()))
+            cache_key = f"api_cache:{hashlib.md5(':'.join(key_parts).encode()).hexdigest()}"
+            
+            # Try to get from cache
+            cache = get_cache_manager()
+            cached = await cache.get(cache_key)
+            if cached is not None:
+                return cached
+            
+            # Call function and cache result
+            result = await func(*args, **kwargs)
+            
+            # Convert Pydantic models to dict for caching
+            if hasattr(result, 'model_dump'):
+                cache_value = result.model_dump()
+            elif hasattr(result, 'dict'):
+                cache_value = result.dict()
+            else:
+                cache_value = result
+            
+            await cache.set(cache_key, cache_value, ttl)
+            return result
+        
+        return wrapper
+    return decorator
+
