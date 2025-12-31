@@ -45,7 +45,7 @@ This directory contains all official R3MES documentation organized by category.
 
 ---
 
-## 🛠️ Products
+## �️ Products
 
 | Document | Description |
 |----------|-------------|
@@ -103,51 +103,30 @@ This directory contains all official R3MES documentation organized by category.
 
 | Document | Description |
 |----------|-------------|
-| [Security Verification](03_security_verification.md) | Verification system |
-| [Production Security](PRODUCTION_SECURITY.md) | Security best practices |
-| [Security Audit](SECURITY_AUDIT.md) | Audit guidelines |
+| [Security Verification](03_security_verification.md) | Verificat best practices |
+| 71 | [Security Audit](71_security_audit.md) | Audit guidelines |
 
 ---
 
-## 📖 Reference
+## 📖 Category 80: Reference & Guides
 
-### Technical Specs
-
-| Document | Description |
-|----------|-------------|
-| [Model Agnostic Standard](MODEL_AGNOSTIC_STANDARD.md) | Model compatibility |
-| [Economic Security](economic_security.md) | Economic attack analysis |
-| [Error Codes](ERROR_CODES.md) | Error code reference |
-| [Feature Flags](FEATURE_FLAGS.md) | Feature toggle reference |
-
-### Guides
-
-| Document | Description |
-|----------|-------------|
-| [Troubleshooting](TROUBLESHOOTING.md) | Common issues and fixes |
-| [Production Troubleshooting](TROUBLESHOOTING_PRODUCTION.md) | Production issues |
-| [Migration Guide](MIGRATION_GUIDE.md) | Version migration |
-| [Debug Mode](17_debug_mode.md) | Debugging features |
+| # | Document | Description |
+|---|----------|-------------|
+| 80 | [Troubleshooting](80_troubleshooting.md) | Common issues and fixes |
+| 81 | [Migration Guide](81_migration_guide.md) | Version migration |
+| 82 | [Testing & QA](82_testing_qa.md) | Testing guidelines |
+| 83 | [Performance Tuning](83_performance_tuning.md) | Optimization guide |
+| 84 | [Capacity Planning](84_capacity_planning.md) | Resource planning |
 
 ---
 
-## 🗂️ Additional Resources
+## 📋 Category 90: Planning & Status
 
-### Planning & Design
-
-| Document | Description |
-|----------|-------------|
-| [Project Overview](PROJECT_OVERVIEW.md) | Executive summary |
-| [Feature Roadmap](FEATURE_ROADMAP.md) | Planned features |
-| [Implementation Roadmap](07_implementation_roadmap.md) | Development timeline |
-
-### Testing
-
-| Document | Description |
-|----------|-------------|
-| [Testing & QA](11_testing_qa.md) | Testing guidelines |
-| [Performance Tuning](PERFORMANCE_TUNING.md) | Optimization guide |
-| [Capacity Planning](CAPACITY_PLANNING.md) | Resource planning |
+| # | Document | Description |
+|---|----------|-------------|
+| 90 | [Implementation Roadmap](90_implementation_roadmap.md) | Development timeline |
+| 91 | [Feature Roadmap](91_feature_roadmap.md) | Planned features |
+| 92 | [Documentation Status](92_documentation_status.md) | Documentation maintenance |
 
 ---
 
@@ -167,13 +146,24 @@ This directory contains all official R3MES documentation organized by category.
 3. Follow existing formatting conventions
 4. Submit a pull request
 
-### Style Guide
+### Naming Convention
 
-- Use clear, concise language
-- Include code examples where helpful
-- Add screenshots for UI features
-- Keep technical accuracy
-- Update "Last Updated" dates
+All documentation files follow this pattern:
+```
+{category_number}_{document_name}.md
+```
+
+Categories:
+- **00-09**: Home & Overview
+- **10-19**: Getting Started
+- **20-29**: Participation Guides
+- **30-39**: Technical Architecture
+- **40-49**: Products & UI
+- **50-59**: Developer Resources
+- **60-69**: Deployment & Operations
+- **70-79**: Security
+- **80-89**: Reference & Guides
+- **90-99**: Planning & Status
 
 ---
 

@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
     g++ \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install dependencies
@@ -24,6 +25,7 @@ RUN apt-get update && apt-get install -y \
     bash \
     curl \
     postgresql-client \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python dependencies from builder
