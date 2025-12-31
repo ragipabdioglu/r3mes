@@ -3,15 +3,124 @@ Semantic Router - Embedding-based intelligent routing
 
 Kullanıcı mesajını semantic similarity ile analiz edip uygun LoRA adaptörünü seçer.
 Keyword matching yerine embedding-based similarity kullanır.
+
+NOTE: This module supports GPU-less deployment by providing a KeywordRouter fallback
+when sentence-transformers is not available or when R3MES_INFERENCE_MODE != local.
 """
 
-from sentence_transformers import SentenceTransformer
-import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Protocol
 import os
 import logging
+import re
 
 logger = logging.getLogger(__name__)
+
+# Lazy import for sentence_transformers and numpy
+_sentence_transformers_available: Optional[bool] = None
+_SentenceTransformer = None
+_np = None
+
+
+def _ensure_embedding_libraries():
+    """Lazy load embedding libraries when needed."""
+    global _sentence_transformers_available, _SentenceTransformer, _np
+    
+    if _sentence_transformers_available is not None:
+        return _sentence_transformers_available
+    
+    try:
+        from sentence_transformers import SentenceTransformer
+        import numpy as np
+        _SentenceTransformer = SentenceTransformer
+        _np = np
+        _sentence_transformers_available = True
+        logger.info("sentence-transformers loaded successfully")
+        return True
+    except ImportError as e:
+        logger.warning(f"sentence-transformers not available: {e}")
+        logger.warning("Will use KeywordRouter fallback")
+        _sentence_transformers_available = False
+        return False
+
+
+class RouterProtocol(Protocol):
+    """Protocol for router implementations."""
+    
+    def decide_adapter(self, prompt: str) -> Tuple[str, float]:
+        """Decide which adapter to use for the given prompt."""
+        ...
+    
+    def get_available_adapters(self) -> List[str]:
+        """Get list of available adapters."""
+        ...
+
+
+class KeywordRouter:
+    """
+    Simple keyword-based router for GPU-less deployment.
+    
+    Uses regex patterns to match prompts to adapters.
+    This is a fallback when sentence-transformers is not available.
+    """
+    
+    def __init__(self, similarity_threshold: float = 0.7):
+        """
+        Initialize KeywordRouter.
+        
+        Args:
+            similarity_threshold: Not used, kept for API compatibility
+        """
+        self.similarity_threshold = similarity_threshold
+        
+        # Keyword patterns for each adapter
+        self.route_patterns: Dict[str, List[re.Pattern]] = {
+            'coder_adapter': [
+                re.compile(r'\b(code|coding|program|programming|function|class|method|api|debug|bug|error|syntax|algorithm|sql|database|library|framework|python|javascript|java|typescript|rust|go|c\+\+|html|css|react|vue|angular|node|django|flask|fastapi)\b', re.IGNORECASE),
+                re.compile(r'\b(implement|optimize|refactor|compile|runtime|exception|stack\s*trace|variable|loop|array|list|dict|object|string|integer|float|boolean)\b', re.IGNORECASE),
+                re.compile(r'\b(git|github|docker|kubernetes|aws|azure|gcp|ci/cd|devops|deploy|server|backend|frontend|fullstack)\b', re.IGNORECASE),
+            ],
+            'law_adapter': [
+                re.compile(r'\b(legal|law|lawyer|attorney|court|judge|lawsuit|contract|agreement|clause|statute|regulation|jurisdiction|liability|rights|obligations|plaintiff|defendant)\b', re.IGNORECASE),
+                re.compile(r'\b(sue|litigation|settlement|damages|negligence|breach|tort|criminal|civil|appeal|verdict|testimony|evidence|witness)\b', re.IGNORECASE),
+                re.compile(r'\b(copyright|trademark|patent|intellectual\s*property|privacy|gdpr|compliance|terms\s*of\s*service|license)\b', re.IGNORECASE),
+            ],
+        }
+        
+        logger.info("KeywordRouter initialized (fallback mode)")
+    
+    def decide_adapter(self, prompt: str) -> Tuple[str, float]:
+        """
+        Decide adapter using keyword matching.
+        
+        Args:
+            prompt: User message
+            
+        Returns:
+            (adapter_name, confidence_score) tuple
+        """
+        scores: Dict[str, int] = {}
+        
+        for adapter_name, patterns in self.route_patterns.items():
+            score = 0
+            for pattern in patterns:
+                matches = pattern.findall(prompt)
+                score += len(matches)
+            scores[adapter_name] = score
+        
+        if scores:
+            best_adapter = max(scores.items(), key=lambda x: x[1])
+            adapter_name, match_count = best_adapter
+            
+            if match_count > 0:
+                # Normalize score to 0-1 range (rough approximation)
+                confidence = min(1.0, match_count * 0.2)
+                return (adapter_name, confidence)
+        
+        return ('default_adapter', 0.0)
+    
+    def get_available_adapters(self) -> List[str]:
+        """Get list of available adapters."""
+        return list(self.route_patterns.keys()) + ['default_adapter']
 
 
 class SemanticRouter:
@@ -20,6 +129,8 @@ class SemanticRouter:
     
     Her adaptör için örnek prompt'ları embedding'e çevirir ve
     kullanıcı mesajının semantic similarity'sine göre en uygun adaptörü seçer.
+    
+    Falls back to KeywordRouter when sentence-transformers is not available.
     """
     
     def __init__(self, similarity_threshold: float = 0.7, use_semantic: bool = True):
@@ -30,14 +141,26 @@ class SemanticRouter:
             similarity_threshold: Minimum similarity skoru (0.0-1.0)
             use_semantic: Semantic router kullanılsın mı? (False ise sadece keyword router)
         """
-        self.use_semantic = use_semantic
         self.similarity_threshold = similarity_threshold
+        self.use_semantic = use_semantic
         
-        # NOTE: Router fallback removed - SemanticRouter is now mandatory
-        # If semantic router fails, it will raise RuntimeError instead of falling back
+        # Check if we should use semantic routing
+        self._fallback_router: Optional[KeywordRouter] = None
+        self._semantic_available = False
+        
+        if self.use_semantic:
+            # Try to load sentence-transformers
+            if _ensure_embedding_libraries():
+                self._semantic_available = True
+            else:
+                logger.warning("Falling back to KeywordRouter")
+                self._fallback_router = KeywordRouter(similarity_threshold)
+        else:
+            # Explicitly disabled, use keyword router
+            self._fallback_router = KeywordRouter(similarity_threshold)
         
         # Embedding model (lazy loading)
-        self.embedding_model: Optional[SentenceTransformer] = None
+        self.embedding_model = None
         
         # Route definitions (her adaptör için örnek prompt'lar)
         self.route_definitions: Dict[str, List[str]] = {
@@ -78,36 +201,31 @@ class SemanticRouter:
         }
         
         # Pre-computed route embeddings
-        self.route_embeddings: Dict[str, np.ndarray] = {}
+        self.route_embeddings: Dict[str, any] = {}
         
-        # Initialize semantic router if enabled
-        if self.use_semantic:
+        # Initialize semantic routes if available
+        if self._semantic_available:
             try:
                 self._initialize_semantic_routes()
                 logger.info("Semantic router initialized successfully")
-            except ImportError as e:
-                logger.error(f"Failed to import required dependencies for semantic router: {e}")
-                logger.error("Please install sentence-transformers: pip install sentence-transformers")
-                raise RuntimeError(
-                    "SemanticRouter initialization failed: missing dependencies. "
-                    "Router fallback has been removed. Please install: pip install sentence-transformers"
-                ) from e
             except Exception as e:
-                logger.error(f"Failed to initialize semantic router: {e}", exc_info=True)
-                raise RuntimeError(
-                    "SemanticRouter initialization failed. Router fallback has been removed. "
-                    "Please ensure all dependencies are installed and configured correctly."
-                ) from e
+                logger.warning(f"Failed to initialize semantic routes: {e}")
+                logger.warning("Falling back to KeywordRouter")
+                self._semantic_available = False
+                self._fallback_router = KeywordRouter(similarity_threshold)
     
     def _initialize_semantic_routes(self):
         """Her route için embedding'leri önceden hesapla."""
+        if not _sentence_transformers_available:
+            raise RuntimeError("sentence-transformers not available")
+        
         # Load embedding model (lazy loading)
         if self.embedding_model is None:
             try:
                 logger.info("Loading embedding model: all-MiniLM-L6-v2")
                 # Use a lightweight model that doesn't require CUDA
                 # all-MiniLM-L6-v2 is CPU-friendly and fast
-                self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+                self.embedding_model = _SentenceTransformer('all-MiniLM-L6-v2')
                 logger.info("Embedding model loaded successfully")
             except Exception as e:
                 logger.error(f"Failed to load embedding model: {e}", exc_info=True)
@@ -135,12 +253,9 @@ class SemanticRouter:
         Returns:
             (adapter_name, similarity_score) tuple
         """
-        # If semantic router is disabled, raise error (fallback removed)
-        if not self.use_semantic:
-            raise RuntimeError(
-                "SemanticRouter is disabled but Router fallback has been removed. "
-                "Please enable semantic routing or use SemanticRouter with use_semantic=True."
-            )
+        # Use fallback router if semantic is not available
+        if self._fallback_router is not None:
+            return self._fallback_router.decide_adapter(prompt)
         
         try:
             # Ensure embedding model is loaded
@@ -161,7 +276,7 @@ class SemanticRouter:
                     continue
                 
                 # Cosine similarity (normalized embeddings için dot product yeterli)
-                similarity = float(np.dot(prompt_embedding, route_embedding))
+                similarity = float(_np.dot(prompt_embedding, route_embedding))
                 similarities[adapter_name] = similarity
             
             # En yüksek similarity'ye sahip adaptörü bul
@@ -178,11 +293,10 @@ class SemanticRouter:
             
         except Exception as e:
             logger.error(f"Semantic router error: {e}", exc_info=True)
-            # Router fallback removed - raise error instead
-            raise RuntimeError(
-                f"SemanticRouter failed to decide adapter: {e}. "
-                "Router fallback has been removed. Please ensure semantic router is properly configured."
-            ) from e
+            # Fall back to keyword router on error
+            if self._fallback_router is None:
+                self._fallback_router = KeywordRouter(self.similarity_threshold)
+            return self._fallback_router.decide_adapter(prompt)
     
     def add_route_example(self, adapter_name: str, example_prompt: str):
         """
@@ -198,7 +312,7 @@ class SemanticRouter:
         self.route_definitions[adapter_name].append(example_prompt)
         
         # Route embedding'ini yeniden hesapla (eğer semantic router aktifse)
-        if self.use_semantic and self.embedding_model is not None:
+        if self._semantic_available and self.embedding_model is not None:
             combined_text = " ".join(self.route_definitions[adapter_name])
             embedding = self.embedding_model.encode(
                 combined_text, 
@@ -216,4 +330,43 @@ class SemanticRouter:
             Adaptör adları listesi
         """
         return list(self.route_definitions.keys())
+    
+    def is_using_semantic(self) -> bool:
+        """
+        Check if semantic routing is active.
+        
+        Returns:
+            True if using semantic embeddings, False if using keyword fallback
+        """
+        return self._semantic_available and self._fallback_router is None
 
+
+def get_router(similarity_threshold: float = 0.7, use_semantic: bool = True) -> RouterProtocol:
+    """
+    Factory function to get the appropriate router.
+    
+    Checks R3MES_INFERENCE_MODE and returns:
+    - SemanticRouter if mode is LOCAL and sentence-transformers is available
+    - KeywordRouter otherwise
+    
+    Args:
+        similarity_threshold: Minimum similarity score
+        use_semantic: Whether to try semantic routing
+        
+    Returns:
+        Router instance (SemanticRouter or KeywordRouter)
+    """
+    # Check inference mode
+    try:
+        from .inference_mode import should_load_ai_libraries
+        if not should_load_ai_libraries():
+            logger.info("Inference mode is not LOCAL, using KeywordRouter")
+            return KeywordRouter(similarity_threshold)
+    except ImportError:
+        pass
+    
+    # Try semantic router
+    if use_semantic:
+        return SemanticRouter(similarity_threshold, use_semantic=True)
+    
+    return KeywordRouter(similarity_threshold)

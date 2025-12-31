@@ -22,13 +22,61 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from .model_manager import AIModelManager
+# Import inference mode configuration (GPU-less deployment support)
+from .inference_mode import (
+    get_inference_mode, 
+    should_load_ai_libraries, 
+    is_inference_available,
+    InferenceMode,
+    validate_inference_mode_for_startup,
+)
+
+# Conditional imports based on inference mode
+# These modules require GPU libraries (torch, transformers, etc.)
+# Only import them when R3MES_INFERENCE_MODE=local
+_model_manager = None
+_semantic_router = None
+_task_queue = None
+
+def get_model_manager():
+    """Lazy load model manager only when needed."""
+    global _model_manager
+    if _model_manager is None:
+        if not should_load_ai_libraries():
+            return None
+        from .model_manager import AIModelManager
+        from .config_manager import get_config_manager
+        config = get_config_manager().load()
+        _model_manager = AIModelManager(base_model_path=config.base_model_path)
+    return _model_manager
+
+def get_semantic_router():
+    """Lazy load semantic router only when needed."""
+    global _semantic_router
+    if _semantic_router is None:
+        if not should_load_ai_libraries():
+            # Return a simple keyword-based router for non-local modes
+            return None
+        from .semantic_router import SemanticRouter
+        similarity_threshold = float(os.getenv("SEMANTIC_ROUTER_THRESHOLD", "0.7"))
+        _semantic_router = SemanticRouter(
+            similarity_threshold=similarity_threshold,
+            use_semantic=True
+        )
+    return _semantic_router
+
+def get_task_queue():
+    """Lazy load task queue only when needed."""
+    global _task_queue
+    if _task_queue is None:
+        if not should_load_ai_libraries():
+            return None
+        from .task_queue import TaskQueue
+        max_workers = int(os.getenv("MAX_WORKERS", "1"))
+        _task_queue = TaskQueue(max_workers=max_workers)
+    return _task_queue
+
 from .database_async import AsyncDatabase
-# SemanticRouter is now required - Router (deprecated) has been removed
-# Lazy import for SemanticRouter to avoid bitsandbytes import issues
-from .semantic_router import SemanticRouter
-from .task_queue import TaskQueue
-from .inference_executor import get_inference_executor, shutdown_inference_executor
 from .setup_logging import setup_logging
 from .config_manager import get_config_manager
 from .config_endpoints import router as config_router
@@ -90,8 +138,7 @@ config_manager = get_config_manager()
 config = config_manager.load()
 
 # Initialize components using config (needed for lifespan function)
-base_model_path = config.base_model_path
-model_manager = AIModelManager(base_model_path=base_model_path)
+# Model manager is now lazy-loaded based on inference mode
 database = AsyncDatabase(db_path=config.database_path, chain_json_path=config.chain_json_path)
 cache_manager = get_cache_manager()
 serving_node_registry = ServingNodeRegistry(database)
@@ -115,7 +162,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await cache_manager.close()
     
     async def shutdown_inference():
-        await shutdown_inference_executor()
+        # Only shutdown inference executor if it was initialized
+        if should_load_ai_libraries():
+            try:
+                from .inference_executor import shutdown_inference_executor
+                await shutdown_inference_executor()
+            except ImportError:
+                pass  # Inference executor not available
     
     async def shutdown_websockets():
         from .websocket_manager import connection_manager
@@ -149,6 +202,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # ========== STARTUP ==========
     logger.info("Starting R3MES Backend Service...")
     
+    # 0. Validate inference mode configuration
+    inference_mode = get_inference_mode()
+    logger.info(f"Inference mode: {inference_mode.value}")
+    
+    is_valid, mode_message = validate_inference_mode_for_startup()
+    if not is_valid:
+        logger.error(f"❌ Inference mode validation failed: {mode_message}")
+        raise RuntimeError(mode_message)
+    logger.info(f"✅ {mode_message}")
+    
     # 1. Validate environment variables
     try:
         from .env_validator import validate_environment
@@ -170,15 +233,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 "Mock models are for development/testing only. "
                 "Set R3MES_USE_MOCK_MODEL=false and ensure a real model is configured."
             )
-        # Check that model manager initialized successfully (not in mock mode)
-        if model_manager.base_model is None:
-            logger.error("FATAL: Model manager initialized in mock mode in production")
-            raise ModelLoadError(
-                "FATAL: Model could not be loaded in production environment. "
-                "Ensure R3MES_MODEL_IPFS_HASH, R3MES_MODEL_NAME, or BASE_MODEL_PATH is set correctly. "
-                "Model loading failed during initialization."
-            )
-        logger.info("✅ Production environment validated: Real model loaded successfully")
+        # Only check model manager if inference mode is LOCAL
+        if inference_mode == InferenceMode.LOCAL:
+            model_manager = get_model_manager()
+            if model_manager is None or model_manager.base_model is None:
+                logger.error("FATAL: Model manager initialized in mock mode in production")
+                raise ModelLoadError(
+                    "FATAL: Model could not be loaded in production environment. "
+                    "Ensure R3MES_MODEL_IPFS_HASH, R3MES_MODEL_NAME, or BASE_MODEL_PATH is set correctly. "
+                    "Model loading failed during initialization."
+                )
+            logger.info("✅ Production environment validated: Real model loaded successfully")
+        else:
+            logger.info(f"✅ Production environment validated: Inference mode is {inference_mode.value} (no local model required)")
     
     # 2. Connect to database
     logger.info("Connecting to database...")
@@ -188,45 +255,54 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Connecting to Redis cache...")
     await cache_manager.connect()
     
-    # 4. Initialize inference executor
-    logger.info("Initializing inference executor...")
-    max_workers = int(os.getenv("MAX_WORKERS", "1"))
-    await get_inference_executor(max_workers=max_workers)
+    # 4. Initialize inference executor (only if local inference mode)
+    if inference_mode == InferenceMode.LOCAL:
+        logger.info("Initializing inference executor...")
+        max_workers = int(os.getenv("MAX_WORKERS", "1"))
+        from .inference_executor import get_inference_executor
+        await get_inference_executor(max_workers=max_workers)
+        logger.info("✅ Inference executor initialized")
+    else:
+        logger.info(f"Skipping inference executor initialization (mode: {inference_mode.value})")
     
-    # 5. Load adapters on startup
-    logger.info("Loading adapters from checkpoints...")
-    notification_service = get_notification_service()
-    try:
-        # Resolve relative path from current working directory to avoid hardcoded path issues
-        checkpoints_dir = (Path.cwd() / "backend" / "checkpoints").resolve()
-        
-        if checkpoints_dir.exists():
-            loaded_count = 0
-            for adapter_dir in checkpoints_dir.iterdir():
-                if adapter_dir.is_dir():
-                    adapter_name = adapter_dir.name
-                    adapter_path = str(adapter_dir)
-                    
-                    if model_manager.load_adapter(adapter_name, adapter_path):
-                        logger.info(f"Auto-loaded adapter: {adapter_name}")
-                        loaded_count += 1
+    # 5. Load adapters on startup (only if local inference mode)
+    if inference_mode == InferenceMode.LOCAL:
+        logger.info("Loading adapters from checkpoints...")
+        notification_service = get_notification_service()
+        model_manager = get_model_manager()
+        try:
+            # Resolve relative path from current working directory to avoid hardcoded path issues
+            checkpoints_dir = (Path.cwd() / "backend" / "checkpoints").resolve()
             
-            if loaded_count > 0:
-                await notification_service.send_system_alert(
-                    component="Backend",
-                    alert_type="startup",
-                    message=f"Backend started successfully. Loaded {loaded_count} adapters.",
-                    priority=NotificationPriority.LOW
-                )
-                logger.info(f"✅ Loaded {loaded_count} adapters on startup")
-    except Exception as e:
-        logger.error(f"Error loading adapters during startup: {e}")
-        await notification_service.send_system_alert(
-            component="Backend",
-            alert_type="startup_error",
-            message=f"Error loading adapters during startup: {str(e)}",
-            priority=NotificationPriority.CRITICAL
-        )
+            if checkpoints_dir.exists() and model_manager is not None:
+                loaded_count = 0
+                for adapter_dir in checkpoints_dir.iterdir():
+                    if adapter_dir.is_dir():
+                        adapter_name = adapter_dir.name
+                        adapter_path = str(adapter_dir)
+                        
+                        if model_manager.load_adapter(adapter_name, adapter_path):
+                            logger.info(f"Auto-loaded adapter: {adapter_name}")
+                            loaded_count += 1
+                
+                if loaded_count > 0:
+                    await notification_service.send_system_alert(
+                        component="Backend",
+                        alert_type="startup",
+                        message=f"Backend started successfully. Loaded {loaded_count} adapters.",
+                        priority=NotificationPriority.LOW
+                    )
+                    logger.info(f"✅ Loaded {loaded_count} adapters on startup")
+        except Exception as e:
+            logger.error(f"Error loading adapters during startup: {e}")
+            await notification_service.send_system_alert(
+                component="Backend",
+                alert_type="startup_error",
+                message=f"Error loading adapters during startup: {str(e)}",
+                priority=NotificationPriority.CRITICAL
+            )
+    else:
+        logger.info(f"Skipping adapter loading (mode: {inference_mode.value})")
     
     # 6. Start blockchain indexer (if using PostgreSQL)
     if database.config.is_postgresql():
@@ -490,30 +566,27 @@ from .miner_endpoints import router as miner_router
 app.include_router(miner_router)
 
 # Note: Components (model_manager, database, cache_manager) are initialized above for lifespan function
+# Model manager, task queue, and semantic router are now lazy-loaded based on inference mode
 
-# Task Queue for Load Balancing
-max_workers = int(os.getenv("MAX_WORKERS", "1"))  # Number of GPU workers
-task_queue = TaskQueue(max_workers=max_workers)
+# Task Queue and Semantic Router are lazy-loaded via get_task_queue() and get_semantic_router()
+# They are only initialized when R3MES_INFERENCE_MODE=local
 
-# Router selection: SemanticRouter is now required (Router deprecated and removed)
-# SemanticRouter provides better accuracy with embedding-based routing
-similarity_threshold = float(os.getenv("SEMANTIC_ROUTER_THRESHOLD", "0.7"))
-
-logger.info("Initializing Semantic Router (embedding-based)...")
-try:
-    router = SemanticRouter(
-        similarity_threshold=similarity_threshold,
-        use_semantic=True
-    )
-    logger.info("✅ Semantic Router initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize Semantic Router: {e}")
-    logger.error("SemanticRouter is required. Please ensure all dependencies are installed.")
-    logger.error("Required dependencies: sentence-transformers")
-    raise RuntimeError(
-        "SemanticRouter initialization failed. "
-        "This is a required component. Please check your environment and dependencies."
-    ) from e
+# Simple keyword-based adapter routing for non-local modes
+def simple_keyword_router(message: str) -> str:
+    """Simple keyword-based adapter routing when SemanticRouter is not available."""
+    message_lower = message.lower()
+    
+    # Simple keyword matching
+    if any(word in message_lower for word in ["code", "program", "function", "debug", "error"]):
+        return "coding"
+    elif any(word in message_lower for word in ["legal", "law", "contract", "court"]):
+        return "legal"
+    elif any(word in message_lower for word in ["medical", "health", "doctor", "symptom"]):
+        return "medical"
+    elif any(word in message_lower for word in ["finance", "money", "invest", "stock"]):
+        return "finance"
+    else:
+        return "general"
 
 # API Key Authentication
 security = HTTPBearer(auto_error=False)
@@ -628,11 +701,34 @@ async def chat(request: Request, chat_request: ChatRequest):
     
     Rate Limit: 10 requests per minute per IP (configurable via RATE_LIMIT_CHAT)
     
-    Uses atomic credit reservation to prevent race conditions:
-    1. Reserve credit atomically before starting inference
-    2. Confirm reservation after successful completion
-    3. Rollback reservation if inference fails
+    Behavior depends on R3MES_INFERENCE_MODE:
+    - disabled: Returns 503 error
+    - mock: Returns mock responses
+    - remote: Proxies to Serving Nodes
+    - local: Runs inference locally (requires GPU)
     """
+    # Check inference mode first
+    inference_mode = get_inference_mode()
+    
+    # Handle disabled mode
+    if inference_mode == InferenceMode.DISABLED:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "Inference service disabled",
+                "code": "INFERENCE_DISABLED",
+                "message": "AI inference is not available on this server. Please try again later or contact support."
+            }
+        )
+    
+    # Handle mock mode
+    if inference_mode == InferenceMode.MOCK:
+        async def generate_mock_response():
+            mock_response = f"[MOCK MODE] This is a simulated response to: {chat_request.message[:50]}..."
+            for word in mock_response.split():
+                yield word + " "
+        return StreamingResponse(generate_mock_response(), media_type="text/plain")
+    
     # Get wallet address from API key or request body
     wallet_from_auth = await get_wallet_from_auth(request)
     wallet_address = wallet_from_auth or chat_request.wallet_address
@@ -663,29 +759,40 @@ async def chat(request: Request, chat_request: ChatRequest):
     reservation_id = reservation["reservation_id"]
     logger.debug(f"Credit reserved for {wallet_address}, reservation_id: {reservation_id}")
     
-    # Decide adapter (semantic router returns tuple, keyword router returns string)
-    adapter_result = router.decide_adapter(chat_request.message)
-    if isinstance(adapter_result, tuple):
-        adapter_name, similarity_score = adapter_result
-        # Log similarity score for debugging (optional)
-        if similarity_score > 0:
-            logger.debug(f"Semantic router: {adapter_name} (similarity: {similarity_score:.3f})")
+    # Decide adapter using semantic router (if available) or simple keyword router
+    semantic_router = get_semantic_router()
+    if semantic_router is not None:
+        adapter_result = semantic_router.decide_adapter(chat_request.message)
+        if isinstance(adapter_result, tuple):
+            adapter_name, similarity_score = adapter_result
+            if similarity_score > 0:
+                logger.debug(f"Semantic router: {adapter_name} (similarity: {similarity_score:.3f})")
+        else:
+            adapter_name = adapter_result
     else:
-        adapter_name = adapter_result
+        # Use simple keyword router for remote mode
+        adapter_name = simple_keyword_router(chat_request.message)
+        logger.debug(f"Keyword router: {adapter_name}")
     
-    # Try to route to serving node first
+    # Try to route to serving node first (for both remote and local modes)
     serving_nodes = await serving_node_registry.get_serving_nodes_for_lora(
         lora_name=adapter_name,
         max_age_seconds=60
     )
     
-    # Local inference function with atomic credit handling
+    # Local inference function with atomic credit handling (only for local mode)
     async def _generate_local_inference_atomic():
         stream_started = False
         reservation_confirmed = False
         try:
             # Get inference executor
+            from .inference_executor import get_inference_executor
             inference_executor = await get_inference_executor(max_workers=int(os.getenv("MAX_WORKERS", "1")))
+            
+            # Get model manager
+            model_manager = get_model_manager()
+            if model_manager is None:
+                raise RuntimeError("Model manager not available. Set R3MES_INFERENCE_MODE=local and ensure GPU is available.")
             
             # Use inference executor to run in separate thread/process
             async for token in inference_executor.run_inference_streaming(
@@ -802,7 +909,22 @@ async def chat(request: Request, chat_request: ChatRequest):
         
         return StreamingResponse(generate_from_node_atomic(), media_type="text/plain")
     
-    # Fallback to local inference (existing behavior)
+    # Handle case when no serving nodes available
+    if inference_mode == InferenceMode.REMOTE:
+        # In remote mode, we MUST have serving nodes
+        logger.warning(f"No serving nodes available for {adapter_name} in remote mode")
+        # Rollback the credit reservation since we can't process the request
+        await database.rollback_credit_reservation(reservation_id)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "No serving nodes available",
+                "code": "NO_SERVING_NODES",
+                "message": f"No serving nodes are currently available for adapter '{adapter_name}'. Please try again later."
+            }
+        )
+    
+    # Fallback to local inference (only for local mode)
     logger.debug(f"No serving nodes available for {adapter_name}, using local inference")
     return StreamingResponse(_generate_local_inference_atomic(), media_type="text/plain")
 
@@ -1105,16 +1227,23 @@ async def delete_api_key(request: Request, revoke_request: RevokeAPIKeyRequest):
 @limiter.limit("100/minute")  # Health check için daha yüksek limit
 async def health_check(request: Request):
     """Health check endpoint."""
+    inference_mode = get_inference_mode()
+    model_manager = get_model_manager()
+    
     return {
         "status": "healthy",
-        "model_loaded": model_manager.base_model is not None,
-        "adapters_count": len(model_manager.adapters)
+        "inference_mode": inference_mode.value,
+        "model_loaded": model_manager.base_model is not None if model_manager else False,
+        "adapters_count": len(model_manager.adapters) if model_manager else 0
     }
 
 @app.get("/queue/stats")
 @limiter.limit(config.rate_limit_get)
 async def get_queue_stats(request: Request):
     """Get task queue statistics"""
+    task_queue = get_task_queue()
+    if task_queue is None:
+        return {"error": "Task queue not available", "inference_mode": get_inference_mode().value}
     return task_queue.get_queue_stats()
 
 @app.get("/metrics")

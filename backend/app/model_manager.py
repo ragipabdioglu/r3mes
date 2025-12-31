@@ -3,15 +3,86 @@ Model Manager - Multi-LoRA Engine
 
 Sunucu açıldığında Ana Modeli (BitNet) yükler ve istek geldiğinde
 "Tak-Çıkar" adaptörleri yönetir.
+
+NOTE: This module requires GPU libraries (torch, transformers, peft, bitsandbytes).
+It should only be imported when R3MES_INFERENCE_MODE=local.
+For GPU-less deployment, use the lazy loading pattern in main.py.
 """
 
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import torch
 from typing import Optional, Dict, Iterator, TYPE_CHECKING
 from pathlib import Path
 import os
 import logging
-from .model_loader import get_model_loader
+
+logger = logging.getLogger(__name__)
+
+# Lazy import GPU libraries to support GPU-less deployment
+# These imports are deferred until actually needed
+_torch = None
+_transformers = None
+_peft_available = None
+_bitsandbytes_available = None
+
+
+def _ensure_gpu_libraries():
+    """Lazy load GPU libraries when needed."""
+    global _torch, _transformers, _peft_available, _bitsandbytes_available
+    
+    if _torch is not None:
+        return  # Already loaded
+    
+    # Import torch
+    import torch as torch_module
+    _torch = torch_module
+    
+    # Set environment variables to help bitsandbytes find CUDA
+    os.environ.setdefault("BITSANDBYTES_NOWELCOME", "1")
+    
+    # Set CUDA version for bitsandbytes
+    try:
+        cuda_version = _torch.version.cuda
+        if cuda_version:
+            cuda_major, cuda_minor = cuda_version.split(".")[:2]
+            bnb_cuda_version = f"{cuda_major}{cuda_minor}"
+            os.environ.setdefault("BNB_CUDA_VERSION", bnb_cuda_version)
+            logger.info(f"Set BNB_CUDA_VERSION={bnb_cuda_version} for bitsandbytes")
+    except Exception:
+        pass
+    
+    # Try to add PyTorch's CUDA library path to LD_LIBRARY_PATH
+    try:
+        torch_lib_path = os.path.join(os.path.dirname(_torch.__file__), "lib")
+        if os.path.exists(torch_lib_path):
+            current_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+            if torch_lib_path not in current_ld_path:
+                os.environ["LD_LIBRARY_PATH"] = f"{torch_lib_path}:{current_ld_path}" if current_ld_path else torch_lib_path
+    except Exception:
+        pass
+    
+    # Import transformers
+    import transformers as transformers_module
+    _transformers = transformers_module
+    
+    # Try to import peft
+    try:
+        from peft import PeftModel
+        _peft_available = True
+    except Exception as e:
+        logger.warning(f"peft not available (bitsandbytes/CUDA issue): {e}")
+        logger.warning("Will use mock mode for adapters")
+        _peft_available = False
+    
+    # Try to import BitsAndBytesConfig
+    try:
+        from transformers import BitsAndBytesConfig
+        _bitsandbytes_available = True
+    except Exception as e:
+        logger.warning(f"bitsandbytes not available: {e}")
+        logger.warning("Will use CPU mode or full precision loading")
+        _bitsandbytes_available = False
+
+
+# Import exceptions (these don't require GPU)
 from .exceptions import (
     ProductionConfigurationError,
     ModelLoadError,
@@ -19,64 +90,6 @@ from .exceptions import (
     AdapterNotFoundError,
     InsufficientVRAMError,
 )
-
-logger = logging.getLogger(__name__)
-
-# Try to import PeftModel, fallback to mock if bitsandbytes/CUDA setup fails
-# Note: peft imports bitsandbytes which requires CUDA runtime library
-PEFT_AVAILABLE = False
-PeftModel = None
-
-# Set environment variables to help bitsandbytes find CUDA
-import os
-# Suppress bitsandbytes welcome message
-os.environ.setdefault("BITSANDBYTES_NOWELCOME", "1")
-
-# Set CUDA version for bitsandbytes (CUDA 12.8 = 128)
-try:
-    import torch
-    cuda_version = torch.version.cuda
-    if cuda_version:
-        # Convert "12.8" to "128" for bitsandbytes
-        cuda_major, cuda_minor = cuda_version.split(".")[:2]
-        bnb_cuda_version = f"{cuda_major}{cuda_minor}"
-        os.environ.setdefault("BNB_CUDA_VERSION", bnb_cuda_version)
-        logger.info(f"Set BNB_CUDA_VERSION={bnb_cuda_version} for bitsandbytes")
-except Exception:
-    pass
-
-# Try to add PyTorch's CUDA library path to LD_LIBRARY_PATH
-try:
-    import torch
-    torch_lib_path = os.path.join(os.path.dirname(torch.__file__), "lib")
-    if os.path.exists(torch_lib_path):
-        current_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
-        if torch_lib_path not in current_ld_path:
-            os.environ["LD_LIBRARY_PATH"] = f"{torch_lib_path}:{current_ld_path}" if current_ld_path else torch_lib_path
-except Exception:
-    pass
-
-# Now try to import peft
-try:
-    from peft import PeftModel
-    PEFT_AVAILABLE = True
-except Exception as e:
-    logger.warning(f"peft not available (bitsandbytes/CUDA issue): {e}")
-    logger.warning("Will use mock mode for adapters")
-    # Create a mock PeftModel class for type hints
-    class PeftModel:
-        pass
-    PEFT_AVAILABLE = False
-
-# Try to import BitsAndBytesConfig, fallback to None if CUDA setup fails
-try:
-    from transformers import BitsAndBytesConfig
-    BITSANDBYTES_AVAILABLE = True
-except Exception as e:
-    logger.warning(f"bitsandbytes not available: {e}")
-    logger.warning("Will use CPU mode or full precision loading")
-    BitsAndBytesConfig = None
-    BITSANDBYTES_AVAILABLE = False
 
 
 class AIModelManager:
@@ -88,6 +101,9 @@ class AIModelManager:
     - LoRA adaptörlerini dinamik olarak yükler/kaldırır
     - Adaptörler arasında geçiş yapar
     - Streaming response üretir
+    
+    NOTE: This class requires GPU libraries. Only instantiate when
+    R3MES_INFERENCE_MODE=local.
     """
     
     def __init__(self, base_model_path: Optional[str] = None):
@@ -97,6 +113,9 @@ class AIModelManager:
         Args:
             base_model_path: Base model dosya yolu (None ise multi-source loader kullanılır)
         """
+        # Ensure GPU libraries are loaded
+        _ensure_gpu_libraries()
+        
         # Check environment for production mode
         is_production = os.getenv("R3MES_ENV", "development").lower() == "production"
         use_mock_model = os.getenv("R3MES_USE_MOCK_MODEL", "false").lower() == "true"
@@ -111,6 +130,7 @@ class AIModelManager:
         
         # Use multi-source loader if path not provided
         if base_model_path is None:
+            from .model_loader import get_model_loader
             model_loader = get_model_loader()
             model_path, source = model_loader.get_model_path()
             
@@ -149,18 +169,23 @@ class AIModelManager:
             logger.warning("Using mock mode (for development)")
             self.base_model = None
             self.tokenizer = None
-            self.adapters: Dict[str, PeftModel] = {}
+            self.adapters: Dict[str, object] = {}
             self.active_adapter: Optional[str] = None
             return
         
         try:
+            # Get transformers classes
+            AutoModelForCausalLM = _transformers.AutoModelForCausalLM
+            AutoTokenizer = _transformers.AutoTokenizer
+            
             # Quantization config (4-bit loading for low VRAM) - only if bitsandbytes is available
             quantization_config = None
-            if BITSANDBYTES_AVAILABLE and BitsAndBytesConfig is not None:
+            if _bitsandbytes_available:
                 try:
+                    BitsAndBytesConfig = _transformers.BitsAndBytesConfig
                     quantization_config = BitsAndBytesConfig(
                         load_in_4bit=True,
-                        bnb_4bit_compute_dtype=torch.float16,
+                        bnb_4bit_compute_dtype=_torch.float16,
                         bnb_4bit_use_double_quant=True,
                         bnb_4bit_quant_type="nf4"
                     )
@@ -177,7 +202,7 @@ class AIModelManager:
             # Load base model with or without quantization
             load_kwargs = {
                 "device_map": "auto",
-                "torch_dtype": torch.float16
+                "torch_dtype": _torch.float16
             }
             if quantization_config is not None:
                 load_kwargs["quantization_config"] = quantization_config
@@ -188,7 +213,7 @@ class AIModelManager:
             )
             
             # Active adapters registry
-            self.adapters: Dict[str, PeftModel] = {}
+            self.adapters: Dict[str, object] = {}
             self.active_adapter: Optional[str] = None
             
             logger.info("Base model loaded with 4-bit quantization")
@@ -197,7 +222,7 @@ class AIModelManager:
             logger.warning("Using mock mode (for development)")
             self.base_model = None
             self.tokenizer = None
-            self.adapters: Dict[str, PeftModel] = {}
+            self.adapters: Dict[str, object] = {}
             self.active_adapter: Optional[str] = None
     
     def load_adapter(self, name: str, path: str) -> bool:
@@ -216,7 +241,16 @@ class AIModelManager:
             self.adapters[name] = None  # Mock adapter
             return True
         
+        # Check if peft is available (lazy loaded)
+        if not _peft_available:
+            logger.warning(f"peft not available, cannot load adapter '{name}'")
+            self.adapters[name] = None  # Mock adapter fallback
+            return True
+        
         try:
+            # Import PeftModel from lazy-loaded peft
+            from peft import PeftModel
+            
             # Load LoRA adapter
             adapter = PeftModel.from_pretrained(
                 self.base_model,
@@ -303,8 +337,8 @@ class AIModelManager:
             max_length=512
         ).to(self.base_model.device)
         
-        # Generate with streaming
-        with torch.no_grad():
+        # Generate with streaming (use lazy-loaded torch)
+        with _torch.no_grad():
             outputs = self.base_model.generate(
                 **inputs,
                 max_new_tokens=512,

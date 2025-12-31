@@ -1,0 +1,25 @@
+# R3MES Inference Dependencies (GPU required)
+# Use this file for Miner/Serving nodes that need local inference
+# Install on top of requirements-api.txt: pip install -r requirements-inference.txt
+
+# AI/ML Libraries (requires NVIDIA GPU with CUDA)
+torch>=2.1.0
+transformers==4.35.0
+peft==0.7.0
+bitsandbytes==0.41.3
+accelerate==0.25.0
+
+# Semantic Router (embedding-based routing)
+sentence-transformers>=2.2.0
+numpy>=1.24.0
+
+# NOTE: This file contains GPU-dependent libraries only.
+# Install requirements-api.txt first, then this file:
+#
+#   pip install -r requirements-api.txt
+#   pip install -r requirements-inference.txt
+#
+# Or use the full requirements.txt for combined installation:
+#   pip install -r requirements.txt
+#
+# Set R3MES_INFERENCE_MODE=local to enable local inference

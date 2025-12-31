@@ -153,6 +153,16 @@ class EnvironmentValidator:
                 example="production"
             ),
             
+            # Inference Mode Configuration
+            EnvVarRule(
+                name="R3MES_INFERENCE_MODE",
+                required=False,
+                default="disabled",
+                validator=self.validate_inference_mode,
+                description="Inference mode: disabled, mock, remote, or local",
+                example="remote"
+            ),
+            
             # Database Configuration
             EnvVarRule(
                 name="DATABASE_TYPE",
@@ -321,6 +331,46 @@ class EnvironmentValidator:
         valid_modes = ("development", "staging", "production")
         if value.lower() not in valid_modes:
             return False, f"Must be one of: {', '.join(valid_modes)}"
+        return True, None
+    
+    def validate_inference_mode(self, value: str) -> Tuple[bool, Optional[str]]:
+        """
+        Validate R3MES_INFERENCE_MODE value.
+        
+        Valid modes:
+        - disabled: No inference available (returns 503)
+        - mock: Returns mock responses (for testing)
+        - remote: Proxies requests to Serving Nodes (GPU-less deployment)
+        - local: Runs inference locally (requires GPU)
+        """
+        valid_modes = ("disabled", "mock", "remote", "local")
+        if value.lower() not in valid_modes:
+            return False, f"Must be one of: {', '.join(valid_modes)}"
+        
+        # Additional validation for local mode
+        if value.lower() == "local":
+            # Check if GPU libraries can be imported
+            try:
+                import torch
+                if not torch.cuda.is_available():
+                    return False, (
+                        "R3MES_INFERENCE_MODE=local requires GPU, but no CUDA device found. "
+                        "Use 'remote' or 'disabled' for GPU-less deployment."
+                    )
+            except ImportError:
+                return False, (
+                    "R3MES_INFERENCE_MODE=local requires torch, but it's not installed. "
+                    "Use 'remote' or 'disabled' for GPU-less deployment."
+                )
+        
+        # Warn about mock mode in production
+        if value.lower() == "mock" and self.is_production:
+            # This is a warning, not an error - allow it but log
+            logger.warning(
+                "R3MES_INFERENCE_MODE=mock in production. "
+                "This should only be used for testing purposes."
+            )
+        
         return True, None
     
     def validate_secret_management(self) -> Tuple[bool, List[str]]:
