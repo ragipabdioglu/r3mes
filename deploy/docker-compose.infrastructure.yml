@@ -1,5 +1,3 @@
-version: '3.8'
-
 # R3MES Infrastructure Stack (GPU-less deployment)
 # For Validator/Proposer nodes without GPU
 # Usage: docker compose -f docker-compose.infrastructure.yml up -d
@@ -69,8 +67,10 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       
-      # Blockchain
-      BLOCKCHAIN_RPC_URL: ${BLOCKCHAIN_RPC_URL:-http://remesd:26657}
+      # Blockchain (Real URLs - no localhost)
+      BLOCKCHAIN_RPC_URL: ${BLOCKCHAIN_RPC_URL:-https://rpc.r3mes.network}
+      BLOCKCHAIN_GRPC_URL: ${BLOCKCHAIN_GRPC_URL:-rpc.r3mes.network:9090}
+      BLOCKCHAIN_REST_URL: ${BLOCKCHAIN_REST_URL:-https://rpc.r3mes.network:1317}
       CHAIN_ID: ${CHAIN_ID:-remes-testnet-1}
       
       # Security
