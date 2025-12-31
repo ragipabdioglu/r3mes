@@ -4,6 +4,10 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
+pydantic-settings>=2.0.0  # Pydantic settings management
+python-multipart>=0.0.6  # Form data parsing
+websockets>=12.0  # WebSocket support
+starlette>=0.27.0  # ASGI framework (FastAPI dependency)
 
 # AI/ML Libraries
 transformers==4.35.0
@@ -53,6 +57,21 @@ opentelemetry-exporter-jaeger-thrift>=1.21.0  # Jaeger exporter
 # Blockchain Query
 grpcio>=1.60.0  # gRPC client (optional, for future gRPC support)
 requests>=2.31.0  # HTTP client for REST API fallback
+httpx>=0.25.0  # Async HTTP client
+aiohttp>=3.9.0  # Async HTTP client (alternative)
+
+# Security
+python-jose[cryptography]>=3.3.0  # JWT handling
+passlib[bcrypt]>=1.7.4  # Password hashing
+cryptography>=41.0.0  # Cryptographic operations
+
+# Async utilities
+anyio>=4.0.0  # Async compatibility layer
+asyncio-throttle>=1.0.0  # Async rate limiting
+
+# JSON handling
+orjson>=3.9.0  # Fast JSON serialization
+ujson>=5.8.0  # Ultra fast JSON
 
 # Secret Management
 google-cloud-secret-manager>=2.18.0  # Google Cloud Secret Manager
