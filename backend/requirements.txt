@@ -66,7 +66,7 @@ passlib[bcrypt]>=1.7.4  # Password hashing
 cryptography>=41.0.0  # Cryptographic operations
 
 # Async utilities
-anyio>=4.0.0  # Async compatibility layer
+anyio>=3.7.1,<4.0.0  # Async compatibility layer (FastAPI 0.104.1 requires <4.0.0)
 asyncio-throttle>=1.0.0  # Async rate limiting
 
 # JSON handling
