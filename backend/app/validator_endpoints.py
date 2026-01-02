@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from .blockchain_query_client import get_blockchain_client
-from .cache import cache_response
+from .cache_middleware import cache_response
 
 logger = logging.getLogger(__name__)
 
