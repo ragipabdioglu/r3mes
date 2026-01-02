@@ -984,7 +984,7 @@ async def get_network_stats(request: Request) -> NetworkStatsResponse:
 @limiter.limit(config.rate_limit_get)
 async def get_blocks(
     request: Request,
-    limit: int = Field(10, ge=1, le=100, description="Number of blocks to return (1-100)")
+    limit: int = Query(default=10, ge=1, le=100, description="Number of blocks to return (1-100)")
 ) -> BlocksResponse:
     """
     Son blokları döndürür.
@@ -1047,7 +1047,7 @@ async def get_miner_stats(
 async def get_miner_earnings(
     request: Request,
     wallet_address: str = PathParam(..., description="Miner wallet address", min_length=20, max_length=60, pattern="^remes[a-z0-9]+$"),
-    days: int = Field(7, ge=1, le=365, description="Number of days to retrieve (1-365)")
+    days: int = Query(default=7, ge=1, le=365, description="Number of days to retrieve (1-365)")
 ) -> EarningsHistoryResponse:
     """
     Miner earnings geçmişini döndürür.
@@ -1068,7 +1068,7 @@ async def get_miner_earnings(
 async def get_miner_hashrate(
     request: Request,
     wallet_address: str = PathParam(..., description="Miner wallet address", min_length=20, max_length=60, pattern="^remes[a-z0-9]+$"),
-    days: int = Field(7, ge=1, le=365, description="Number of days to retrieve (1-365)")
+    days: int = Query(default=7, ge=1, le=365, description="Number of days to retrieve (1-365)")
 ) -> HashrateHistoryResponse:
     """
     Miner hashrate geçmişini döndürür.
