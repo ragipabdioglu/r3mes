@@ -22,7 +22,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /remesd ./cmd/remesd
 # ===========================================
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates curl jq
+RUN apk add --no-cache ca-certificates curl jq bash
 
 # Copy binary from builder
 COPY --from=builder /remesd /usr/local/bin/remesd
@@ -37,9 +37,25 @@ EXPOSE 26656 26657 1317 9090
 ENV MONIKER="r3mes-validator"
 ENV CHAIN_ID="r3mes-testnet-1"
 
-# Entrypoint script
-COPY deploy/testnet/entrypoint-validator.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Create entrypoint script inline
+RUN echo '#!/bin/bash' > /entrypoint.sh && \
+    echo 'set -e' >> /entrypoint.sh && \
+    echo 'REMES_HOME="/root/.remes"' >> /entrypoint.sh && \
+    echo 'CHAIN_ID="${CHAIN_ID:-r3mes-testnet-1}"' >> /entrypoint.sh && \
+    echo 'MONIKER="${MONIKER:-r3mes-validator}"' >> /entrypoint.sh && \
+    echo 'if [ ! -f "$REMES_HOME/config/config.toml" ]; then' >> /entrypoint.sh && \
+    echo '    echo "Initializing R3MES node..."' >> /entrypoint.sh && \
+    echo '    remesd init "$MONIKER" --chain-id "$CHAIN_ID" --home "$REMES_HOME"' >> /entrypoint.sh && \
+    echo '    sed -i "s/laddr = \"tcp:\\/\\/127.0.0.1:26657\"/laddr = \"tcp:\\/\\/0.0.0.0:26657\"/" "$REMES_HOME/config/config.toml"' >> /entrypoint.sh && \
+    echo '    sed -i "s/cors_allowed_origins = \\[\\]/cors_allowed_origins = [\"*\"]/" "$REMES_HOME/config/config.toml"' >> /entrypoint.sh && \
+    echo '    sed -i "s/enable = false/enable = true/" "$REMES_HOME/config/app.toml"' >> /entrypoint.sh && \
+    echo '    sed -i "s/swagger = false/swagger = true/" "$REMES_HOME/config/app.toml"' >> /entrypoint.sh && \
+    echo '    sed -i "s/address = \"tcp:\\/\\/localhost:1317\"/address = \"tcp:\\/\\/0.0.0.0:1317\"/" "$REMES_HOME/config/app.toml"' >> /entrypoint.sh && \
+    echo '    sed -i "s/address = \"localhost:9090\"/address = \"0.0.0.0:9090\"/" "$REMES_HOME/config/app.toml"' >> /entrypoint.sh && \
+    echo '    sed -i "s/minimum-gas-prices = \"\"/minimum-gas-prices = \"0.025ur3mes\"/" "$REMES_HOME/config/app.toml"' >> /entrypoint.sh && \
+    echo 'fi' >> /entrypoint.sh && \
+    echo 'exec "$@"' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["remesd", "start"]
