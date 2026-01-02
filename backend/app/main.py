@@ -1019,7 +1019,7 @@ async def get_blocks(
 @limiter.limit(config.rate_limit_get)
 async def get_miner_stats(
     request: Request,
-    wallet_address: str = PathParam(..., description="Miner wallet address", min_length=20, max_length=60, pattern="^remes[a-z0-9]+$")
+    wallet_address: str = FastAPIPath(..., description="Miner wallet address", min_length=20, max_length=60, pattern="^remes[a-z0-9]+$")
 ) -> MinerStatsResponse:
     """
     Miner istatistiklerini döndürür.
@@ -1046,7 +1046,7 @@ async def get_miner_stats(
 @limiter.limit(config.rate_limit_get)
 async def get_miner_earnings(
     request: Request,
-    wallet_address: str = PathParam(..., description="Miner wallet address", min_length=20, max_length=60, pattern="^remes[a-z0-9]+$"),
+    wallet_address: str = FastAPIPath(..., description="Miner wallet address", min_length=20, max_length=60, pattern="^remes[a-z0-9]+$"),
     days: int = Query(default=7, ge=1, le=365, description="Number of days to retrieve (1-365)")
 ) -> EarningsHistoryResponse:
     """
@@ -1067,7 +1067,7 @@ async def get_miner_earnings(
 @limiter.limit(config.rate_limit_get)
 async def get_miner_hashrate(
     request: Request,
-    wallet_address: str = PathParam(..., description="Miner wallet address", min_length=20, max_length=60, pattern="^remes[a-z0-9]+$"),
+    wallet_address: str = FastAPIPath(..., description="Miner wallet address", min_length=20, max_length=60, pattern="^remes[a-z0-9]+$"),
     days: int = Query(default=7, ge=1, le=365, description="Number of days to retrieve (1-365)")
 ) -> HashrateHistoryResponse:
     """
