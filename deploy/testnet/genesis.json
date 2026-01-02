@@ -32,7 +32,7 @@
       "accounts": [
         {
           "@type": "/cosmos.auth.v1beta1.BaseAccount",
-          "address": "remes1jrtxwayldq3l3wu4frt8eg9syzcdkzw7vmmsmh",
+          "address": "remes1jrtxwayldq3l3wu4frt8eg9syzcdkzw7vmmshm",
           "pub_key": null,
           "account_number": "0",
           "sequence": "0"
@@ -69,7 +69,7 @@
           ]
         },
         {
-          "address": "remes1jrtxwayldq3l3wu4frt8eg9syzcdkzw7vmmsmh",
+          "address": "remes1jrtxwayldq3l3wu4frt8eg9syzcdkzw7vmmshm",
           "coins": [
             {
               "denom": "ur3mes",
