@@ -229,20 +229,37 @@
     },
     "remes": {
       "params": {
-        "min_stake": "1000000000",
-        "training_reward_rate": "0.100000000000000000",
-        "serving_reward_rate": "0.050000000000000000",
-        "proposer_reward_rate": "0.020000000000000000",
-        "slash_fraction": "0.010000000000000000",
-        "min_training_nodes": 3,
-        "aggregation_threshold": "0.670000000000000000",
-        "model_update_interval": 100,
-        "gradient_submission_window": 50
+        "nonce_window_size": "10000",
+        "min_stake": "1000",
+        "stake_denom": "ur3mes",
+        "mining_difficulty": "1234.0",
+        "reward_per_gradient": "0.1",
+        "max_validators": "100",
+        "slashing_penalty": "0.05",
+        "challenge_period_blocks": "100",
+        "scalability_params": {
+          "max_participants_per_shard": "1000",
+          "max_gradients_per_block": "100",
+          "max_aggregations_per_block": "50",
+          "max_pending_gradients": "10000",
+          "max_pending_aggregations": "1000",
+          "compression_ratio_threshold": "0.9",
+          "network_load_threshold": "0.8",
+          "resource_utilization_threshold": "0.8",
+          "enable_load_balancing": true,
+          "load_balancing_strategy": "round_robin",
+          "shard_reassignment_interval": "100",
+          "enable_adaptive_compression": true,
+          "enable_adaptive_sharding": true,
+          "enable_resource_optimization": true
+        }
       },
-      "model_registry": [],
-      "node_registrations": [],
-      "training_rounds": [],
-      "gradient_submissions": []
+      "model_hash": "",
+      "model_version": "v1.0.0",
+      "initial_participants": [],
+      "stored_gradient_list": [],
+      "model_registry_list": [],
+      "genesis_vault_list": []
     },
     "ibc": {
       "client_genesis": {
