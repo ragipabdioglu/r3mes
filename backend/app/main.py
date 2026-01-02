@@ -4,7 +4,7 @@ R3MES Backend Inference Service - FastAPI Application
 Web sitesinin (Frontend) bağlanacağı kapıları açar.
 """
 
-from fastapi import FastAPI, HTTPException, Request, Depends, Header, Path as FastAPIPath
+from fastapi import FastAPI, HTTPException, Request, Depends, Header, Path as FastAPIPath, Query
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
