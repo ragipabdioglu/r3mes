@@ -6,6 +6,7 @@ import (
 
 	clienthelpers "cosmossdk.io/client/v2/helpers"
 	svrcmd "github.com/cosmos/cosmos-sdk/server/cmd"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"remes/app"
 	"remes/cmd/remesd/cmd"
@@ -13,6 +14,14 @@ import (
 )
 
 func main() {
+	// Set SDK config with correct bech32 prefixes BEFORE anything else
+	config := sdk.GetConfig()
+	config.SetBech32PrefixForAccount(app.AccountAddressPrefix, app.AccountAddressPrefix+"pub")
+	config.SetBech32PrefixForValidator(app.AccountAddressPrefix+"valoper", app.AccountAddressPrefix+"valoperpub")
+	config.SetBech32PrefixForConsensusNode(app.AccountAddressPrefix+"valcons", app.AccountAddressPrefix+"valconspub")
+	config.SetCoinType(app.ChainCoinType)
+	config.Seal()
+
 	// Validate environment configuration before starting
 	if validationErrors := app.ValidateEnvironment(); len(validationErrors) > 0 {
 		app.PrintValidationErrors(validationErrors)
