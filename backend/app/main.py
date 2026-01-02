@@ -706,6 +706,15 @@ class EarningsHistoryResponse(BaseModel):
 class HashrateHistoryResponse(BaseModel):
     hashrate: list[dict]
 
+class LoRARegistryResponse(BaseModel):
+    id: int
+    name: str
+    ipfs_hash: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    version: Optional[str] = None
+    created_at: Optional[str] = None
+
 @app.post("/chat")
 @limiter.limit(config.rate_limit_chat)
 async def chat(request: Request, chat_request: ChatRequest):
