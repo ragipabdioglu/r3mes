@@ -66,6 +66,7 @@ class AppConfig:
     # API settings (can be overridden via environment variables in load() method)
     rate_limit_chat: str = "10/minute"
     rate_limit_get: str = "30/minute"
+    rate_limit_post: str = "20/minute"
     
     # Network settings
     # Note: Defaults are None for production safety. In production, these must be set via environment variables.
@@ -313,6 +314,7 @@ class ConfigManager:
         # Rate limiting settings (support both old RATE_LIMIT_* and new BACKEND_RATE_LIMIT_* for backward compatibility)
         config.rate_limit_chat = os.getenv("BACKEND_RATE_LIMIT_CHAT") or os.getenv("RATE_LIMIT_CHAT", config.rate_limit_chat)
         config.rate_limit_get = os.getenv("BACKEND_RATE_LIMIT_GET") or os.getenv("RATE_LIMIT_GET", config.rate_limit_get)
+        config.rate_limit_post = os.getenv("BACKEND_RATE_LIMIT_POST") or os.getenv("RATE_LIMIT_POST", config.rate_limit_post)
         
         # Network settings (already handled above in env_mode check, but keep for backward compatibility)
         # Only override if not already set by production/development logic above
