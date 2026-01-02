@@ -4,7 +4,9 @@
 package types
 
 import (
+	cosmossdk_io_math "cosmossdk.io/math"
 	fmt "fmt"
+	_ "github.com/cosmos/cosmos-proto"
 	_ "github.com/cosmos/cosmos-sdk/types/tx/amino"
 	_ "github.com/cosmos/gogoproto/gogoproto"
 	proto "github.com/cosmos/gogoproto/proto"
@@ -26,6 +28,32 @@ const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
 // Params defines the parameters for the module.
 type Params struct {
+	// Nonce window size for mining validation
+	// Default: 10000
+	NonceWindowSize uint64 `protobuf:"varint,1,opt,name=nonce_window_size,json=nonceWindowSize,proto3" json:"nonce_window_size,omitempty"`
+	// Minimum stake required for validators
+	// Default: 1000 tokens
+	MinStake cosmossdk_io_math.Int `protobuf:"bytes,2,opt,name=min_stake,json=minStake,proto3,customtype=cosmossdk.io/math.Int" json:"min_stake"`
+	// Denomination for staking
+	// Default: "remes"
+	StakeDenom string `protobuf:"bytes,3,opt,name=stake_denom,json=stakeDenom,proto3" json:"stake_denom,omitempty"`
+	// Mining difficulty as string for decimal precision
+	// Default: "1234.0"
+	MiningDifficulty string `protobuf:"bytes,4,opt,name=mining_difficulty,json=miningDifficulty,proto3" json:"mining_difficulty,omitempty"`
+	// Reward per gradient as string for decimal precision
+	// Default: "0.1"
+	RewardPerGradient string `protobuf:"bytes,5,opt,name=reward_per_gradient,json=rewardPerGradient,proto3" json:"reward_per_gradient,omitempty"`
+	// Maximum number of validators
+	// Default: 100
+	MaxValidators uint64 `protobuf:"varint,6,opt,name=max_validators,json=maxValidators,proto3" json:"max_validators,omitempty"`
+	// Slashing penalty as string for decimal precision (0.0-1.0)
+	// Default: "0.05" (5%)
+	SlashingPenalty string `protobuf:"bytes,7,opt,name=slashing_penalty,json=slashingPenalty,proto3" json:"slashing_penalty,omitempty"`
+	// Challenge period blocks - number of blocks before aggregation can be finalized
+	// Default: 100 blocks (~8 minutes at 5s/block)
+	ChallengePeriodBlocks int64 `protobuf:"varint,8,opt,name=challenge_period_blocks,json=challengePeriodBlocks,proto3" json:"challenge_period_blocks,omitempty"`
+	// Scalability parameters for adaptive scaling mechanisms
+	ScalabilityParams ScalabilityParams `protobuf:"bytes,9,opt,name=scalability_params,json=scalabilityParams,proto3" json:"scalability_params"`
 }
 
 func (m *Params) Reset()         { *m = Params{} }
@@ -61,24 +89,277 @@ func (m *Params) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_Params proto.InternalMessageInfo
 
+func (m *Params) GetNonceWindowSize() uint64 {
+	if m != nil {
+		return m.NonceWindowSize
+	}
+	return 0
+}
+
+func (m *Params) GetStakeDenom() string {
+	if m != nil {
+		return m.StakeDenom
+	}
+	return ""
+}
+
+func (m *Params) GetMiningDifficulty() string {
+	if m != nil {
+		return m.MiningDifficulty
+	}
+	return ""
+}
+
+func (m *Params) GetRewardPerGradient() string {
+	if m != nil {
+		return m.RewardPerGradient
+	}
+	return ""
+}
+
+func (m *Params) GetMaxValidators() uint64 {
+	if m != nil {
+		return m.MaxValidators
+	}
+	return 0
+}
+
+func (m *Params) GetSlashingPenalty() string {
+	if m != nil {
+		return m.SlashingPenalty
+	}
+	return ""
+}
+
+func (m *Params) GetChallengePeriodBlocks() int64 {
+	if m != nil {
+		return m.ChallengePeriodBlocks
+	}
+	return 0
+}
+
+func (m *Params) GetScalabilityParams() ScalabilityParams {
+	if m != nil {
+		return m.ScalabilityParams
+	}
+	return ScalabilityParams{}
+}
+
+// ScalabilityParams holds configuration for adaptive scaling mechanisms
+type ScalabilityParams struct {
+	// Thresholds for adaptive scaling
+	MaxParticipantsPerShard uint64 `protobuf:"varint,1,opt,name=max_participants_per_shard,json=maxParticipantsPerShard,proto3" json:"max_participants_per_shard,omitempty"`
+	MaxGradientsPerBlock    uint64 `protobuf:"varint,2,opt,name=max_gradients_per_block,json=maxGradientsPerBlock,proto3" json:"max_gradients_per_block,omitempty"`
+	MaxAggregationsPerBlock uint64 `protobuf:"varint,3,opt,name=max_aggregations_per_block,json=maxAggregationsPerBlock,proto3" json:"max_aggregations_per_block,omitempty"`
+	MaxPendingGradients     uint64 `protobuf:"varint,4,opt,name=max_pending_gradients,json=maxPendingGradients,proto3" json:"max_pending_gradients,omitempty"`
+	MaxPendingAggregations  uint64 `protobuf:"varint,5,opt,name=max_pending_aggregations,json=maxPendingAggregations,proto3" json:"max_pending_aggregations,omitempty"`
+	// Adaptive parameters (as strings for decimal precision)
+	CompressionRatioThreshold    string `protobuf:"bytes,6,opt,name=compression_ratio_threshold,json=compressionRatioThreshold,proto3" json:"compression_ratio_threshold,omitempty"`
+	NetworkLoadThreshold         string `protobuf:"bytes,7,opt,name=network_load_threshold,json=networkLoadThreshold,proto3" json:"network_load_threshold,omitempty"`
+	ResourceUtilizationThreshold string `protobuf:"bytes,8,opt,name=resource_utilization_threshold,json=resourceUtilizationThreshold,proto3" json:"resource_utilization_threshold,omitempty"`
+	// Load balancing
+	EnableLoadBalancing       bool   `protobuf:"varint,9,opt,name=enable_load_balancing,json=enableLoadBalancing,proto3" json:"enable_load_balancing,omitempty"`
+	LoadBalancingStrategy     string `protobuf:"bytes,10,opt,name=load_balancing_strategy,json=loadBalancingStrategy,proto3" json:"load_balancing_strategy,omitempty"`
+	ShardReassignmentInterval uint64 `protobuf:"varint,11,opt,name=shard_reassignment_interval,json=shardReassignmentInterval,proto3" json:"shard_reassignment_interval,omitempty"`
+	// Performance optimization
+	EnableAdaptiveCompression  bool `protobuf:"varint,12,opt,name=enable_adaptive_compression,json=enableAdaptiveCompression,proto3" json:"enable_adaptive_compression,omitempty"`
+	EnableAdaptiveSharding     bool `protobuf:"varint,13,opt,name=enable_adaptive_sharding,json=enableAdaptiveSharding,proto3" json:"enable_adaptive_sharding,omitempty"`
+	EnableResourceOptimization bool `protobuf:"varint,14,opt,name=enable_resource_optimization,json=enableResourceOptimization,proto3" json:"enable_resource_optimization,omitempty"`
+}
+
+func (m *ScalabilityParams) Reset()         { *m = ScalabilityParams{} }
+func (m *ScalabilityParams) String() string { return proto.CompactTextString(m) }
+func (*ScalabilityParams) ProtoMessage()    {}
+func (*ScalabilityParams) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e73843849ab2fa2a, []int{1}
+}
+func (m *ScalabilityParams) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ScalabilityParams) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ScalabilityParams.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ScalabilityParams) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScalabilityParams.Merge(m, src)
+}
+func (m *ScalabilityParams) XXX_Size() int {
+	return m.Size()
+}
+func (m *ScalabilityParams) XXX_DiscardUnknown() {
+	xxx_messageInfo_ScalabilityParams.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ScalabilityParams proto.InternalMessageInfo
+
+func (m *ScalabilityParams) GetMaxParticipantsPerShard() uint64 {
+	if m != nil {
+		return m.MaxParticipantsPerShard
+	}
+	return 0
+}
+
+func (m *ScalabilityParams) GetMaxGradientsPerBlock() uint64 {
+	if m != nil {
+		return m.MaxGradientsPerBlock
+	}
+	return 0
+}
+
+func (m *ScalabilityParams) GetMaxAggregationsPerBlock() uint64 {
+	if m != nil {
+		return m.MaxAggregationsPerBlock
+	}
+	return 0
+}
+
+func (m *ScalabilityParams) GetMaxPendingGradients() uint64 {
+	if m != nil {
+		return m.MaxPendingGradients
+	}
+	return 0
+}
+
+func (m *ScalabilityParams) GetMaxPendingAggregations() uint64 {
+	if m != nil {
+		return m.MaxPendingAggregations
+	}
+	return 0
+}
+
+func (m *ScalabilityParams) GetCompressionRatioThreshold() string {
+	if m != nil {
+		return m.CompressionRatioThreshold
+	}
+	return ""
+}
+
+func (m *ScalabilityParams) GetNetworkLoadThreshold() string {
+	if m != nil {
+		return m.NetworkLoadThreshold
+	}
+	return ""
+}
+
+func (m *ScalabilityParams) GetResourceUtilizationThreshold() string {
+	if m != nil {
+		return m.ResourceUtilizationThreshold
+	}
+	return ""
+}
+
+func (m *ScalabilityParams) GetEnableLoadBalancing() bool {
+	if m != nil {
+		return m.EnableLoadBalancing
+	}
+	return false
+}
+
+func (m *ScalabilityParams) GetLoadBalancingStrategy() string {
+	if m != nil {
+		return m.LoadBalancingStrategy
+	}
+	return ""
+}
+
+func (m *ScalabilityParams) GetShardReassignmentInterval() uint64 {
+	if m != nil {
+		return m.ShardReassignmentInterval
+	}
+	return 0
+}
+
+func (m *ScalabilityParams) GetEnableAdaptiveCompression() bool {
+	if m != nil {
+		return m.EnableAdaptiveCompression
+	}
+	return false
+}
+
+func (m *ScalabilityParams) GetEnableAdaptiveSharding() bool {
+	if m != nil {
+		return m.EnableAdaptiveSharding
+	}
+	return false
+}
+
+func (m *ScalabilityParams) GetEnableResourceOptimization() bool {
+	if m != nil {
+		return m.EnableResourceOptimization
+	}
+	return false
+}
+
 func init() {
 	proto.RegisterType((*Params)(nil), "remes.remes.v1.Params")
+	proto.RegisterType((*ScalabilityParams)(nil), "remes.remes.v1.ScalabilityParams")
 }
 
 func init() { proto.RegisterFile("remes/remes/v1/params.proto", fileDescriptor_e73843849ab2fa2a) }
 
 var fileDescriptor_e73843849ab2fa2a = []byte{
-	// 149 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x92, 0x2e, 0x4a, 0xcd, 0x4d,
-	0x2d, 0xd6, 0x87, 0x90, 0x65, 0x86, 0xfa, 0x05, 0x89, 0x45, 0x89, 0xb9, 0xc5, 0x7a, 0x05, 0x45,
-	0xf9, 0x25, 0xf9, 0x42, 0x7c, 0x60, 0x61, 0x3d, 0x08, 0x59, 0x66, 0x28, 0x25, 0x98, 0x98, 0x9b,
-	0x99, 0x97, 0xaf, 0x0f, 0x26, 0x21, 0x4a, 0xa4, 0x44, 0xd2, 0xf3, 0xd3, 0xf3, 0xc1, 0x4c, 0x7d,
-	0x10, 0x0b, 0x22, 0xaa, 0xa4, 0xce, 0xc5, 0x16, 0x00, 0x36, 0xc8, 0x4a, 0xf6, 0xc5, 0x02, 0x79,
-	0xc6, 0xae, 0xe7, 0x1b, 0xb4, 0x44, 0x20, 0x56, 0x54, 0x40, 0xad, 0x82, 0x48, 0x3b, 0xe9, 0x9e,
-	0x78, 0x24, 0xc7, 0x78, 0xe1, 0x91, 0x1c, 0xe3, 0x83, 0x47, 0x72, 0x8c, 0x13, 0x1e, 0xcb, 0x31,
-	0x5c, 0x78, 0x2c, 0xc7, 0x70, 0xe3, 0xb1, 0x1c, 0x43, 0x94, 0x30, 0xaa, 0xfa, 0x92, 0xca, 0x82,
-	0xd4, 0xe2, 0x24, 0x36, 0xb0, 0xf1, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xdc, 0x61, 0x9b,
-	0xa4, 0xb6, 0x00, 0x00, 0x00,
+	// 837 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x54, 0x5d, 0x6f, 0x1b, 0x45,
+	0x14, 0xcd, 0x12, 0x93, 0x26, 0x13, 0x9a, 0xd6, 0x93, 0x38, 0xdd, 0xa4, 0xc5, 0x0e, 0x95, 0x90,
+	0x4c, 0xab, 0xda, 0x6a, 0xf8, 0x10, 0x2a, 0x12, 0xa2, 0x21, 0x12, 0x44, 0x42, 0xc2, 0x5a, 0x43,
+	0x91, 0x78, 0x19, 0x5d, 0xef, 0x4e, 0xd7, 0xa3, 0xec, 0xce, 0xac, 0x66, 0x26, 0xfe, 0xc8, 0x13,
+	0xcf, 0x3c, 0xf1, 0x13, 0xf8, 0x09, 0x3c, 0xf0, 0x23, 0xfa, 0x58, 0xf1, 0x84, 0x78, 0xa8, 0x50,
+	0xf2, 0x00, 0x7f, 0x02, 0x09, 0xcd, 0x9d, 0xf5, 0x7a, 0xdd, 0xbe, 0xac, 0xd6, 0xf7, 0x9c, 0x33,
+	0xe7, 0xee, 0xbd, 0x67, 0x4c, 0xee, 0x6a, 0x9e, 0x73, 0xd3, 0xf7, 0xcf, 0xc9, 0xe3, 0x7e, 0x01,
+	0x1a, 0x72, 0xd3, 0x2b, 0xb4, 0xb2, 0x8a, 0xee, 0x60, 0xb9, 0xe7, 0x9f, 0x93, 0xc7, 0x87, 0x4d,
+	0xc8, 0x85, 0x54, 0x7d, 0x7c, 0x7a, 0xca, 0xe1, 0x5e, 0xaa, 0x52, 0x85, 0xaf, 0x7d, 0xf7, 0x56,
+	0x56, 0x0f, 0x62, 0x65, 0x72, 0x65, 0x98, 0x07, 0xfc, 0x0f, 0x0f, 0xdd, 0xff, 0x6f, 0x9d, 0x6c,
+	0x0c, 0xd0, 0x84, 0x3e, 0x20, 0x4d, 0xa9, 0x64, 0xcc, 0xd9, 0x54, 0xc8, 0x44, 0x4d, 0x99, 0x11,
+	0x97, 0x3c, 0x0c, 0x8e, 0x82, 0x6e, 0x23, 0xba, 0x85, 0xc0, 0x0f, 0x58, 0x1f, 0x8a, 0x4b, 0x4e,
+	0xbf, 0x26, 0x5b, 0xb9, 0x90, 0xcc, 0x58, 0x38, 0xe7, 0xe1, 0x5b, 0x47, 0x41, 0x77, 0xeb, 0xe4,
+	0xe1, 0x8b, 0x57, 0x9d, 0xb5, 0xbf, 0x5e, 0x75, 0x5a, 0xfe, 0x7c, 0x93, 0x9c, 0xf7, 0x84, 0xea,
+	0xe7, 0x60, 0xc7, 0xbd, 0x33, 0x69, 0xff, 0xf8, 0xfd, 0x11, 0x29, 0x8d, 0xcf, 0xa4, 0x8d, 0x36,
+	0x73, 0x21, 0x87, 0x4e, 0x4c, 0x3b, 0x64, 0x1b, 0x4f, 0x61, 0x09, 0x97, 0x2a, 0x0f, 0xd7, 0xdd,
+	0x59, 0x11, 0xc1, 0xd2, 0xa9, 0xab, 0xd0, 0x87, 0xa4, 0x99, 0x0b, 0x29, 0x64, 0xca, 0x12, 0xf1,
+	0xfc, 0xb9, 0x88, 0x2f, 0x32, 0x3b, 0x0f, 0x1b, 0x48, 0xbb, 0xed, 0x81, 0xd3, 0xaa, 0x4e, 0x7b,
+	0x64, 0x57, 0xf3, 0x29, 0xe8, 0x84, 0x15, 0x5c, 0xb3, 0x54, 0x43, 0x22, 0xb8, 0xb4, 0xe1, 0xdb,
+	0x48, 0x6f, 0x7a, 0x68, 0xc0, 0xf5, 0x57, 0x25, 0x40, 0xdf, 0x27, 0x3b, 0x39, 0xcc, 0xd8, 0x04,
+	0x32, 0x91, 0x80, 0x55, 0xda, 0x84, 0x1b, 0xf8, 0xc1, 0x37, 0x73, 0x98, 0x3d, 0xab, 0x8a, 0xf4,
+	0x03, 0x72, 0xdb, 0x64, 0x60, 0xc6, 0xae, 0x8b, 0x82, 0x4b, 0x70, 0x2d, 0xdc, 0xc0, 0x33, 0x6f,
+	0x2d, 0xea, 0x03, 0x5f, 0xa6, 0x9f, 0x90, 0x3b, 0xf1, 0x18, 0xb2, 0x8c, 0xcb, 0x94, 0xbb, 0x26,
+	0x84, 0x4a, 0xd8, 0x28, 0x53, 0xf1, 0xb9, 0x09, 0x37, 0x8f, 0x82, 0xee, 0x7a, 0xd4, 0xaa, 0xe0,
+	0x01, 0xa2, 0x27, 0x08, 0xd2, 0x67, 0x84, 0x9a, 0x18, 0x32, 0x18, 0x89, 0x4c, 0xd8, 0x39, 0xf3,
+	0x8b, 0x0f, 0xb7, 0x8e, 0x82, 0xee, 0xf6, 0xf1, 0x7b, 0xbd, 0xd5, 0xcd, 0xf7, 0x86, 0x4b, 0xa6,
+	0x5f, 0xde, 0x49, 0xc3, 0x4d, 0x3f, 0x6a, 0x9a, 0xd7, 0x81, 0x27, 0xef, 0xfe, 0xfb, 0x6b, 0x27,
+	0xf8, 0xf9, 0x9f, 0xdf, 0x1e, 0xec, 0xf9, 0x50, 0xcd, 0xca, 0x70, 0x79, 0xf8, 0xfe, 0x4f, 0x37,
+	0x48, 0xf3, 0x8d, 0xd3, 0xe8, 0x67, 0xe4, 0xd0, 0x8d, 0xa5, 0x00, 0x6d, 0x45, 0x2c, 0x0a, 0x90,
+	0xd6, 0xe0, 0x40, 0xcd, 0x18, 0x74, 0x52, 0x66, 0xe2, 0x4e, 0x0e, 0xb3, 0x41, 0x8d, 0x30, 0xe0,
+	0x7a, 0xe8, 0x60, 0xfa, 0x31, 0x71, 0x50, 0x35, 0x7c, 0xaf, 0xc4, 0x11, 0x60, 0x52, 0x1a, 0xd1,
+	0x5e, 0x0e, 0xb3, 0xc5, 0x06, 0x9c, 0x0c, 0x27, 0xb0, 0xf0, 0x84, 0x34, 0xd5, 0x3c, 0x05, 0x2b,
+	0x94, 0xac, 0x2b, 0xd7, 0x2b, 0xcf, 0xa7, 0x35, 0x42, 0x25, 0x3e, 0x26, 0x2d, 0x6c, 0x98, 0xcb,
+	0xc4, 0xed, 0xa8, 0xf2, 0xc6, 0xa0, 0x34, 0xa2, 0x5d, 0xd7, 0xab, 0xc7, 0x2a, 0x63, 0xfa, 0x29,
+	0x09, 0xeb, 0x9a, 0xba, 0x31, 0x06, 0xa6, 0x11, 0xed, 0x2f, 0x65, 0x75, 0x57, 0xfa, 0x39, 0xb9,
+	0x1b, 0xab, 0xbc, 0xd0, 0xdc, 0x18, 0xa1, 0x24, 0xd3, 0xae, 0xcc, 0xec, 0x58, 0x73, 0x33, 0x56,
+	0x59, 0x82, 0x11, 0xda, 0x8a, 0x0e, 0x6a, 0x94, 0xc8, 0x31, 0xbe, 0x5b, 0x10, 0xe8, 0x47, 0x64,
+	0x5f, 0x72, 0x3b, 0x55, 0xfa, 0x9c, 0x65, 0x0a, 0x92, 0x9a, 0xd4, 0x87, 0x6a, 0xaf, 0x44, 0xbf,
+	0x51, 0x90, 0x2c, 0x55, 0xa7, 0xa4, 0xad, 0xb9, 0x51, 0x17, 0x3a, 0xe6, 0xec, 0xc2, 0x8a, 0x4c,
+	0x5c, 0x62, 0x3b, 0x35, 0xf5, 0x26, 0xaa, 0xef, 0x2d, 0x58, 0xdf, 0x2f, 0x49, 0xcb, 0x53, 0x8e,
+	0x49, 0x8b, 0x4b, 0x18, 0x65, 0xdc, 0x5b, 0x8f, 0x20, 0x03, 0x19, 0x0b, 0x99, 0x62, 0xd4, 0x36,
+	0xa3, 0x5d, 0x0f, 0x3a, 0xe7, 0x93, 0x05, 0xe4, 0x32, 0xbd, 0x4a, 0x66, 0xc6, 0x6a, 0xb0, 0x3c,
+	0x9d, 0x87, 0x04, 0x2d, 0x5b, 0x59, 0x9d, 0x3f, 0x2c, 0x41, 0x37, 0x27, 0x4c, 0x0c, 0xd3, 0x1c,
+	0x8c, 0x11, 0xa9, 0xcc, 0xb9, 0xb4, 0x4c, 0x48, 0xcb, 0xf5, 0x04, 0xb2, 0x70, 0x1b, 0x87, 0x7c,
+	0x80, 0x94, 0xa8, 0xc6, 0x38, 0x2b, 0x09, 0x4e, 0x5f, 0xf6, 0x0a, 0x09, 0x14, 0x56, 0x4c, 0x38,
+	0xab, 0x0d, 0x35, 0x7c, 0x07, 0x3b, 0x3e, 0xf0, 0x94, 0xa7, 0x25, 0xe3, 0xcb, 0x25, 0xc1, 0x6d,
+	0xf8, 0x75, 0x3d, 0x9a, 0xb9, 0xcf, 0xbd, 0x89, 0xe2, 0xfd, 0x55, 0xf1, 0xb0, 0x44, 0xe9, 0x17,
+	0xe4, 0x5e, 0xa9, 0xac, 0x46, 0xae, 0x0a, 0x2b, 0xf2, 0x72, 0x9c, 0xe1, 0x0e, 0xaa, 0x0f, 0x3d,
+	0x27, 0x2a, 0x29, 0xdf, 0xd6, 0x18, 0x4f, 0xba, 0x8b, 0x7b, 0xd7, 0x59, 0xbd, 0x77, 0x6f, 0x5e,
+	0xdd, 0x47, 0x2f, 0xae, 0xda, 0xc1, 0xcb, 0xab, 0x76, 0xf0, 0xf7, 0x55, 0x3b, 0xf8, 0xe5, 0xba,
+	0xbd, 0xf6, 0xf2, 0xba, 0xbd, 0xf6, 0xe7, 0x75, 0x7b, 0xed, 0xc7, 0xdd, 0x55, 0xa9, 0x9d, 0x17,
+	0xdc, 0x8c, 0x36, 0xf0, 0x8f, 0xfb, 0xc3, 0xff, 0x03, 0x00, 0x00, 0xff, 0xff, 0xdd, 0xd8, 0x22,
+	0xdb, 0x2b, 0x06, 0x00, 0x00,
 }
 
 func (this *Params) Equal(that interface{}) bool {
@@ -98,6 +379,96 @@ func (this *Params) Equal(that interface{}) bool {
 	if that1 == nil {
 		return this == nil
 	} else if this == nil {
+		return false
+	}
+	if this.NonceWindowSize != that1.NonceWindowSize {
+		return false
+	}
+	if !this.MinStake.Equal(that1.MinStake) {
+		return false
+	}
+	if this.StakeDenom != that1.StakeDenom {
+		return false
+	}
+	if this.MiningDifficulty != that1.MiningDifficulty {
+		return false
+	}
+	if this.RewardPerGradient != that1.RewardPerGradient {
+		return false
+	}
+	if this.MaxValidators != that1.MaxValidators {
+		return false
+	}
+	if this.SlashingPenalty != that1.SlashingPenalty {
+		return false
+	}
+	if this.ChallengePeriodBlocks != that1.ChallengePeriodBlocks {
+		return false
+	}
+	if !this.ScalabilityParams.Equal(&that1.ScalabilityParams) {
+		return false
+	}
+	return true
+}
+func (this *ScalabilityParams) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ScalabilityParams)
+	if !ok {
+		that2, ok := that.(ScalabilityParams)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.MaxParticipantsPerShard != that1.MaxParticipantsPerShard {
+		return false
+	}
+	if this.MaxGradientsPerBlock != that1.MaxGradientsPerBlock {
+		return false
+	}
+	if this.MaxAggregationsPerBlock != that1.MaxAggregationsPerBlock {
+		return false
+	}
+	if this.MaxPendingGradients != that1.MaxPendingGradients {
+		return false
+	}
+	if this.MaxPendingAggregations != that1.MaxPendingAggregations {
+		return false
+	}
+	if this.CompressionRatioThreshold != that1.CompressionRatioThreshold {
+		return false
+	}
+	if this.NetworkLoadThreshold != that1.NetworkLoadThreshold {
+		return false
+	}
+	if this.ResourceUtilizationThreshold != that1.ResourceUtilizationThreshold {
+		return false
+	}
+	if this.EnableLoadBalancing != that1.EnableLoadBalancing {
+		return false
+	}
+	if this.LoadBalancingStrategy != that1.LoadBalancingStrategy {
+		return false
+	}
+	if this.ShardReassignmentInterval != that1.ShardReassignmentInterval {
+		return false
+	}
+	if this.EnableAdaptiveCompression != that1.EnableAdaptiveCompression {
+		return false
+	}
+	if this.EnableAdaptiveSharding != that1.EnableAdaptiveSharding {
+		return false
+	}
+	if this.EnableResourceOptimization != that1.EnableResourceOptimization {
 		return false
 	}
 	return true
@@ -122,6 +493,190 @@ func (m *Params) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	{
+		size, err := m.ScalabilityParams.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintParams(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x4a
+	if m.ChallengePeriodBlocks != 0 {
+		i = encodeVarintParams(dAtA, i, uint64(m.ChallengePeriodBlocks))
+		i--
+		dAtA[i] = 0x40
+	}
+	if len(m.SlashingPenalty) > 0 {
+		i -= len(m.SlashingPenalty)
+		copy(dAtA[i:], m.SlashingPenalty)
+		i = encodeVarintParams(dAtA, i, uint64(len(m.SlashingPenalty)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if m.MaxValidators != 0 {
+		i = encodeVarintParams(dAtA, i, uint64(m.MaxValidators))
+		i--
+		dAtA[i] = 0x30
+	}
+	if len(m.RewardPerGradient) > 0 {
+		i -= len(m.RewardPerGradient)
+		copy(dAtA[i:], m.RewardPerGradient)
+		i = encodeVarintParams(dAtA, i, uint64(len(m.RewardPerGradient)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.MiningDifficulty) > 0 {
+		i -= len(m.MiningDifficulty)
+		copy(dAtA[i:], m.MiningDifficulty)
+		i = encodeVarintParams(dAtA, i, uint64(len(m.MiningDifficulty)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.StakeDenom) > 0 {
+		i -= len(m.StakeDenom)
+		copy(dAtA[i:], m.StakeDenom)
+		i = encodeVarintParams(dAtA, i, uint64(len(m.StakeDenom)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	{
+		size := m.MinStake.Size()
+		i -= size
+		if _, err := m.MinStake.MarshalTo(dAtA[i:]); err != nil {
+			return 0, err
+		}
+		i = encodeVarintParams(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x12
+	if m.NonceWindowSize != 0 {
+		i = encodeVarintParams(dAtA, i, uint64(m.NonceWindowSize))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ScalabilityParams) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ScalabilityParams) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ScalabilityParams) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.EnableResourceOptimization {
+		i--
+		if m.EnableResourceOptimization {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x70
+	}
+	if m.EnableAdaptiveSharding {
+		i--
+		if m.EnableAdaptiveSharding {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x68
+	}
+	if m.EnableAdaptiveCompression {
+		i--
+		if m.EnableAdaptiveCompression {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x60
+	}
+	if m.ShardReassignmentInterval != 0 {
+		i = encodeVarintParams(dAtA, i, uint64(m.ShardReassignmentInterval))
+		i--
+		dAtA[i] = 0x58
+	}
+	if len(m.LoadBalancingStrategy) > 0 {
+		i -= len(m.LoadBalancingStrategy)
+		copy(dAtA[i:], m.LoadBalancingStrategy)
+		i = encodeVarintParams(dAtA, i, uint64(len(m.LoadBalancingStrategy)))
+		i--
+		dAtA[i] = 0x52
+	}
+	if m.EnableLoadBalancing {
+		i--
+		if m.EnableLoadBalancing {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x48
+	}
+	if len(m.ResourceUtilizationThreshold) > 0 {
+		i -= len(m.ResourceUtilizationThreshold)
+		copy(dAtA[i:], m.ResourceUtilizationThreshold)
+		i = encodeVarintParams(dAtA, i, uint64(len(m.ResourceUtilizationThreshold)))
+		i--
+		dAtA[i] = 0x42
+	}
+	if len(m.NetworkLoadThreshold) > 0 {
+		i -= len(m.NetworkLoadThreshold)
+		copy(dAtA[i:], m.NetworkLoadThreshold)
+		i = encodeVarintParams(dAtA, i, uint64(len(m.NetworkLoadThreshold)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if len(m.CompressionRatioThreshold) > 0 {
+		i -= len(m.CompressionRatioThreshold)
+		copy(dAtA[i:], m.CompressionRatioThreshold)
+		i = encodeVarintParams(dAtA, i, uint64(len(m.CompressionRatioThreshold)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if m.MaxPendingAggregations != 0 {
+		i = encodeVarintParams(dAtA, i, uint64(m.MaxPendingAggregations))
+		i--
+		dAtA[i] = 0x28
+	}
+	if m.MaxPendingGradients != 0 {
+		i = encodeVarintParams(dAtA, i, uint64(m.MaxPendingGradients))
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.MaxAggregationsPerBlock != 0 {
+		i = encodeVarintParams(dAtA, i, uint64(m.MaxAggregationsPerBlock))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.MaxGradientsPerBlock != 0 {
+		i = encodeVarintParams(dAtA, i, uint64(m.MaxGradientsPerBlock))
+		i--
+		dAtA[i] = 0x10
+	}
+	if m.MaxParticipantsPerShard != 0 {
+		i = encodeVarintParams(dAtA, i, uint64(m.MaxParticipantsPerShard))
+		i--
+		dAtA[i] = 0x8
+	}
 	return len(dAtA) - i, nil
 }
 
@@ -142,6 +697,90 @@ func (m *Params) Size() (n int) {
 	}
 	var l int
 	_ = l
+	if m.NonceWindowSize != 0 {
+		n += 1 + sovParams(uint64(m.NonceWindowSize))
+	}
+	l = m.MinStake.Size()
+	n += 1 + l + sovParams(uint64(l))
+	l = len(m.StakeDenom)
+	if l > 0 {
+		n += 1 + l + sovParams(uint64(l))
+	}
+	l = len(m.MiningDifficulty)
+	if l > 0 {
+		n += 1 + l + sovParams(uint64(l))
+	}
+	l = len(m.RewardPerGradient)
+	if l > 0 {
+		n += 1 + l + sovParams(uint64(l))
+	}
+	if m.MaxValidators != 0 {
+		n += 1 + sovParams(uint64(m.MaxValidators))
+	}
+	l = len(m.SlashingPenalty)
+	if l > 0 {
+		n += 1 + l + sovParams(uint64(l))
+	}
+	if m.ChallengePeriodBlocks != 0 {
+		n += 1 + sovParams(uint64(m.ChallengePeriodBlocks))
+	}
+	l = m.ScalabilityParams.Size()
+	n += 1 + l + sovParams(uint64(l))
+	return n
+}
+
+func (m *ScalabilityParams) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.MaxParticipantsPerShard != 0 {
+		n += 1 + sovParams(uint64(m.MaxParticipantsPerShard))
+	}
+	if m.MaxGradientsPerBlock != 0 {
+		n += 1 + sovParams(uint64(m.MaxGradientsPerBlock))
+	}
+	if m.MaxAggregationsPerBlock != 0 {
+		n += 1 + sovParams(uint64(m.MaxAggregationsPerBlock))
+	}
+	if m.MaxPendingGradients != 0 {
+		n += 1 + sovParams(uint64(m.MaxPendingGradients))
+	}
+	if m.MaxPendingAggregations != 0 {
+		n += 1 + sovParams(uint64(m.MaxPendingAggregations))
+	}
+	l = len(m.CompressionRatioThreshold)
+	if l > 0 {
+		n += 1 + l + sovParams(uint64(l))
+	}
+	l = len(m.NetworkLoadThreshold)
+	if l > 0 {
+		n += 1 + l + sovParams(uint64(l))
+	}
+	l = len(m.ResourceUtilizationThreshold)
+	if l > 0 {
+		n += 1 + l + sovParams(uint64(l))
+	}
+	if m.EnableLoadBalancing {
+		n += 2
+	}
+	l = len(m.LoadBalancingStrategy)
+	if l > 0 {
+		n += 1 + l + sovParams(uint64(l))
+	}
+	if m.ShardReassignmentInterval != 0 {
+		n += 1 + sovParams(uint64(m.ShardReassignmentInterval))
+	}
+	if m.EnableAdaptiveCompression {
+		n += 2
+	}
+	if m.EnableAdaptiveSharding {
+		n += 2
+	}
+	if m.EnableResourceOptimization {
+		n += 2
+	}
 	return n
 }
 
@@ -180,6 +819,630 @@ func (m *Params) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: Params: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NonceWindowSize", wireType)
+			}
+			m.NonceWindowSize = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.NonceWindowSize |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MinStake", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthParams
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthParams
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.MinStake.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StakeDenom", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthParams
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthParams
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.StakeDenom = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MiningDifficulty", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthParams
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthParams
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.MiningDifficulty = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RewardPerGradient", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthParams
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthParams
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.RewardPerGradient = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxValidators", wireType)
+			}
+			m.MaxValidators = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxValidators |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SlashingPenalty", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthParams
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthParams
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SlashingPenalty = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ChallengePeriodBlocks", wireType)
+			}
+			m.ChallengePeriodBlocks = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ChallengePeriodBlocks |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ScalabilityParams", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthParams
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthParams
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.ScalabilityParams.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipParams(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthParams
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ScalabilityParams) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowParams
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ScalabilityParams: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ScalabilityParams: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxParticipantsPerShard", wireType)
+			}
+			m.MaxParticipantsPerShard = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxParticipantsPerShard |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxGradientsPerBlock", wireType)
+			}
+			m.MaxGradientsPerBlock = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxGradientsPerBlock |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxAggregationsPerBlock", wireType)
+			}
+			m.MaxAggregationsPerBlock = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxAggregationsPerBlock |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxPendingGradients", wireType)
+			}
+			m.MaxPendingGradients = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxPendingGradients |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxPendingAggregations", wireType)
+			}
+			m.MaxPendingAggregations = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxPendingAggregations |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CompressionRatioThreshold", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthParams
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthParams
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.CompressionRatioThreshold = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NetworkLoadThreshold", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthParams
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthParams
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NetworkLoadThreshold = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ResourceUtilizationThreshold", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthParams
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthParams
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ResourceUtilizationThreshold = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field EnableLoadBalancing", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.EnableLoadBalancing = bool(v != 0)
+		case 10:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LoadBalancingStrategy", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthParams
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthParams
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.LoadBalancingStrategy = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 11:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ShardReassignmentInterval", wireType)
+			}
+			m.ShardReassignmentInterval = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ShardReassignmentInterval |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 12:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field EnableAdaptiveCompression", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.EnableAdaptiveCompression = bool(v != 0)
+		case 13:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field EnableAdaptiveSharding", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.EnableAdaptiveSharding = bool(v != 0)
+		case 14:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field EnableResourceOptimization", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowParams
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.EnableResourceOptimization = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipParams(dAtA[iNdEx:])

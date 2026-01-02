@@ -12,8 +12,8 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { walletAddress, credits } = useWallet();
-  const { resolvedTheme, toggleTheme } = useTheme();
+  const { walletAddress, userInfo } = useWallet();
+  const { actualTheme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -46,6 +46,60 @@ export default function Navbar() {
     { href: "/docs", label: "Docs" },
     { href: "/help", label: "Help" },
   ];
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && mobileMenuOpen) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key === 'Tab' && mobileMenuOpen) {
+        // Focus trap logic for mobile menu
+        const focusableElements = document.querySelectorAll(
+          '[data-mobile-menu] button, [data-mobile-menu] a, [data-mobile-menu] [tabindex]:not([tabindex="-1"])'
+        );
+        const firstElement = focusableElements[0] as HTMLElement;
+        const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+
+        if (e.shiftKey && document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        } else if (!e.shiftKey && document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    document.addEventListener('keydown', handleTab);
+    
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener('keydown', handleTab);
+    };
+  }, [mobileMenuOpen]);
+
+  // Mobile menu scroll lock
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+      // Focus first menu item when opened
+      setTimeout(() => {
+        const firstMenuItem = document.querySelector('[data-mobile-menu] a') as HTMLElement;
+        firstMenuItem?.focus();
+      }, 100);
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [mobileMenuOpen]);
 
   return (
     <>
@@ -87,18 +141,19 @@ export default function Navbar() {
         <div className="h-5 w-px shrink-0" style={{ backgroundColor: 'var(--border-color)' }} />
 
         {/* Main Links */}
-        <div className="hidden sm:flex items-center gap-1 md:gap-2" role="menubar">
+        <div className="hidden sm:flex items-center gap-1 md:gap-2" role="menubar" aria-label="Main navigation">
           {navLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105`}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
               style={{
                 color: isActive(link.href) ? 'var(--accent-primary)' : 'var(--text-secondary)',
                 backgroundColor: isActive(link.href) ? 'rgba(0,113,227,0.1)' : 'transparent'
               }}
               role="menuitem"
               aria-current={isActive(link.href) ? "page" : undefined}
+              tabIndex={0}
             >
               {link.label}
             </Link>
@@ -108,18 +163,24 @@ export default function Navbar() {
         {/* More dropdown - Desktop */}
         <div className="hidden md:block relative group">
           <button 
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             style={{ color: 'var(--text-secondary)' }}
+            aria-expanded={false}
+            aria-haspopup="menu"
+            aria-label="More navigation options"
+            tabIndex={0}
           >
             More
-            <ChevronDown className="w-3.5 h-3.5" />
+            <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
           
           {/* Dropdown */}
           <div 
             className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 
-                       opacity-0 invisible group-hover:opacity-100 group-hover:visible
+                       opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible
                        transition-all duration-200 transform group-hover:translate-y-0 translate-y-2"
+            role="menu"
+            aria-label="Additional navigation options"
           >
             <div 
               className="rounded-2xl p-2 min-w-[160px]"
@@ -133,11 +194,14 @@ export default function Navbar() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="block px-4 py-2 rounded-lg text-sm font-medium transition-all hover:scale-[1.02]"
+                  className="block px-4 py-2 rounded-lg text-sm font-medium transition-all hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-500"
                   style={{
                     color: isActive(link.href) ? 'var(--accent-primary)' : 'var(--text-secondary)',
                     backgroundColor: isActive(link.href) ? 'rgba(0,113,227,0.1)' : 'transparent'
                   }}
+                  role="menuitem"
+                  aria-current={isActive(link.href) ? "page" : undefined}
+                  tabIndex={0}
                 >
                   {link.label}
                 </Link>
@@ -149,14 +213,21 @@ export default function Navbar() {
         {/* Mobile Menu Button */}
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="sm:hidden p-2 rounded-full transition-all"
-          style={{ backgroundColor: 'var(--bg-tertiary)' }}
-          aria-label="Toggle menu"
+          className="sm:hidden p-2 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          style={{ 
+            backgroundColor: 'var(--bg-tertiary)',
+            minWidth: '44px',
+            minHeight: '44px'
+          }}
+          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="mobile-menu"
+          tabIndex={0}
         >
           {mobileMenuOpen ? (
-            <X className="w-4 h-4" style={{ color: 'var(--text-primary)' }} />
+            <X className="w-4 h-4" style={{ color: 'var(--text-primary)' }} aria-hidden="true" />
           ) : (
-            <Menu className="w-4 h-4" style={{ color: 'var(--text-primary)' }} />
+            <Menu className="w-4 h-4" style={{ color: 'var(--text-primary)' }} aria-hidden="true" />
           )}
         </button>
 
@@ -166,7 +237,7 @@ export default function Navbar() {
         {/* Right side actions */}
         <div className="flex items-center gap-2 shrink-0">
           {/* Credits badge */}
-          {walletAddress && credits !== null && (
+          {walletAddress && userInfo?.credits !== null && userInfo?.credits !== undefined && (
             <span 
               className="hidden sm:inline-flex text-xs px-2.5 py-1 rounded-full font-medium"
               style={{ 
@@ -175,21 +246,26 @@ export default function Navbar() {
                 border: '1px solid rgba(0,113,227,0.2)'
               }}
             >
-              {formatCredits(credits)}
+              {formatCredits(userInfo.credits)}
             </span>
           )}
 
           {/* Theme toggle */}
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-full transition-all duration-200 hover:scale-110"
-            style={{ backgroundColor: 'var(--bg-tertiary)' }}
-            aria-label="Toggle theme"
+            className="p-2 rounded-full transition-all duration-200 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            style={{ 
+              backgroundColor: 'var(--bg-tertiary)',
+              minWidth: '44px',
+              minHeight: '44px'
+            }}
+            aria-label={`Switch to ${actualTheme === "dark" ? "light" : "dark"} mode`}
+            tabIndex={0}
           >
-            {resolvedTheme === "dark" ? (
-              <Sun className="w-4 h-4" style={{ color: 'var(--text-primary)' }} />
+            {actualTheme === "dark" ? (
+              <Sun className="w-4 h-4" style={{ color: 'var(--text-primary)' }} aria-hidden="true" />
             ) : (
-              <Moon className="w-4 h-4" style={{ color: 'var(--text-primary)' }} />
+              <Moon className="w-4 h-4" style={{ color: 'var(--text-primary)' }} aria-hidden="true" />
             )}
           </button>
 
@@ -223,22 +299,38 @@ export default function Navbar() {
                 border: '1px solid var(--border-color)',
                 boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
               }}
+              id="mobile-menu"
+              data-mobile-menu
+              role="menu"
+              aria-label="Mobile navigation menu"
             >
               <div className="grid grid-cols-2 gap-2">
-                {[...navLinks, ...moreLinks].map((link) => (
+                {[...navLinks, ...moreLinks].map((link, index) => (
                   <Link
                     key={link.href}
                     href={link.href}
                     onClick={() => setMobileMenuOpen(false)}
-                    className="px-4 py-3 rounded-xl text-sm font-medium text-center transition-all"
+                    className="px-4 py-3 rounded-xl text-sm font-medium text-center transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
                     style={{
                       color: isActive(link.href) ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                      backgroundColor: isActive(link.href) ? 'rgba(0,113,227,0.1)' : 'var(--bg-secondary)'
+                      backgroundColor: isActive(link.href) ? 'rgba(0,113,227,0.1)' : 'var(--bg-secondary)',
+                      minHeight: '44px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
                     }}
+                    role="menuitem"
+                    aria-current={isActive(link.href) ? "page" : undefined}
+                    tabIndex={0}
                   >
                     {link.label}
                   </Link>
                 ))}
+              </div>
+              
+              {/* Screen reader instructions */}
+              <div className="sr-only">
+                Use arrow keys to navigate menu items, Enter to select, or Escape to close menu.
               </div>
             </motion.div>
           </>

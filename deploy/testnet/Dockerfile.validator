@@ -1,0 +1,45 @@
+# R3MES Validator Node Dockerfile
+FROM golang:1.22-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache make git gcc musl-dev linux-headers
+
+# Set working directory
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -o /remesd ./cmd/remesd
+
+# ===========================================
+# Runtime image
+# ===========================================
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates curl jq
+
+# Copy binary from builder
+COPY --from=builder /remesd /usr/local/bin/remesd
+
+# Create data directory
+RUN mkdir -p /root/.remes
+
+# Expose ports
+EXPOSE 26656 26657 1317 9090
+
+# Set environment variables
+ENV MONIKER="r3mes-validator"
+ENV CHAIN_ID="r3mes-testnet-1"
+
+# Entrypoint script
+COPY deploy/testnet/entrypoint-validator.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["remesd", "start"]

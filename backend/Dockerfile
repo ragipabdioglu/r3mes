@@ -28,11 +28,14 @@ RUN apt-get update && apt-get install -y \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser -u 1001 appuser
+
 # Copy Python dependencies from builder
-COPY --from=builder /root/.local /root/.local
+COPY --from=builder /root/.local /home/appuser/.local
 
 # Make sure scripts in .local are usable
-ENV PATH=/root/.local/bin:$PATH
+ENV PATH=/home/appuser/.local/bin:$PATH
 ENV PYTHONPATH=/app
 
 # Copy application code (no volume mount for production)
@@ -42,11 +45,13 @@ COPY . .
 COPY scripts/init_db.sh /app/scripts/init_db.sh
 RUN chmod +x /app/scripts/init_db.sh
 
-# Create necessary directories
-RUN mkdir -p checkpoints logs
+# Create necessary directories and set permissions
+RUN mkdir -p checkpoints logs && \
+    chown -R appuser:appuser /app && \
+    chown -R appuser:appuser /home/appuser/.local
 
-# Keep running as root for now (alembic needs access to .local/bin)
-# TODO: Fix permissions for non-root user later
+# Switch to non-root user
+USER appuser
 
 # Expose port
 EXPOSE 8000

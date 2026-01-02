@@ -1,0 +1,188 @@
+version: '3.8'
+
+# R3MES Testnet Docker Compose
+# Domain: r3mes.network
+# Server: 38.242.246.6
+
+services:
+  # ===========================================
+  # BLOCKCHAIN NODE (Validator)
+  # ===========================================
+  validator:
+    build:
+      context: ../../remes
+      dockerfile: ../deploy/testnet/Dockerfile.validator
+    container_name: r3mes-validator
+    ports:
+      - "26656:26656"  # P2P
+      - "26657:26657"  # RPC (rpc.r3mes.network)
+      - "1317:1317"    # REST API (rest.r3mes.network)
+      - "9090:9090"    # gRPC
+    volumes:
+      - validator_data:/root/.remes
+      - ./genesis.json:/root/.remes/config/genesis.json:ro
+    environment:
+      - MONIKER=r3mes-testnet-validator-1
+      - CHAIN_ID=r3mes-testnet-1
+    networks:
+      - r3mes-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:26657/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===========================================
+  # BACKEND API
+  # ===========================================
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: ../deploy/testnet/Dockerfile.backend
+    container_name: r3mes-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://r3mes:${DB_PASSWORD}@postgres:5432/r3mes
+      - REDIS_URL=redis://redis:6379
+      - BLOCKCHAIN_RPC=http://validator:26657
+      - BLOCKCHAIN_REST=http://validator:1317
+      - IPFS_API=http://ipfs:5001
+      - SECRET_KEY=${SECRET_KEY}
+      - FAUCET_ENABLED=true
+      - FAUCET_MNEMONIC=${FAUCET_MNEMONIC}
+      - FAUCET_AMOUNT=10000000ur3mes
+      - FAUCET_DAILY_LIMIT=100000000ur3mes
+      - CORS_ORIGINS=https://r3mes.network,https://www.r3mes.network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      validator:
+        condition: service_healthy
+    networks:
+      - r3mes-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===========================================
+  # IPFS NODE
+  # ===========================================
+  ipfs:
+    image: ipfs/kubo:v0.24.0
+    container_name: r3mes-ipfs
+    ports:
+      - "4001:4001"    # P2P
+      - "5001:5001"    # API (internal)
+      - "8080:8080"    # Gateway (ipfs.r3mes.network)
+    volumes:
+      - ipfs_data:/data/ipfs
+    environment:
+      - IPFS_PROFILE=server
+    networks:
+      - r3mes-network
+    restart: always
+
+  # ===========================================
+  # POSTGRESQL DATABASE
+  # ===========================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: r3mes-postgres
+    environment:
+      - POSTGRES_USER=r3mes
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=r3mes
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - r3mes-network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U r3mes"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # REDIS CACHE
+  # ===========================================
+  redis:
+    image: redis:7-alpine
+    container_name: r3mes-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - r3mes-network
+    restart: always
+
+  # ===========================================
+  # NGINX REVERSE PROXY (SSL Termination)
+  # ===========================================
+  nginx:
+    image: nginx:alpine
+    container_name: r3mes-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - certbot_data:/var/www/certbot:ro
+    depends_on:
+      - backend
+      - validator
+      - ipfs
+    networks:
+      - r3mes-network
+    restart: always
+
+  # ===========================================
+  # CERTBOT (SSL Certificates)
+  # ===========================================
+  certbot:
+    image: certbot/certbot
+    container_name: r3mes-certbot
+    volumes:
+      - ./ssl:/etc/letsencrypt
+      - certbot_data:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - r3mes-network
+
+  # ===========================================
+  # MONITORING (Optional)
+  # ===========================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: r3mes-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_SERVER_ROOT_URL=https://grafana.r3mes.network
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - r3mes-network
+    restart: always
+
+networks:
+  r3mes-network:
+    driver: bridge
+
+volumes:
+  validator_data:
+  postgres_data:
+  redis_data:
+  ipfs_data:
+  grafana_data:
+  certbot_data:

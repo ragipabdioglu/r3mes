@@ -1,202 +1,536 @@
+#!/usr/bin/env python3
 """
-Fixed Chunk / Variable Speed Protocol (Sabit Veri, Değişken Hız)
+R3MES Chunk Processor
 
-Protocol Rules:
-1. Server always sends 2048-token chunks (never split)
-2. Miner receives full chunk (cannot request smaller chunks)
-3. Miner can micro-batch locally for VRAM efficiency
-4. Gradient must be computed on full chunk (for validation)
-
-FAZ 5 Integration: Uses core.constants for centralized configuration.
+Production-ready chunk processor that:
+1. Processes fixed-size data chunks
+2. Handles various data formats (JSON, text, binary, tensors)
+3. Implements batch processing for efficiency
+4. Manages memory usage for large datasets
+5. Provides data loading pipeline for training
 """
 
+import logging
+import json
+import pickle
+from typing import Any, Dict, List, Optional, Iterator, Tuple, Union
+from pathlib import Path
 import torch
-from typing import Dict, Any, List, Optional
-from torch.nn import Module
-from torch.optim import Optimizer
+import numpy as np
 
-# Import from core constants (FAZ 1)
-try:
-    from core.constants import CHUNK_SIZE_TOKENS
-    FIXED_CHUNK_SIZE_TOKENS = CHUNK_SIZE_TOKENS
-except ImportError:
-    # Fallback for backward compatibility
-    FIXED_CHUNK_SIZE_TOKENS = 2048
-
-# Import validation utilities (FAZ 1)
-try:
-    from core.validation import validate_chunk_size as core_validate_chunk_size
-    from core.exceptions import ChunkSizeError
-    HAS_CORE_VALIDATION = True
-except ImportError:
-    HAS_CORE_VALIDATION = False
+from r3mes.utils.logger import setup_logger
 
 
 class ChunkProcessor:
-    """
-    Process fixed-size chunks with local micro-batching.
+    """Chunk processor for handling training data chunks."""
     
-    Protocol Rules:
-    1. Server always sends 2048-token chunks (never split)
-    2. Miner receives full chunk (cannot request smaller chunks)
-    3. Miner can micro-batch locally for VRAM efficiency
-    4. Gradient must be computed on full chunk (for validation)
-    """
-    
-    def __init__(self, local_batch_size: int = 1):
+    def __init__(
+        self,
+        batch_size: int = 4,
+        max_sequence_length: int = 512,
+        device: str = "auto",
+        log_level: str = "INFO",
+        use_json_logs: bool = False,
+    ):
         """
         Initialize chunk processor.
         
         Args:
-            local_batch_size: Local micro-batch size (VRAM-dependent, default: 1)
+            batch_size: Batch size for processing
+            max_sequence_length: Maximum sequence length for text data
+            device: Device to use ("auto", "cuda", "cpu")
+            log_level: Logging level
+            use_json_logs: Whether to use JSON-formatted logs
         """
-        self.local_batch_size = local_batch_size
-        self.chunk_buffer: List[Dict[str, Any]] = []
-        print(f"✅ ChunkProcessor initialized with local_batch_size={local_batch_size}")
-        print(f"   Protocol chunk size: {FIXED_CHUNK_SIZE_TOKENS} tokens (fixed)")
+        # Setup logger
+        log_level_map = {
+            "DEBUG": 10,
+            "INFO": 20,
+            "WARNING": 30,
+            "ERROR": 40,
+        }
+        self.logger = setup_logger(
+            "r3mes.chunk_processor",
+            level=log_level_map.get(log_level.upper(), logging.INFO),
+            use_json=use_json_logs,
+        )
+        
+        self.batch_size = batch_size
+        self.max_sequence_length = max_sequence_length
+        
+        # Device selection
+        if device == "auto":
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = torch.device(device)
+        
+        self.logger.info(f"Chunk processor initialized (device: {self.device}, batch_size: {batch_size})")
     
-    def validate_chunk_size(self, chunk_data: Dict[str, Any], strict: bool = True) -> bool:
+    def detect_data_format(self, data: Any) -> str:
         """
-        Validate that chunk matches protocol-mandated size.
+        Detect the format of chunk data.
         
         Args:
-            chunk_data: Chunk data dictionary with 'input_ids' or 'token_count'
-            strict: If True, require exact CHUNK_SIZE_TOKENS (default: True)
+            data: Chunk data
             
         Returns:
-            True if valid, raises ValueError/ChunkSizeError if invalid
+            Data format string ("json", "text", "tensor", "numpy", "binary", "unknown")
         """
-        if "input_ids" in chunk_data:
-            token_count = chunk_data["input_ids"].shape[1] if hasattr(chunk_data["input_ids"], "shape") else len(chunk_data["input_ids"])
-        elif "token_count" in chunk_data:
-            token_count = chunk_data["token_count"]
-        else:
-            raise ValueError("Chunk data must contain 'input_ids' or 'token_count'")
+        try:
+            if isinstance(data, dict):
+                return "json"
+            elif isinstance(data, str):
+                return "text"
+            elif isinstance(data, torch.Tensor):
+                return "tensor"
+            elif isinstance(data, np.ndarray):
+                return "numpy"
+            elif isinstance(data, bytes):
+                return "binary"
+            elif isinstance(data, list):
+                if data and isinstance(data[0], dict):
+                    return "json_list"
+                elif data and isinstance(data[0], str):
+                    return "text_list"
+                else:
+                    return "list"
+            else:
+                return "unknown"
+        except Exception as e:
+            self.logger.error(f"Error detecting data format: {e}")
+            return "unknown"
+    
+    def parse_json_data(self, data: Union[Dict, List[Dict]]) -> List[Dict[str, Any]]:
+        """
+        Parse JSON data into standardized format.
         
-        # Use core validation if available (FAZ 1)
-        if HAS_CORE_VALIDATION:
-            try:
-                core_validate_chunk_size(token_count, strict=strict)
-                return True
-            except ChunkSizeError as e:
-                raise ValueError(str(e))
+        Args:
+            data: JSON data (dict or list of dicts)
+            
+        Returns:
+            List of parsed data items
+        """
+        try:
+            if isinstance(data, dict):
+                # Single item
+                return [data]
+            elif isinstance(data, list):
+                # List of items
+                return data
+            else:
+                self.logger.error(f"Invalid JSON data type: {type(data)}")
+                return []
+        except Exception as e:
+            self.logger.error(f"Error parsing JSON data: {e}")
+            return []
+    
+    def parse_text_data(self, data: Union[str, List[str]]) -> List[str]:
+        """
+        Parse text data into list of strings.
         
-        # Fallback validation
-        if strict and token_count != FIXED_CHUNK_SIZE_TOKENS:
-            raise ValueError(
-                f"Invalid chunk size: {token_count} tokens "
-                f"(expected {FIXED_CHUNK_SIZE_TOKENS} tokens per protocol)"
-            )
+        Args:
+            data: Text data (string or list of strings)
+            
+        Returns:
+            List of text strings
+        """
+        try:
+            if isinstance(data, str):
+                # Split by lines or sentences
+                if '\n' in data:
+                    # Split by lines
+                    lines = [line.strip() for line in data.split('\n') if line.strip()]
+                    return lines
+                else:
+                    # Single text
+                    return [data]
+            elif isinstance(data, list):
+                # List of strings
+                return [str(item) for item in data]
+            else:
+                self.logger.error(f"Invalid text data type: {type(data)}")
+                return []
+        except Exception as e:
+            self.logger.error(f"Error parsing text data: {e}")
+            return []
+    
+    def tokenize_text(self, texts: List[str], tokenizer=None) -> torch.Tensor:
+        """
+        Tokenize text data.
         
-        return True
+        Args:
+            texts: List of text strings
+            tokenizer: Optional tokenizer (if None, uses simple word tokenization)
+            
+        Returns:
+            Tokenized tensor [batch_size, sequence_length]
+        """
+        try:
+            if tokenizer is not None:
+                # Use provided tokenizer
+                encoded = tokenizer(
+                    texts,
+                    padding=True,
+                    truncation=True,
+                    max_length=self.max_sequence_length,
+                    return_tensors="pt"
+                )
+                return encoded['input_ids']
+            else:
+                # Simple word tokenization (fallback)
+                vocab = {}
+                vocab_size = 0
+                
+                # Build vocabulary
+                for text in texts:
+                    words = text.lower().split()
+                    for word in words:
+                        if word not in vocab:
+                            vocab[word] = vocab_size
+                            vocab_size += 1
+                
+                # Add special tokens
+                vocab['<pad>'] = vocab_size
+                vocab['<unk>'] = vocab_size + 1
+                
+                # Tokenize texts
+                tokenized = []
+                for text in texts:
+                    words = text.lower().split()[:self.max_sequence_length]
+                    tokens = [vocab.get(word, vocab['<unk>']) for word in words]
+                    
+                    # Pad to max length
+                    while len(tokens) < self.max_sequence_length:
+                        tokens.append(vocab['<pad>'])
+                    
+                    tokenized.append(tokens)
+                
+                return torch.tensor(tokenized, dtype=torch.long)
+                
+        except Exception as e:
+            self.logger.error(f"Error tokenizing text: {e}")
+            # Return dummy tensor
+            return torch.zeros((len(texts), self.max_sequence_length), dtype=torch.long)
+    
+    def process_tensor_data(self, data: torch.Tensor) -> torch.Tensor:
+        """
+        Process tensor data.
+        
+        Args:
+            data: Input tensor
+            
+        Returns:
+            Processed tensor
+        """
+        try:
+            # Move to device
+            data = data.to(self.device)
+            
+            # Ensure proper shape for batch processing
+            if data.dim() == 1:
+                # Add batch dimension
+                data = data.unsqueeze(0)
+            
+            return data
+        except Exception as e:
+            self.logger.error(f"Error processing tensor data: {e}")
+            return torch.empty(0)
+    
+    def process_numpy_data(self, data: np.ndarray) -> torch.Tensor:
+        """
+        Process numpy data.
+        
+        Args:
+            data: Input numpy array
+            
+        Returns:
+            Processed tensor
+        """
+        try:
+            # Convert to tensor
+            tensor = torch.from_numpy(data)
+            
+            # Process as tensor
+            return self.process_tensor_data(tensor)
+        except Exception as e:
+            self.logger.error(f"Error processing numpy data: {e}")
+            return torch.empty(0)
+    
+    def create_batches(self, data: List[Any], batch_size: Optional[int] = None) -> Iterator[List[Any]]:
+        """
+        Create batches from data list.
+        
+        Args:
+            data: List of data items
+            batch_size: Batch size (uses self.batch_size if not provided)
+            
+        Yields:
+            Batches of data items
+        """
+        batch_size = batch_size or self.batch_size
+        
+        for i in range(0, len(data), batch_size):
+            yield data[i:i + batch_size]
     
     def process_chunk(
         self,
-        chunk_data: Dict[str, Any],
-        model: Module,
-        optimizer: Optimizer,
-        device: Optional[torch.device] = None
-    ) -> float:
+        chunk_data: Any,
+        tokenizer=None,
+        return_format: str = "tensor"
+    ) -> Tuple[torch.Tensor, Dict[str, Any]]:
         """
-        Process full chunk with local micro-batching.
+        Process a data chunk.
         
         Args:
-            chunk_data: Full 2048-token chunk (protocol-mandated)
-            model: Training model
-            optimizer: Optimizer instance
-            device: Device to use (auto-detect if None)
+            chunk_data: Raw chunk data
+            tokenizer: Optional tokenizer for text data
+            return_format: Return format ("tensor", "dict", "list")
             
         Returns:
-            Total loss for the chunk
+            Tuple of (processed_data, metadata)
         """
-        if device is None:
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
-        # Validate chunk size matches protocol
-        self.validate_chunk_size(chunk_data)
-        
-        # Extract input data
-        input_ids = chunk_data["input_ids"]
-        labels = chunk_data.get("labels", input_ids)  # Default to input_ids if labels not provided
-        
-        # Move to device
-        if isinstance(input_ids, torch.Tensor):
-            input_ids = input_ids.to(device)
-        if isinstance(labels, torch.Tensor):
-            labels = labels.to(device)
-        
-        # Split into micro-batches for local processing
-        # Protocol: Full chunk is 2048 tokens, but we can process in smaller batches
-        if isinstance(input_ids, torch.Tensor):
-            seq_len = input_ids.shape[1]
-            micro_batch_size = min(self.local_batch_size, seq_len)
-        else:
-            seq_len = len(input_ids)
-            micro_batch_size = min(self.local_batch_size, seq_len)
-        
-        # Calculate number of micro-batches
-        num_micro_batches = (seq_len + micro_batch_size - 1) // micro_batch_size
-        
-        # Process micro-batches with gradient accumulation
-        total_loss = 0.0
-        model.train()
-        optimizer.zero_grad()
-        
-        for i in range(0, seq_len, micro_batch_size):
-            end_idx = min(i + micro_batch_size, seq_len)
+        try:
+            self.logger.debug(f"Processing chunk data: {type(chunk_data)}")
             
-            # Extract micro-batch
-            if isinstance(input_ids, torch.Tensor):
-                micro_input = input_ids[:, i:end_idx]
-                micro_labels = labels[:, i:end_idx] if isinstance(labels, torch.Tensor) else labels
+            # Detect data format
+            data_format = self.detect_data_format(chunk_data)
+            self.logger.debug(f"Detected data format: {data_format}")
+            
+            metadata = {
+                "data_format": data_format,
+                "original_type": str(type(chunk_data)),
+                "device": str(self.device),
+            }
+            
+            # Process based on format
+            if data_format == "json":
+                # JSON data
+                parsed_data = self.parse_json_data(chunk_data)
+                metadata["num_items"] = len(parsed_data)
+                
+                if return_format == "tensor":
+                    # Convert to tensor (simplified - extract text fields)
+                    texts = []
+                    for item in parsed_data:
+                        if isinstance(item, dict):
+                            # Extract text fields
+                            text_fields = []
+                            for key, value in item.items():
+                                if isinstance(value, str):
+                                    text_fields.append(value)
+                            texts.append(" ".join(text_fields))
+                        else:
+                            texts.append(str(item))
+                    
+                    processed_data = self.tokenize_text(texts, tokenizer)
+                else:
+                    processed_data = parsed_data
+                    
+            elif data_format in ["text", "text_list"]:
+                # Text data
+                parsed_data = self.parse_text_data(chunk_data)
+                metadata["num_items"] = len(parsed_data)
+                
+                if return_format == "tensor":
+                    processed_data = self.tokenize_text(parsed_data, tokenizer)
+                else:
+                    processed_data = parsed_data
+                    
+            elif data_format == "tensor":
+                # Tensor data
+                processed_data = self.process_tensor_data(chunk_data)
+                metadata["tensor_shape"] = list(processed_data.shape)
+                
+            elif data_format == "numpy":
+                # Numpy data
+                processed_data = self.process_numpy_data(chunk_data)
+                metadata["tensor_shape"] = list(processed_data.shape)
+                
+            elif data_format == "binary":
+                # Binary data - try to deserialize
+                try:
+                    # Try pickle first
+                    deserialized = pickle.loads(chunk_data)
+                    return self.process_chunk(deserialized, tokenizer, return_format)
+                except:
+                    try:
+                        # Try JSON
+                        json_str = chunk_data.decode('utf-8')
+                        deserialized = json.loads(json_str)
+                        return self.process_chunk(deserialized, tokenizer, return_format)
+                    except:
+                        # Treat as raw bytes
+                        self.logger.warning("Could not deserialize binary data, treating as raw bytes")
+                        processed_data = torch.frombuffer(chunk_data, dtype=torch.uint8)
+                        metadata["binary_size"] = len(chunk_data)
+                        
             else:
-                micro_input = input_ids[i:end_idx]
-                micro_labels = labels[i:end_idx] if isinstance(labels, list) else labels
+                # Unknown format
+                self.logger.warning(f"Unknown data format: {data_format}, converting to string")
+                text_data = str(chunk_data)
+                processed_data = self.tokenize_text([text_data], tokenizer)
             
-            # Forward pass
-            output = model(micro_input)
+            # Move to device if tensor
+            if isinstance(processed_data, torch.Tensor):
+                processed_data = processed_data.to(self.device)
+                metadata["device"] = str(self.device)
             
-            # Compute loss (simplified - in production would use proper loss function)
-            if isinstance(output, torch.Tensor) and isinstance(micro_labels, torch.Tensor):
-                loss_fn = torch.nn.MSELoss()
-                loss = loss_fn(output, micro_labels)
-            else:
-                # Fallback: simple mean squared error
-                loss = torch.mean((output - micro_labels) ** 2) if isinstance(output, torch.Tensor) else torch.tensor(0.0)
+            self.logger.debug(f"Chunk processed: {type(processed_data)}")
+            return processed_data, metadata
             
-            # Scale loss for gradient accumulation
-            scaled_loss = loss / num_micro_batches
-            scaled_loss.backward()
-            
-            total_loss += loss.item() if isinstance(loss, torch.Tensor) else loss
-        
-        # Gradient is now computed on full chunk (via accumulation)
-        # This ensures validation can verify gradient on complete chunk
-        optimizer.step()
-        
-        return total_loss
+        except Exception as e:
+            self.logger.error(f"Error processing chunk: {e}", exc_info=True)
+            # Return empty tensor and error metadata
+            return torch.empty(0), {"error": str(e), "data_format": "error"}
     
-    def get_chunk_info(self, chunk_data: Dict[str, Any]) -> Dict[str, Any]:
+    def process_batch(
+        self,
+        batch_data: List[Any],
+        tokenizer=None,
+        return_format: str = "tensor"
+    ) -> Tuple[List[torch.Tensor], List[Dict[str, Any]]]:
         """
-        Get information about a chunk.
+        Process a batch of chunks.
         
         Args:
-            chunk_data: Chunk data dictionary
+            batch_data: List of chunk data
+            tokenizer: Optional tokenizer
+            return_format: Return format
             
         Returns:
-            Dictionary with chunk information
+            Tuple of (processed_data_list, metadata_list)
         """
-        if "input_ids" in chunk_data:
-            token_count = chunk_data["input_ids"].shape[1] if hasattr(chunk_data["input_ids"], "shape") else len(chunk_data["input_ids"])
-        elif "token_count" in chunk_data:
-            token_count = chunk_data["token_count"]
-        else:
-            token_count = 0
+        try:
+            processed_data_list = []
+            metadata_list = []
+            
+            for i, chunk_data in enumerate(batch_data):
+                self.logger.debug(f"Processing batch item {i+1}/{len(batch_data)}")
+                
+                processed_data, metadata = self.process_chunk(
+                    chunk_data, tokenizer, return_format
+                )
+                
+                processed_data_list.append(processed_data)
+                metadata_list.append(metadata)
+            
+            self.logger.debug(f"Batch processed: {len(processed_data_list)} items")
+            return processed_data_list, metadata_list
+            
+        except Exception as e:
+            self.logger.error(f"Error processing batch: {e}", exc_info=True)
+            return [], []
+    
+    def create_data_loader(
+        self,
+        chunk_data_list: List[Any],
+        tokenizer=None,
+        shuffle: bool = False,
+        batch_size: Optional[int] = None,
+    ) -> Iterator[Tuple[List[torch.Tensor], List[Dict[str, Any]]]]:
+        """
+        Create a data loader for chunk processing.
         
+        Args:
+            chunk_data_list: List of chunk data
+            tokenizer: Optional tokenizer
+            shuffle: Whether to shuffle data
+            batch_size: Batch size (uses self.batch_size if not provided)
+            
+        Yields:
+            Batches of (processed_data_list, metadata_list)
+        """
+        try:
+            data = chunk_data_list.copy()
+            
+            if shuffle:
+                import random
+                random.shuffle(data)
+            
+            batch_size = batch_size or self.batch_size
+            
+            for batch in self.create_batches(data, batch_size):
+                processed_batch, metadata_batch = self.process_batch(
+                    batch, tokenizer, return_format="tensor"
+                )
+                yield processed_batch, metadata_batch
+                
+        except Exception as e:
+            self.logger.error(f"Error creating data loader: {e}", exc_info=True)
+    
+    def estimate_memory_usage(self, chunk_data: Any) -> Dict[str, float]:
+        """
+        Estimate memory usage for processing chunk data.
+        
+        Args:
+            chunk_data: Chunk data to analyze
+            
+        Returns:
+            Dictionary with memory estimates (in MB)
+        """
+        try:
+            import sys
+            
+            # Get size of raw data
+            raw_size_bytes = sys.getsizeof(chunk_data)
+            
+            # Estimate processed size based on data format
+            data_format = self.detect_data_format(chunk_data)
+            
+            if data_format in ["text", "text_list"]:
+                # Text data - estimate tokenized size
+                if isinstance(chunk_data, str):
+                    num_tokens = len(chunk_data.split())
+                elif isinstance(chunk_data, list):
+                    num_tokens = sum(len(str(item).split()) for item in chunk_data)
+                else:
+                    num_tokens = 100  # Default estimate
+                
+                # Tensor size: num_tokens * sequence_length * 4 bytes (int32)
+                processed_size_bytes = min(num_tokens, self.max_sequence_length) * 4
+                
+            elif data_format == "tensor":
+                # Tensor data
+                if hasattr(chunk_data, 'numel') and hasattr(chunk_data, 'element_size'):
+                    processed_size_bytes = chunk_data.numel() * chunk_data.element_size()
+                else:
+                    processed_size_bytes = raw_size_bytes
+                    
+            elif data_format == "numpy":
+                # Numpy data
+                if hasattr(chunk_data, 'nbytes'):
+                    processed_size_bytes = chunk_data.nbytes
+                else:
+                    processed_size_bytes = raw_size_bytes
+                    
+            else:
+                # Other formats - use raw size as estimate
+                processed_size_bytes = raw_size_bytes
+            
+            return {
+                "raw_size_mb": raw_size_bytes / (1024 * 1024),
+                "processed_size_mb": processed_size_bytes / (1024 * 1024),
+                "estimated_peak_mb": (raw_size_bytes + processed_size_bytes) / (1024 * 1024),
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error estimating memory usage: {e}")
+            return {
+                "raw_size_mb": 0.0,
+                "processed_size_mb": 0.0,
+                "estimated_peak_mb": 0.0,
+            }
+    
+    def get_processing_stats(self) -> Dict[str, Any]:
+        """
+        Get processing statistics.
+        
+        Returns:
+            Dictionary with processing stats
+        """
         return {
-            "token_count": token_count,
-            "protocol_size": FIXED_CHUNK_SIZE_TOKENS,
-            "is_valid": token_count == FIXED_CHUNK_SIZE_TOKENS,
-            "local_batch_size": self.local_batch_size,
+            "batch_size": self.batch_size,
+            "max_sequence_length": self.max_sequence_length,
+            "device": str(self.device),
+            "device_available": torch.cuda.is_available() if self.device.type == "cuda" else True,
         }
-

@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Layers, TrendingUp, Clock, CheckCircle, Database, Activity } from "lucide-react";
+import { Layers, TrendingUp, Database, Activity } from "lucide-react";
 import { useProposerNodes, useAggregations, useGradientPool } from "@/hooks/useProposerData";
 import { logger } from "@/lib/logger";
 import StatCard from "@/components/StatCard";
 import WalletGuard from "@/components/WalletGuard";
 import { SkeletonStatCard } from "@/components/SkeletonLoader";
+import { formatAddress, formatHash } from "@/utils/formatters";
+import { useAnnouncer } from "@/hooks/useAccessibility";
 
 function ProposerPageContent() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const { announceLoading } = useAnnouncer();
 
   // Use React Query hooks instead of setInterval polling
   const { data: proposerNodesData, isLoading: nodesLoading, error: nodesError } = useProposerNodes(100, 0);
@@ -26,6 +29,11 @@ function ProposerPageContent() {
     const address = localStorage.getItem("keplr_address");
     setWalletAddress(address);
   }, []);
+
+  // Announce loading state changes
+  useEffect(() => {
+    announceLoading("proposer data", isLoading);
+  }, [isLoading, announceLoading]);
 
   useEffect(() => {
     if (nodesError) {
@@ -138,7 +146,7 @@ function ProposerPageContent() {
                         </td>
                         <td className="py-4 px-4">
                           <span className="text-xs text-[var(--text-secondary)] font-mono">
-                            {gradient.miner ? `${gradient.miner.slice(0, 10)}...${gradient.miner.slice(-8)}` : "N/A"}
+                            {formatAddress(gradient.miner)}
                           </span>
                         </td>
                         <td className="py-4 px-4">
@@ -148,7 +156,7 @@ function ProposerPageContent() {
                         </td>
                         <td className="py-4 px-4">
                           <span className="text-xs text-[var(--text-secondary)] font-mono">
-                            {gradient.ipfs_hash ? `${gradient.ipfs_hash.slice(0, 10)}...${gradient.ipfs_hash.slice(-8)}` : "N/A"}
+                            {formatHash(gradient.ipfs_hash)}
                           </span>
                         </td>
                         <td className="py-4 px-4">
@@ -192,14 +200,14 @@ function ProposerPageContent() {
                           Aggregation #{agg.aggregation_id}
                         </div>
                         <div className="text-xs text-[var(--text-secondary)] mt-1">
-                          Proposer: {agg.proposer.slice(0, 20)}...{agg.proposer.slice(-8)} | 
+                          Proposer: {formatAddress(agg.proposer, 20, 8)} | 
                           Participants: {agg.participant_count} | 
                           Round: {agg.training_round_id}
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="text-xs text-[var(--text-muted)] font-mono">
-                          {agg.aggregated_gradient_ipfs_hash.slice(0, 10)}...
+                          {formatHash(agg.aggregated_gradient_ipfs_hash, 10)}
                         </div>
                       </div>
                     </div>
@@ -234,7 +242,7 @@ function ProposerPageContent() {
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-semibold text-[var(--text-primary)] text-sm sm:text-base">
-                          {node.node_address.slice(0, 20)}...{node.node_address.slice(-8)}
+                          {formatAddress(node.node_address, 20, 8)}
                         </div>
                         <div className="text-xs text-[var(--text-secondary)] mt-1">
                           Status: {node.status} | Aggregations: {node.total_aggregations}

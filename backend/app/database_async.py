@@ -485,8 +485,8 @@ class AsyncDatabase:
         except Exception as e:
             try:
                 await cursor.execute("ROLLBACK")
-            except:
-                pass
+            except Exception as rollback_error:
+                logger.warning(f"Failed to rollback transaction during credit reservation: {rollback_error}")
             logger.error(f"Failed to reserve credit for {wallet}: {e}")
             return {
                 "success": False,
@@ -574,8 +574,8 @@ class AsyncDatabase:
         except Exception as e:
             try:
                 await cursor.execute("ROLLBACK")
-            except:
-                pass
+            except Exception as rollback_error:
+                logger.warning(f"Failed to rollback transaction during reservation confirmation: {rollback_error}")
             logger.error(f"Failed to confirm reservation {reservation_id}: {e}")
             return False
     

@@ -1,4 +1,117 @@
 groups:
+  - name: r3mes_critical_alerts
+    interval: 15s
+    rules:
+      # Database connection pool exhaustion
+      - alert: DatabaseConnectionPoolExhausted
+        expr: database_connections_active >= database_connections_max * 0.95
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "Database connection pool is {{ $value }}/{{ database_connections_max }} (95% threshold reached)"
+
+      # Redis memory exhaustion
+      - alert: RedisMemoryExhaustion
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          service: cache
+        annotations:
+          summary: "Redis memory exhaustion"
+          description: "Redis memory usage is {{ $value | humanizePercentage }} (threshold: 90%)"
+
+      # Disk space critical
+      - alert: DiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.05
+        for: 1m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "CRITICAL: Disk space extremely low"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining (threshold: 5%)"
+
+      # Pod restart loops
+      - alert: PodRestartLoop
+        expr: increase(kube_pod_container_status_restarts_total[15m]) > 5
+        for: 5m
+        labels:
+          severity: critical
+          service: kubernetes
+        annotations:
+          summary: "Pod restart loop detected"
+          description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in 15 minutes"
+
+      # Deployment replica mismatch
+      - alert: DeploymentReplicaMismatch
+        expr: kube_deployment_status_replicas != kube_deployment_spec_replicas
+        for: 10m
+        labels:
+          severity: critical
+          service: kubernetes
+        annotations:
+          summary: "Deployment replica mismatch"
+          description: "Deployment {{ $labels.deployment }} has {{ kube_deployment_status_replicas }} replicas but expects {{ kube_deployment_spec_replicas }}"
+
+      # StatefulSet replica mismatch
+      - alert: StatefulSetReplicaMismatch
+        expr: kube_statefulset_status_replicas != kube_statefulset_replicas
+        for: 10m
+        labels:
+          severity: critical
+          service: kubernetes
+        annotations:
+          summary: "StatefulSet replica mismatch"
+          description: "StatefulSet {{ $labels.statefulset }} has {{ kube_statefulset_status_replicas }} replicas but expects {{ kube_statefulset_replicas }}"
+
+      # High error rate on critical endpoints
+      - alert: CriticalEndpointErrors
+        expr: rate(api_requests_total{endpoint=~"/api/(chat|user|miner).*", status_code=~"5.."}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "Critical endpoint error rate high"
+          description: "Endpoint {{ $labels.endpoint }} error rate is {{ $value }} errors/sec (threshold: 0.05)"
+
+      # JWT secret compromise detection
+      - alert: SuspiciousJWTActivity
+        expr: rate(jwt_validation_failures_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: critical
+          service: security
+        annotations:
+          summary: "Suspicious JWT validation failures"
+          description: "JWT validation failure rate is {{ $value }} failures/sec - possible compromise"
+
+      # Mining submission failures
+      - alert: MiningSubmissionFailures
+        expr: rate(mining_submissions_failed_total[10m]) / rate(mining_submissions_total[10m]) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          service: mining
+        annotations:
+          summary: "High mining submission failure rate"
+          description: "Mining submission failure rate is {{ $value | humanizePercentage }} (threshold: 50%)"
+
+      # IPFS connectivity issues
+      - alert: IPFSConnectivityIssues
+        expr: ipfs_connectivity_status == 0
+        for: 3m
+        labels:
+          severity: critical
+          service: ipfs
+        annotations:
+          summary: "IPFS connectivity lost"
+          description: "IPFS node is not reachable for more than 3 minutes"
+
   - name: r3mes_backend_alerts
     interval: 30s
     rules:

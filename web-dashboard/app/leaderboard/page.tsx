@@ -1,25 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Trophy, Medal, Award, TrendingUp } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getLeaderboard } from "@/lib/api";
+import { useAnnouncer } from "@/hooks/useAccessibility";
+import { formatAddress, formatNumber, formatPercentage } from "@/utils/formatters";
 
 export default function LeaderboardPage() {
   const [activeTab, setActiveTab] = useState<"miners" | "validators">("miners");
+  const { announce, announceLoading, announceError } = useAnnouncer();
 
-  const { data: minersData, isLoading: minersLoading } = useQuery({
+  const { data: minersData, isLoading: minersLoading, error: minersError } = useQuery({
     queryKey: ["leaderboard", "miners"],
     queryFn: () => getLeaderboard("miners"),
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  const { data: validatorsData, isLoading: validatorsLoading } = useQuery({
+  const { data: validatorsData, isLoading: validatorsLoading, error: validatorsError } = useQuery({
     queryKey: ["leaderboard", "validators"],
     queryFn: () => getLeaderboard("validators"),
     refetchInterval: 30000,
   });
+
+  // Announce loading and error states
+  useEffect(() => {
+    if (activeTab === "miners") {
+      if (minersLoading) {
+        announceLoading("miners leaderboard", true);
+      } else if (minersData?.miners?.length) {
+        announce(`Loaded ${minersData.miners.length} miners`);
+      }
+      if (minersError) {
+        announceError("Failed to load miners leaderboard");
+      }
+    } else {
+      if (validatorsLoading) {
+        announceLoading("validators leaderboard", true);
+      } else if (validatorsData?.validators?.length) {
+        announce(`Loaded ${validatorsData.validators.length} validators`);
+      }
+      if (validatorsError) {
+        announceError("Failed to load validators leaderboard");
+      }
+    }
+  }, [activeTab, minersLoading, validatorsLoading, minersData, validatorsData, minersError, validatorsError, announce, announceLoading, announceError]);
+
+  const handleTabChange = (tab: "miners" | "validators") => {
+    setActiveTab(tab);
+    announce(`Switched to ${tab} leaderboard`);
+  };
 
   const getTierBadge = (tier: string) => {
     const tiers: Record<string, { icon: JSX.Element; color: string; label: string }> = {
@@ -71,9 +102,12 @@ export default function LeaderboardPage() {
         </motion.div>
 
         {/* Tabs */}
-        <div className="flex gap-4 justify-center mb-8">
+        <div className="flex gap-4 justify-center mb-8" role="tablist" aria-label="Leaderboard categories">
           <button
-            onClick={() => setActiveTab("miners")}
+            onClick={() => handleTabChange("miners")}
+            role="tab"
+            aria-selected={activeTab === "miners"}
+            aria-controls="miners-panel"
             className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "miners"
                 ? "bg-green-500 text-white"
@@ -83,7 +117,10 @@ export default function LeaderboardPage() {
             Top Miners
           </button>
           <button
-            onClick={() => setActiveTab("validators")}
+            onClick={() => handleTabChange("validators")}
+            role="tab"
+            aria-selected={activeTab === "validators"}
+            aria-controls="validators-panel"
             className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
               activeTab === "validators"
                 ? "bg-green-500 text-white"
@@ -97,9 +134,13 @@ export default function LeaderboardPage() {
         {/* Leaderboard Table */}
         <div className="card overflow-hidden">
           {activeTab === "miners" ? (
-            <MinersTable data={minersData} loading={minersLoading} getTierBadge={getTierBadge} />
+            <div id="miners-panel" role="tabpanel" aria-labelledby="miners-tab">
+              <MinersTable data={minersData} loading={minersLoading} getTierBadge={getTierBadge} />
+            </div>
           ) : (
-            <ValidatorsTable data={validatorsData} loading={validatorsLoading} getTierBadge={getTierBadge} />
+            <div id="validators-panel" role="tabpanel" aria-labelledby="validators-tab">
+              <ValidatorsTable data={validatorsData} loading={validatorsLoading} getTierBadge={getTierBadge} />
+            </div>
           )}
         </div>
       </div>
@@ -159,7 +200,7 @@ function MinersTable({
                 </div>
               </td>
               <td className="px-6 py-4 font-mono text-sm">
-                {miner.address.slice(0, 8)}...{miner.address.slice(-6)}
+                {formatAddress(miner.address, 8, 6)}
               </td>
               <td className="px-6 py-4">
                 <div className={`flex items-center gap-2 ${tier.color}`}>
@@ -167,7 +208,7 @@ function MinersTable({
                   <span className="font-semibold">{tier.label}</span>
                 </div>
               </td>
-              <td className="px-6 py-4 text-right">{miner.total_submissions?.toLocaleString() || 0}</td>
+              <td className="px-6 py-4 text-right">{formatNumber(miner.total_submissions || 0)}</td>
               <td className="px-6 py-4 text-right">{miner.reputation?.toFixed(2) || "0.00"}</td>
               <td className="px-6 py-4 text-right">
                 {miner.trend && miner.trend > 0 && (
@@ -237,7 +278,7 @@ function ValidatorsTable({
                 </div>
               </td>
               <td className="px-6 py-4 font-mono text-sm">
-                {validator.address.slice(0, 8)}...{validator.address.slice(-6)}
+                {formatAddress(validator.address, 8, 6)}
               </td>
               <td className="px-6 py-4">
                 <div className={`flex items-center gap-2 ${tier.color}`}>
@@ -246,8 +287,8 @@ function ValidatorsTable({
                 </div>
               </td>
               <td className="px-6 py-4 text-right">{validator.trust_score?.toFixed(2) || "0.00"}</td>
-              <td className="px-6 py-4 text-right">{validator.uptime?.toFixed(1) || "0.0"}%</td>
-              <td className="px-6 py-4 text-right">{validator.voting_power?.toLocaleString() || "0"}</td>
+              <td className="px-6 py-4 text-right">{formatPercentage(validator.uptime || 0)}</td>
+              <td className="px-6 py-4 text-right">{formatNumber(validator.voting_power || 0)}</td>
             </tr>
           );
         })}

@@ -12,6 +12,13 @@
     "lint": "next lint",
     "analyze": "cross-env ANALYZE=true next build",
     "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci --coverage --watchAll=false",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration",
+    "test:accessibility": "jest tests/accessibility --verbose",
+    "test:a11y": "npm run test:accessibility",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:smoke": "playwright test --grep @smoke"
@@ -58,11 +65,15 @@
     "@playwright/test": "^1.40.0",
     "@testing-library/jest-dom": "^6.4.0",
     "@testing-library/react": "^14.2.0",
+    "@testing-library/user-event": "^14.5.1",
     "@types/jest": "^29.5.0",
+    "axe-core": "^4.8.2",
     "cross-env": "^7.0.3",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.0",
+    "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
+    "jest-axe": "^8.0.0",
     "jest-environment-jsdom": "^29.7.0"
   }
 }

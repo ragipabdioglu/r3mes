@@ -1,485 +1,939 @@
+/// System and process status monitoring for R3MES Desktop Launcher
+/// 
+/// Monitors system resources, process health, network connectivity,
+/// and provides alerts and recommendations.
+
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH, Duration};
-use std::io;
-use log::{debug, warn, error};
-use crate::config::get_config;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tokio::time::{interval, Duration};
 
-/// Custom error type for status monitoring operations
-#[derive(Debug)]
-pub enum StatusError {
-    /// Network-related errors (connection, timeout)
-    Network(String),
-    /// Configuration errors
-    Config(String),
-    /// IO errors (file system, process)
-    Io(io::Error),
-    /// JSON parsing errors
-    Parse(String),
-    /// Timeout errors
-    Timeout(String),
-}
-
-impl std::fmt::Display for StatusError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            StatusError::Network(msg) => write!(f, "Network error: {}", msg),
-            StatusError::Config(msg) => write!(f, "Configuration error: {}", msg),
-            StatusError::Io(err) => write!(f, "IO error: {}", err),
-            StatusError::Parse(msg) => write!(f, "Parse error: {}", msg),
-            StatusError::Timeout(msg) => write!(f, "Timeout: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for StatusError {}
-
-impl From<io::Error> for StatusError {
-    fn from(err: io::Error) -> Self {
-        StatusError::Io(err)
-    }
-}
-
-impl From<serde_json::Error> for StatusError {
-    fn from(err: serde_json::Error) -> Self {
-        StatusError::Parse(err.to_string())
-    }
-}
-
-/// Result type alias for status operations
-pub type StatusResult<T> = Result<T, StatusError>;
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemStatus {
-    pub chain_sync: ChainSyncStatus,
-    pub ipfs: IpfsStatus,
-    pub model: ModelStatus,
-    pub node: NodeStatus,
-    /// Overall system health status
+    pub cpu: CpuStatus,
+    pub memory: MemoryStatus,
+    pub disk: DiskStatus,
+    pub network: NetworkStatus,
+    pub processes: HashMap<String, ProcessStatus>,
+    pub services: HashMap<String, ServiceStatus>,
+    pub alerts: Vec<Alert>,
+    pub timestamp: u64,
+    pub uptime: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CpuStatus {
+    pub usage_percent: f64,
+    pub load_average: Vec<f64>,
+    pub core_count: u32,
+    pub temperature: Option<f64>,
+    pub frequency_mhz: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryStatus {
+    pub total_bytes: u64,
+    pub used_bytes: u64,
+    pub available_bytes: u64,
+    pub usage_percent: f64,
+    pub swap_total: u64,
+    pub swap_used: u64,
+    pub cached_bytes: u64,
+    pub buffers_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiskStatus {
+    pub total_bytes: u64,
+    pub used_bytes: u64,
+    pub available_bytes: u64,
+    pub usage_percent: f64,
+    pub read_bytes_per_sec: u64,
+    pub write_bytes_per_sec: u64,
+    pub read_ops_per_sec: u64,
+    pub write_ops_per_sec: u64,
+    pub mount_point: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkStatus {
+    pub interfaces: HashMap<String, NetworkInterface>,
+    pub total_bytes_sent: u64,
+    pub total_bytes_received: u64,
+    pub connectivity: ConnectivityStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkInterface {
+    pub name: String,
+    pub bytes_sent: u64,
+    pub bytes_received: u64,
+    pub packets_sent: u64,
+    pub packets_received: u64,
+    pub errors: u64,
+    pub drops: u64,
+    pub speed_mbps: Option<u64>,
+    pub is_up: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectivityStatus {
+    pub internet_connected: bool,
+    pub rpc_reachable: bool,
+    pub ipfs_reachable: bool,
+    pub dashboard_reachable: bool,
+    pub latency_ms: HashMap<String, u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProcessStatus {
+    pub name: String,
+    pub pid: Option<u32>,
+    pub status: String,
+    pub cpu_percent: f64,
+    pub memory_bytes: u64,
+    pub memory_percent: f64,
+    pub start_time: u64,
+    pub running_time: u64,
+    pub threads: u32,
+    pub file_descriptors: Option<u32>,
+    pub command_line: String,
     pub health: HealthStatus,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ChainSyncStatus {
-    pub synced: bool,
-    pub percentage: f64,
-    pub block_height: Option<u64>,
-    pub latest_block_height: Option<u64>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceStatus {
+    pub name: String,
+    pub status: String,
+    pub port: Option<u16>,
+    pub response_time_ms: Option<u64>,
+    pub last_check: u64,
+    pub error_count: u64,
+    pub health: HealthStatus,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct IpfsStatus {
-    pub connected: bool,
-    pub peers: u32,
-    pub status: String, // "online", "offline", "connecting"
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum HealthStatus {
+    Healthy,
+    Warning,
+    Critical,
+    Unknown,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ModelStatus {
-    pub downloaded: bool,
-    pub progress: f64, // 0.0 to 1.0
-    pub file_name: Option<String>,
-    pub file_size_gb: Option<f64>,
-    pub integrity_verified: bool,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Alert {
+    pub id: String,
+    pub level: AlertLevel,
+    pub title: String,
+    pub message: String,
+    pub source: String,
+    pub timestamp: u64,
+    pub acknowledged: bool,
+    pub auto_resolve: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct NodeStatus {
-    pub running: bool,
-    pub rpc_endpoint: String,
-    pub grpc_endpoint: String,
-    pub last_block_time: Option<i64>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AlertLevel {
+    Info,
+    Warning,
+    Critical,
 }
 
-/// Overall health status of the system
-#[derive(Debug, Serialize, Deserialize)]
-pub struct HealthStatus {
-    pub status: String, // "healthy", "degraded", "unhealthy"
-    pub issues: Vec<String>,
-    pub last_check: i64,
+pub struct StatusMonitor {
+    system_status: Arc<RwLock<SystemStatus>>,
+    monitoring_interval: Duration,
+    alert_thresholds: AlertThresholds,
+    process_names: Vec<String>,
+    service_endpoints: HashMap<String, String>,
+    previous_stats: Arc<RwLock<Option<SystemStatus>>>,
 }
 
-/// HTTP request with timeout
-fn http_request_with_timeout(url: &str, timeout_secs: u64) -> StatusResult<String> {
-    let output = Command::new("curl")
-        .arg("-s")
-        .arg("--max-time")
-        .arg(timeout_secs.to_string())
-        .arg("--connect-timeout")
-        .arg("5")
-        .arg(url)
-        .output()
-        .map_err(|e| StatusError::Io(e))?;
+#[derive(Debug, Clone)]
+pub struct AlertThresholds {
+    pub cpu_warning: f64,
+    pub cpu_critical: f64,
+    pub memory_warning: f64,
+    pub memory_critical: f64,
+    pub disk_warning: f64,
+    pub disk_critical: f64,
+    pub response_time_warning: u64,
+    pub response_time_critical: u64,
+}
 
-    if !output.status.success() {
-        return Err(StatusError::Network(format!(
-            "Request failed with status: {:?}",
-            output.status.code()
-        )));
+impl Default for AlertThresholds {
+    fn default() -> Self {
+        Self {
+            cpu_warning: 80.0,
+            cpu_critical: 95.0,
+            memory_warning: 85.0,
+            memory_critical: 95.0,
+            disk_warning: 85.0,
+            disk_critical: 95.0,
+            response_time_warning: 5000,  // 5 seconds
+            response_time_critical: 10000, // 10 seconds
+        }
     }
-
-    String::from_utf8(output.stdout)
-        .map_err(|e| StatusError::Parse(format!("Invalid UTF-8 response: {}", e)))
 }
 
-pub async fn get_system_status() -> Result<SystemStatus, String> {
-    let mut issues = Vec::new();
-
-    // Collect status from all components, handling errors gracefully
-    let chain_sync = match get_chain_sync_status().await {
-        Ok(status) => status,
-        Err(e) => {
-            warn!("Failed to get chain sync status: {}", e);
-            issues.push(format!("Chain sync: {}", e));
-            ChainSyncStatus {
-                synced: false,
-                percentage: 0.0,
-                block_height: None,
-                latest_block_height: None,
-            }
+impl StatusMonitor {
+    /// Create a new status monitor
+    pub fn new() -> Self {
+        let process_names = vec![
+            "remesd".to_string(),
+            "r3mes-miner".to_string(),
+            "ipfs".to_string(),
+            "r3mes-serving".to_string(),
+            "r3mes-validator".to_string(),
+            "r3mes-proposer".to_string(),
+        ];
+        
+        let mut service_endpoints = HashMap::new();
+        service_endpoints.insert("rpc".to_string(), "http://localhost:26657/status".to_string());
+        service_endpoints.insert("api".to_string(), "http://localhost:1317/cosmos/base/tendermint/v1beta1/node_info".to_string());
+        service_endpoints.insert("ipfs".to_string(), "http://localhost:5001/api/v0/version".to_string());
+        service_endpoints.insert("dashboard".to_string(), "http://localhost:3000/api/health".to_string());
+        
+        Self {
+            system_status: Arc::new(RwLock::new(Self::default_system_status())),
+            monitoring_interval: Duration::from_secs(5),
+            alert_thresholds: AlertThresholds::default(),
+            process_names,
+            service_endpoints,
+            previous_stats: Arc::new(RwLock::new(None)),
         }
-    };
-
-    let ipfs = match get_ipfs_status().await {
-        Ok(status) => status,
-        Err(e) => {
-            warn!("Failed to get IPFS status: {}", e);
-            issues.push(format!("IPFS: {}", e));
-            IpfsStatus {
-                connected: false,
-                peers: 0,
-                status: "error".to_string(),
-            }
-        }
-    };
-
-    let model = match get_model_status().await {
-        Ok(status) => status,
-        Err(e) => {
-            warn!("Failed to get model status: {}", e);
-            issues.push(format!("Model: {}", e));
-            ModelStatus {
-                downloaded: false,
-                progress: 0.0,
-                file_name: None,
-                file_size_gb: None,
-                integrity_verified: false,
-            }
-        }
-    };
-
-    let node = match get_node_status().await {
-        Ok(status) => status,
-        Err(e) => {
-            warn!("Failed to get node status: {}", e);
-            issues.push(format!("Node: {}", e));
-            let config = get_config();
-            NodeStatus {
-                running: false,
-                rpc_endpoint: config.rpc_url.clone(),
-                grpc_endpoint: config.grpc_url.clone(),
-                last_block_time: None,
-            }
-        }
-    };
-
-    // Determine overall health
-    let health_status = if issues.is_empty() && node.running && chain_sync.synced {
-        "healthy"
-    } else if node.running {
-        "degraded"
-    } else {
-        "unhealthy"
-    };
-
-    let health = HealthStatus {
-        status: health_status.to_string(),
-        issues,
-        last_check: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::ZERO)
-            .as_secs() as i64,
-    };
-
-    Ok(SystemStatus {
-        chain_sync,
-        ipfs,
-        model,
-        node,
-        health,
-    })
-}
-
-pub async fn get_chain_sync_status() -> StatusResult<ChainSyncStatus> {
-    let config = get_config();
-    let rpc_url = &config.rpc_url;
+    }
     
-    debug!("Fetching chain sync status from {}", rpc_url);
-    
-    // Try to get current block height with timeout
-    let current_height: Option<u64> = match http_request_with_timeout(
-        &format!("{}/status", rpc_url),
-        10,
-    ) {
-        Ok(response) => {
-            // Parse JSON response
-            match serde_json::from_str::<serde_json::Value>(&response) {
-                Ok(json) => {
-                    json.get("result")
-                        .and_then(|r| r.get("sync_info"))
-                        .and_then(|s| s.get("latest_block_height"))
-                        .and_then(|h| h.as_str())
-                        .and_then(|h| h.parse().ok())
+    /// Start monitoring
+    pub async fn start_monitoring(&self) {
+        let system_status = Arc::clone(&self.system_status);
+        let previous_stats = Arc::clone(&self.previous_stats);
+        let interval_duration = self.monitoring_interval;
+        let thresholds = self.alert_thresholds.clone();
+        let process_names = self.process_names.clone();
+        let service_endpoints = self.service_endpoints.clone();
+        
+        tokio::spawn(async move {
+            let mut interval = interval(interval_duration);
+            
+            loop {
+                interval.tick().await;
+                
+                let mut status = Self::collect_system_status(&process_names, &service_endpoints).await;
+                
+                // Generate alerts based on thresholds
+                status.alerts = Self::generate_alerts(&status, &thresholds);
+                
+                // Store previous stats for rate calculations
+                {
+                    let mut prev = previous_stats.write().await;
+                    *prev = Some(status.clone());
                 }
-                Err(e) => {
-                    warn!("Failed to parse chain status response: {}", e);
-                    None
+                
+                // Update current status
+                {
+                    let mut current = system_status.write().await;
+                    *current = status;
                 }
             }
+        });
+    }
+    
+    /// Get current system status
+    pub async fn get_status(&self) -> SystemStatus {
+        self.system_status.read().await.clone()
+    }
+    
+    /// Get specific process status
+    pub async fn get_process_status(&self, process_name: &str) -> Option<ProcessStatus> {
+        let status = self.system_status.read().await;
+        status.processes.get(process_name).cloned()
+    }
+    
+    /// Get active alerts
+    pub async fn get_alerts(&self) -> Vec<Alert> {
+        let status = self.system_status.read().await;
+        status.alerts.clone()
+    }
+    
+    /// Acknowledge an alert
+    pub async fn acknowledge_alert(&self, alert_id: &str) {
+        let mut status = self.system_status.write().await;
+        for alert in &mut status.alerts {
+            if alert.id == alert_id {
+                alert.acknowledged = true;
+                break;
+            }
         }
-        Err(e) => {
-            warn!("Failed to fetch chain status: {}", e);
-            None
+    }
+    
+    /// Collect comprehensive system status
+    async fn collect_system_status(
+        process_names: &[String],
+        service_endpoints: &HashMap<String, String>,
+    ) -> SystemStatus {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        
+        let cpu = Self::collect_cpu_status().await;
+        let memory = Self::collect_memory_status().await;
+        let disk = Self::collect_disk_status().await;
+        let network = Self::collect_network_status().await;
+        let processes = Self::collect_process_status(process_names).await;
+        let services = Self::collect_service_status(service_endpoints).await;
+        let uptime = Self::get_system_uptime().await;
+        
+        SystemStatus {
+            cpu,
+            memory,
+            disk,
+            network,
+            processes,
+            services,
+            alerts: Vec::new(), // Will be populated by generate_alerts
+            timestamp,
+            uptime,
         }
-    };
-
-    // Try to get latest block height from network
-    let latest_height: Option<u64> = None; // Would query network peers
-
-    let percentage = if let (Some(current), Some(latest)) = (current_height, latest_height) {
-        if latest > 0 {
-            (current as f64 / latest as f64) * 100.0
+    }
+    
+    /// Collect CPU status
+    async fn collect_cpu_status() -> CpuStatus {
+        let core_count = num_cpus::get() as u32;
+        let usage_percent = Self::get_cpu_usage().await;
+        let load_average = Self::get_load_average().await;
+        let temperature = Self::get_cpu_temperature().await;
+        let frequency_mhz = Self::get_cpu_frequency().await;
+        
+        CpuStatus {
+            usage_percent,
+            load_average,
+            core_count,
+            temperature,
+            frequency_mhz,
+        }
+    }
+    
+    /// Get CPU usage percentage
+    async fn get_cpu_usage() -> f64 {
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(stat) = std::fs::read_to_string("/proc/stat") {
+                if let Some(line) = stat.lines().next() {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 8 && parts[0] == "cpu" {
+                        let user: u64 = parts[1].parse().unwrap_or(0);
+                        let nice: u64 = parts[2].parse().unwrap_or(0);
+                        let system: u64 = parts[3].parse().unwrap_or(0);
+                        let idle: u64 = parts[4].parse().unwrap_or(0);
+                        let iowait: u64 = parts[5].parse().unwrap_or(0);
+                        let irq: u64 = parts[6].parse().unwrap_or(0);
+                        let softirq: u64 = parts[7].parse().unwrap_or(0);
+                        
+                        let total = user + nice + system + idle + iowait + irq + softirq;
+                        let active = total - idle - iowait;
+                        
+                        if total > 0 {
+                            return (active as f64 / total as f64) * 100.0;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Fallback: use system load
+        0.0
+    }
+    
+    /// Get system load average
+    async fn get_load_average() -> Vec<f64> {
+        #[cfg(unix)]
+        {
+            if let Ok(loadavg) = std::fs::read_to_string("/proc/loadavg") {
+                let parts: Vec<&str> = loadavg.split_whitespace().collect();
+                if parts.len() >= 3 {
+                    return vec![
+                        parts[0].parse().unwrap_or(0.0),
+                        parts[1].parse().unwrap_or(0.0),
+                        parts[2].parse().unwrap_or(0.0),
+                    ];
+                }
+            }
+        }
+        
+        vec![0.0, 0.0, 0.0]
+    }
+    
+    /// Get CPU temperature
+    async fn get_cpu_temperature() -> Option<f64> {
+        #[cfg(target_os = "linux")]
+        {
+            // Try different thermal zones
+            for i in 0..10 {
+                let temp_path = format!("/sys/class/thermal/thermal_zone{}/temp", i);
+                if let Ok(temp_str) = std::fs::read_to_string(&temp_path) {
+                    if let Ok(temp_millicelsius) = temp_str.trim().parse::<u64>() {
+                        return Some(temp_millicelsius as f64 / 1000.0);
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+    
+    /// Get CPU frequency
+    async fn get_cpu_frequency() -> Option<u32> {
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(freq_str) = std::fs::read_to_string("/proc/cpuinfo") {
+                for line in freq_str.lines() {
+                    if line.starts_with("cpu MHz") {
+                        if let Some(freq_part) = line.split(':').nth(1) {
+                            if let Ok(freq) = freq_part.trim().parse::<f64>() {
+                                return Some(freq as u32);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+    
+    /// Collect memory status
+    async fn collect_memory_status() -> MemoryStatus {
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(meminfo) = std::fs::read_to_string("/proc/meminfo") {
+                let mut total_bytes = 0;
+                let mut available_bytes = 0;
+                let mut cached_bytes = 0;
+                let mut buffers_bytes = 0;
+                let mut swap_total = 0;
+                let mut swap_used = 0;
+                
+                for line in meminfo.lines() {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        let value = parts[1].parse::<u64>().unwrap_or(0) * 1024; // Convert KB to bytes
+                        
+                        match parts[0] {
+                            "MemTotal:" => total_bytes = value,
+                            "MemAvailable:" => available_bytes = value,
+                            "Cached:" => cached_bytes = value,
+                            "Buffers:" => buffers_bytes = value,
+                            "SwapTotal:" => swap_total = value,
+                            "SwapFree:" => swap_used = swap_total - value,
+                            _ => {}
+                        }
+                    }
+                }
+                
+                let used_bytes = total_bytes - available_bytes;
+                let usage_percent = if total_bytes > 0 {
+                    (used_bytes as f64 / total_bytes as f64) * 100.0
+                } else {
+                    0.0
+                };
+                
+                return MemoryStatus {
+                    total_bytes,
+                    used_bytes,
+                    available_bytes,
+                    usage_percent,
+                    swap_total,
+                    swap_used,
+                    cached_bytes,
+                    buffers_bytes,
+                };
+            }
+        }
+        
+        // Fallback for other platforms
+        MemoryStatus {
+            total_bytes: 0,
+            used_bytes: 0,
+            available_bytes: 0,
+            usage_percent: 0.0,
+            swap_total: 0,
+            swap_used: 0,
+            cached_bytes: 0,
+            buffers_bytes: 0,
+        }
+    }
+    
+    /// Collect disk status
+    async fn collect_disk_status() -> DiskStatus {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
+        let workspace_path = std::path::PathBuf::from(&home).join("R3MES");
+        
+        // Get disk space information
+        let (total_bytes, available_bytes) = Self::get_disk_space(&workspace_path).await;
+        let used_bytes = total_bytes - available_bytes;
+        let usage_percent = if total_bytes > 0 {
+            (used_bytes as f64 / total_bytes as f64) * 100.0
         } else {
             0.0
-        }
-    } else if current_height.is_some() {
-        // If we have current height but no latest, assume synced
-        100.0
-    } else {
-        0.0
-    };
-
-    Ok(ChainSyncStatus {
-        synced: percentage >= 99.0 || (current_height.is_some() && latest_height.is_none()),
-        percentage,
-        block_height: current_height,
-        latest_block_height: latest_height,
-    })
-}
-
-pub async fn get_ipfs_status() -> StatusResult<IpfsStatus> {
-    let config = get_config();
-    let ipfs_url = &config.ipfs_url;
-    
-    debug!("Checking IPFS status at {}", ipfs_url);
-    
-    // Check if IPFS is running with timeout
-    let connected = match http_request_with_timeout(
-        &format!("{}/api/v0/version", ipfs_url),
-        5,
-    ) {
-        Ok(_) => true,
-        Err(e) => {
-            debug!("IPFS not available: {}", e);
-            false
-        }
-    };
-
-    // Get peer count if connected
-    let peers = if connected {
-        match http_request_with_timeout(
-            &format!("{}/api/v0/swarm/peers", ipfs_url),
-            5,
-        ) {
-            Ok(response) => {
-                // Parse JSON to count peers
-                match serde_json::from_str::<serde_json::Value>(&response) {
-                    Ok(json) => {
-                        json.get("Peers")
-                            .and_then(|p| p.as_array())
-                            .map(|arr| arr.len() as u32)
-                            .unwrap_or(0)
-                    }
-                    Err(_) => 0
-                }
-            }
-            Err(_) => 0
-        }
-    } else {
-        0
-    };
-
-    let status = if connected {
-        if peers > 0 {
-            "online"
-        } else {
-            "connecting"
-        }
-    } else {
-        "offline"
-    };
-
-    Ok(IpfsStatus {
-        connected,
-        peers,
-        status: status.to_string(),
-    })
-}
-
-pub async fn get_model_status() -> StatusResult<ModelStatus> {
-    use std::path::PathBuf;
-    use std::fs;
-    
-    // Get home directory with proper error handling
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE")) // Windows fallback
-        .unwrap_or_else(|_| {
-            warn!("Could not determine home directory, using current directory");
-            ".".to_string()
-        });
-    
-    let model_dir = PathBuf::from(&home).join(".r3mes").join("models");
-    
-    debug!("Checking model status in {:?}", model_dir);
-    
-    // Check if model directory exists and has files
-    let downloaded = model_dir.exists() && model_dir.is_dir();
-    
-    let (file_name, file_size_gb) = if downloaded {
-        // Find model file (usually .gguf or .safetensors)
-        let model_file = fs::read_dir(&model_dir)
-            .map_err(|e| {
-                warn!("Failed to read model directory: {}", e);
-                StatusError::Io(e)
-            })?
-            .filter_map(|e| e.ok())
-            .find(|e| {
-                e.path().extension()
-                    .and_then(|ext| ext.to_str())
-                    .map(|s| s == "gguf" || s == "safetensors" || s == "bin")
-                    .unwrap_or(false)
-            });
-
-        if let Some(file) = model_file {
-            let path = file.path();
-            let name = path.file_name()
-                .and_then(|n| n.to_str())
-                .map(|s| s.to_string());
-            
-            let size = fs::metadata(&path)
-                .ok()
-                .map(|m| m.len() as f64 / (1024.0 * 1024.0 * 1024.0));
-
-            (name, size)
-        } else {
-            (None, None)
-        }
-    } else {
-        (None, None)
-    };
-
-    // TODO: Implement SHA256 verification
-    let integrity_verified = file_name.is_some();
-
-    Ok(ModelStatus {
-        downloaded: downloaded && file_name.is_some(),
-        progress: if downloaded && file_name.is_some() { 1.0 } else { 0.0 },
-        file_name,
-        file_size_gb,
-        integrity_verified,
-    })
-}
-
-pub async fn get_node_status() -> StatusResult<NodeStatus> {
-    let config = get_config();
-    let rpc_url = &config.rpc_url;
-    let grpc_url = &config.grpc_url;
-    
-    debug!("Checking node status at {}", rpc_url);
-    
-    // Check if node is running with timeout
-    let (running, last_block_time) = match http_request_with_timeout(
-        &format!("{}/status", rpc_url),
-        10,
-    ) {
-        Ok(response) => {
-            // Parse JSON response for block time
-            match serde_json::from_str::<serde_json::Value>(&response) {
-                Ok(json) => {
-                    let block_time = json.get("result")
-                        .and_then(|r| r.get("sync_info"))
-                        .and_then(|s| s.get("latest_block_time"))
-                        .and_then(|t| t.as_str())
-                        .and_then(|t| {
-                            // Parse RFC3339 timestamp
-                            chrono::DateTime::parse_from_rfc3339(t)
-                                .ok()
-                                .map(|dt| dt.timestamp())
-                        });
-                    (true, block_time)
-                }
-                Err(e) => {
-                    warn!("Failed to parse node status: {}", e);
-                    (true, None) // Node is running but couldn't parse response
-                }
-            }
-        }
-        Err(e) => {
-            debug!("Node not available: {}", e);
-            (false, None)
-        }
-    };
-
-    // Fallback to current time if we couldn't get block time
-    let last_block_time = last_block_time.or_else(|| {
-        if running {
-            Some(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or(Duration::ZERO)
-                    .as_secs() as i64
-            )
-        } else {
-            None
-        }
-    });
-
-    Ok(NodeStatus {
-        running,
-        rpc_endpoint: rpc_url.to_string(),
-        grpc_endpoint: grpc_url.to_string(),
-        last_block_time,
-    })
-}
-
-/// Retry a status check with exponential backoff
-pub async fn retry_status_check<T, F, Fut>(
-    operation: F,
-    max_retries: u32,
-    initial_delay_ms: u64,
-) -> StatusResult<T>
-where
-    F: Fn() -> Fut,
-    Fut: std::future::Future<Output = StatusResult<T>>,
-{
-    let mut delay = initial_delay_ms;
-    let mut last_error = None;
-
-    for attempt in 0..max_retries {
-        match operation().await {
-            Ok(result) => return Ok(result),
-            Err(e) => {
-                warn!("Status check attempt {} failed: {}", attempt + 1, e);
-                last_error = Some(e);
-                
-                if attempt < max_retries - 1 {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
-                    delay *= 2; // Exponential backoff
-                }
-            }
+        };
+        
+        // Get disk I/O statistics (simplified)
+        let (read_bytes_per_sec, write_bytes_per_sec, read_ops_per_sec, write_ops_per_sec) = 
+            Self::get_disk_io_stats().await;
+        
+        DiskStatus {
+            total_bytes,
+            used_bytes,
+            available_bytes,
+            usage_percent,
+            read_bytes_per_sec,
+            write_bytes_per_sec,
+            read_ops_per_sec,
+            write_ops_per_sec,
+            mount_point: workspace_path.to_string_lossy().to_string(),
         }
     }
-
-    Err(last_error.unwrap_or(StatusError::Network("Max retries exceeded".to_string())))
+    
+    /// Get disk space information
+    async fn get_disk_space(path: &std::path::Path) -> (u64, u64) {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            
+            let path_cstr = std::ffi::CString::new(path.to_string_lossy().as_bytes()).unwrap();
+            let mut statvfs = std::mem::MaybeUninit::uninit();
+            
+            unsafe {
+                if libc::statvfs(path_cstr.as_ptr(), statvfs.as_mut_ptr()) == 0 {
+                    let statvfs = statvfs.assume_init();
+                    let total_bytes = statvfs.f_blocks * statvfs.f_frsize;
+                    let available_bytes = statvfs.f_bavail * statvfs.f_frsize;
+                    return (total_bytes, available_bytes);
+                }
+            }
+        }
+        
+        (0, 0)
+    }
+    
+    /// Get disk I/O statistics
+    async fn get_disk_io_stats() -> (u64, u64, u64, u64) {
+        // This would require reading /proc/diskstats and calculating rates
+        // For now, return zeros
+        (0, 0, 0, 0)
+    }
+    
+    /// Collect network status
+    async fn collect_network_status() -> NetworkStatus {
+        let interfaces = Self::get_network_interfaces().await;
+        let connectivity = Self::check_connectivity().await;
+        
+        let total_bytes_sent = interfaces.values().map(|i| i.bytes_sent).sum();
+        let total_bytes_received = interfaces.values().map(|i| i.bytes_received).sum();
+        
+        NetworkStatus {
+            interfaces,
+            total_bytes_sent,
+            total_bytes_received,
+            connectivity,
+        }
+    }
+    
+    /// Get network interfaces
+    async fn get_network_interfaces() -> HashMap<String, NetworkInterface> {
+        let mut interfaces = HashMap::new();
+        
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(net_dev) = std::fs::read_to_string("/proc/net/dev") {
+                for line in net_dev.lines().skip(2) {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 17 {
+                        let name = parts[0].trim_end_matches(':').to_string();
+                        let bytes_received = parts[1].parse().unwrap_or(0);
+                        let packets_received = parts[2].parse().unwrap_or(0);
+                        let errors_rx = parts[3].parse().unwrap_or(0);
+                        let drops_rx = parts[4].parse().unwrap_or(0);
+                        let bytes_sent = parts[9].parse().unwrap_or(0);
+                        let packets_sent = parts[10].parse().unwrap_or(0);
+                        let errors_tx = parts[11].parse().unwrap_or(0);
+                        let drops_tx = parts[12].parse().unwrap_or(0);
+                        
+                        interfaces.insert(name.clone(), NetworkInterface {
+                            name,
+                            bytes_sent,
+                            bytes_received,
+                            packets_sent,
+                            packets_received,
+                            errors: errors_rx + errors_tx,
+                            drops: drops_rx + drops_tx,
+                            speed_mbps: None,
+                            is_up: true, // Simplified
+                        });
+                    }
+                }
+            }
+        }
+        
+        interfaces
+    }
+    
+    /// Check network connectivity
+    async fn check_connectivity() -> ConnectivityStatus {
+        let internet_connected = Self::test_internet_connectivity().await;
+        let rpc_reachable = Self::test_endpoint_connectivity("http://localhost:26657/status").await;
+        let ipfs_reachable = Self::test_endpoint_connectivity("http://localhost:5001/api/v0/version").await;
+        let dashboard_reachable = Self::test_endpoint_connectivity("http://localhost:3000").await;
+        
+        let mut latency_ms = HashMap::new();
+        latency_ms.insert("rpc".to_string(), Self::measure_latency("http://localhost:26657/status").await);
+        latency_ms.insert("ipfs".to_string(), Self::measure_latency("http://localhost:5001/api/v0/version").await);
+        
+        ConnectivityStatus {
+            internet_connected,
+            rpc_reachable,
+            ipfs_reachable,
+            dashboard_reachable,
+            latency_ms,
+        }
+    }
+    
+    /// Test internet connectivity
+    async fn test_internet_connectivity() -> bool {
+        let test_hosts = vec!["8.8.8.8:53", "1.1.1.1:53"];
+        
+        for host in test_hosts {
+            if tokio::net::TcpStream::connect(host).await.is_ok() {
+                return true;
+            }
+        }
+        
+        false
+    }
+    
+    /// Test endpoint connectivity
+    async fn test_endpoint_connectivity(url: &str) -> bool {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .unwrap();
+        
+        client.get(url).send().await.is_ok()
+    }
+    
+    /// Measure endpoint latency
+    async fn measure_latency(url: &str) -> u64 {
+        let start = std::time::Instant::now();
+        
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .unwrap();
+        
+        let _ = client.get(url).send().await;
+        
+        start.elapsed().as_millis() as u64
+    }
+    
+    /// Collect process status
+    async fn collect_process_status(process_names: &[String]) -> HashMap<String, ProcessStatus> {
+        let mut processes = HashMap::new();
+        
+        for process_name in process_names {
+            if let Some(status) = Self::get_process_status_by_name(process_name).await {
+                processes.insert(process_name.clone(), status);
+            }
+        }
+        
+        processes
+    }
+    
+    /// Get process status by name
+    async fn get_process_status_by_name(process_name: &str) -> Option<ProcessStatus> {
+        #[cfg(unix)]
+        {
+            let output = Command::new("pgrep")
+                .arg("-f")
+                .arg(process_name)
+                .output()
+                .ok()?;
+            
+            if output.status.success() {
+                let pid_str = String::from_utf8_lossy(&output.stdout).trim();
+                if let Ok(pid) = pid_str.parse::<u32>() {
+                    return Self::get_process_details(pid, process_name).await;
+                }
+            }
+        }
+        
+        None
+    }
+    
+    /// Get detailed process information
+    async fn get_process_details(pid: u32, name: &str) -> Option<ProcessStatus> {
+        // This would read from /proc/PID/* files on Linux
+        // For now, return a basic status
+        Some(ProcessStatus {
+            name: name.to_string(),
+            pid: Some(pid),
+            status: "running".to_string(),
+            cpu_percent: 0.0,
+            memory_bytes: 0,
+            memory_percent: 0.0,
+            start_time: 0,
+            running_time: 0,
+            threads: 1,
+            file_descriptors: None,
+            command_line: String::new(),
+            health: HealthStatus::Healthy,
+        })
+    }
+    
+    /// Collect service status
+    async fn collect_service_status(endpoints: &HashMap<String, String>) -> HashMap<String, ServiceStatus> {
+        let mut services = HashMap::new();
+        
+        for (name, url) in endpoints {
+            let status = Self::check_service_status(name, url).await;
+            services.insert(name.clone(), status);
+        }
+        
+        services
+    }
+    
+    /// Check individual service status
+    async fn check_service_status(name: &str, url: &str) -> ServiceStatus {
+        let start = std::time::Instant::now();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .unwrap();
+        
+        let (status, response_time_ms, error_count) = match client.get(url).send().await {
+            Ok(response) => {
+                let response_time = start.elapsed().as_millis() as u64;
+                if response.status().is_success() {
+                    ("healthy".to_string(), Some(response_time), 0)
+                } else {
+                    ("unhealthy".to_string(), Some(response_time), 1)
+                }
+            }
+            Err(_) => ("unreachable".to_string(), None, 1),
+        };
+        
+        let health = match status.as_str() {
+            "healthy" => HealthStatus::Healthy,
+            "unhealthy" => HealthStatus::Warning,
+            "unreachable" => HealthStatus::Critical,
+            _ => HealthStatus::Unknown,
+        };
+        
+        // Extract port from URL
+        let port = url.parse::<url::Url>()
+            .ok()
+            .and_then(|u| u.port())
+            .or_else(|| {
+                if url.starts_with("https://") { Some(443) }
+                else if url.starts_with("http://") { Some(80) }
+                else { None }
+            });
+        
+        ServiceStatus {
+            name: name.to_string(),
+            status,
+            port,
+            response_time_ms,
+            last_check: timestamp,
+            error_count,
+            health,
+        }
+    }
+    
+    /// Get system uptime
+    async fn get_system_uptime() -> u64 {
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(uptime_str) = std::fs::read_to_string("/proc/uptime") {
+                if let Some(uptime_part) = uptime_str.split_whitespace().next() {
+                    if let Ok(uptime_seconds) = uptime_part.parse::<f64>() {
+                        return uptime_seconds as u64;
+                    }
+                }
+            }
+        }
+        
+        0
+    }
+    
+    /// Generate alerts based on current status and thresholds
+    fn generate_alerts(status: &SystemStatus, thresholds: &AlertThresholds) -> Vec<Alert> {
+        let mut alerts = Vec::new();
+        let timestamp = status.timestamp;
+        
+        // CPU alerts
+        if status.cpu.usage_percent > thresholds.cpu_critical {
+            alerts.push(Alert {
+                id: "cpu_critical".to_string(),
+                level: AlertLevel::Critical,
+                title: "Critical CPU Usage".to_string(),
+                message: format!("CPU usage is {:.1}%", status.cpu.usage_percent),
+                source: "system".to_string(),
+                timestamp,
+                acknowledged: false,
+                auto_resolve: true,
+            });
+        } else if status.cpu.usage_percent > thresholds.cpu_warning {
+            alerts.push(Alert {
+                id: "cpu_warning".to_string(),
+                level: AlertLevel::Warning,
+                title: "High CPU Usage".to_string(),
+                message: format!("CPU usage is {:.1}%", status.cpu.usage_percent),
+                source: "system".to_string(),
+                timestamp,
+                acknowledged: false,
+                auto_resolve: true,
+            });
+        }
+        
+        // Memory alerts
+        if status.memory.usage_percent > thresholds.memory_critical {
+            alerts.push(Alert {
+                id: "memory_critical".to_string(),
+                level: AlertLevel::Critical,
+                title: "Critical Memory Usage".to_string(),
+                message: format!("Memory usage is {:.1}%", status.memory.usage_percent),
+                source: "system".to_string(),
+                timestamp,
+                acknowledged: false,
+                auto_resolve: true,
+            });
+        } else if status.memory.usage_percent > thresholds.memory_warning {
+            alerts.push(Alert {
+                id: "memory_warning".to_string(),
+                level: AlertLevel::Warning,
+                title: "High Memory Usage".to_string(),
+                message: format!("Memory usage is {:.1}%", status.memory.usage_percent),
+                source: "system".to_string(),
+                timestamp,
+                acknowledged: false,
+                auto_resolve: true,
+            });
+        }
+        
+        // Disk alerts
+        if status.disk.usage_percent > thresholds.disk_critical {
+            alerts.push(Alert {
+                id: "disk_critical".to_string(),
+                level: AlertLevel::Critical,
+                title: "Critical Disk Usage".to_string(),
+                message: format!("Disk usage is {:.1}%", status.disk.usage_percent),
+                source: "system".to_string(),
+                timestamp,
+                acknowledged: false,
+                auto_resolve: true,
+            });
+        } else if status.disk.usage_percent > thresholds.disk_warning {
+            alerts.push(Alert {
+                id: "disk_warning".to_string(),
+                level: AlertLevel::Warning,
+                title: "High Disk Usage".to_string(),
+                message: format!("Disk usage is {:.1}%", status.disk.usage_percent),
+                source: "system".to_string(),
+                timestamp,
+                acknowledged: false,
+                auto_resolve: true,
+            });
+        }
+        
+        // Connectivity alerts
+        if !status.network.connectivity.internet_connected {
+            alerts.push(Alert {
+                id: "internet_disconnected".to_string(),
+                level: AlertLevel::Critical,
+                title: "Internet Connection Lost".to_string(),
+                message: "No internet connectivity detected".to_string(),
+                source: "network".to_string(),
+                timestamp,
+                acknowledged: false,
+                auto_resolve: true,
+            });
+        }
+        
+        // Service alerts
+        for (name, service) in &status.services {
+            if matches!(service.health, HealthStatus::Critical) {
+                alerts.push(Alert {
+                    id: format!("service_{}_critical", name),
+                    level: AlertLevel::Critical,
+                    title: format!("Service {} Unreachable", name),
+                    message: format!("Service {} is not responding", name),
+                    source: "service".to_string(),
+                    timestamp,
+                    acknowledged: false,
+                    auto_resolve: true,
+                });
+            }
+        }
+        
+        alerts
+    }
+    
+    /// Create default system status
+    fn default_system_status() -> SystemStatus {
+        SystemStatus {
+            cpu: CpuStatus {
+                usage_percent: 0.0,
+                load_average: vec![0.0, 0.0, 0.0],
+                core_count: 1,
+                temperature: None,
+                frequency_mhz: None,
+            },
+            memory: MemoryStatus {
+                total_bytes: 0,
+                used_bytes: 0,
+                available_bytes: 0,
+                usage_percent: 0.0,
+                swap_total: 0,
+                swap_used: 0,
+                cached_bytes: 0,
+                buffers_bytes: 0,
+            },
+            disk: DiskStatus {
+                total_bytes: 0,
+                used_bytes: 0,
+                available_bytes: 0,
+                usage_percent: 0.0,
+                read_bytes_per_sec: 0,
+                write_bytes_per_sec: 0,
+                read_ops_per_sec: 0,
+                write_ops_per_sec: 0,
+                mount_point: "/".to_string(),
+            },
+            network: NetworkStatus {
+                interfaces: HashMap::new(),
+                total_bytes_sent: 0,
+                total_bytes_received: 0,
+                connectivity: ConnectivityStatus {
+                    internet_connected: false,
+                    rpc_reachable: false,
+                    ipfs_reachable: false,
+                    dashboard_reachable: false,
+                    latency_ms: HashMap::new(),
+                },
+            },
+            processes: HashMap::new(),
+            services: HashMap::new(),
+            alerts: Vec::new(),
+            timestamp: 0,
+            uptime: 0,
+        }
+    }
 }
-

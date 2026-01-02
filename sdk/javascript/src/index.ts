@@ -243,7 +243,7 @@ export class R3MESClient {
    */
   async getNetworkStats(): Promise<NetworkStats> {
     const response = await this.fetch(`${this.backendUrl}/network/stats`);
-    return response.json();
+    return response.json() as Promise<NetworkStats>;
   }
 
   /**
@@ -256,7 +256,7 @@ export class R3MESClient {
     if (response.status === 404) {
       throw new NotFoundError(`User not found: ${walletAddress}`);
     }
-    return response.json();
+    return response.json() as Promise<UserInfo>;
   }
 
   /**
@@ -276,7 +276,7 @@ export class R3MESClient {
         is_active: false,
       };
     }
-    return response.json();
+    return response.json() as Promise<MinerStats>;
   }
 
   /**
@@ -284,7 +284,7 @@ export class R3MESClient {
    */
   async getLatestBlock(): Promise<BlockInfo> {
     const response = await this.fetch(`${this.rpcUrl}/block`);
-    const data = await response.json();
+    const data = await response.json() as { result?: { block?: { header?: { height?: string; time?: string; proposer_address?: string }; data?: { txs?: unknown[] } }; block_id?: { hash?: string } } };
     const block = data.result?.block;
     return {
       height: parseInt(block?.header?.height || "0"),
@@ -302,7 +302,7 @@ export class R3MESClient {
     const response = await this.fetch(
       `${this.restUrl}/cosmos/bank/v1beta1/balances/${address}`
     );
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.balances || [];
   }
 
@@ -316,7 +316,7 @@ export class R3MESClient {
     const response = await this.fetch(
       `${this.restUrl}/cosmos/staking/v1beta1/validators?status=${status}&pagination.limit=${limit}`
     );
-    const data = await response.json();
+    const data = await response.json() as any;
     return (data.validators || []).map((v: any) => ({
       operator_address: v.operator_address,
       moniker: v.description?.moniker || "",
@@ -337,7 +337,7 @@ export class R3MESClient {
     const response = await this.fetch(
       `${this.backendUrl}/leaderboard?limit=${limit}&period=${period}`
     );
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.miners || [];
   }
 
@@ -384,7 +384,7 @@ export class MinerClient {
     const response = await fetch(
       `${this.backendUrl}/miner/earnings/${walletAddress}?limit=${limit}&offset=${offset}`
     );
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.earnings || [];
   }
 
@@ -395,7 +395,7 @@ export class MinerClient {
     const response = await fetch(
       `${this.backendUrl}/miner/hashrate/${walletAddress}?hours=${hours}`
     );
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.hashrate || [];
   }
 }
@@ -415,7 +415,7 @@ export class BlockchainClient {
 
   async getBlock(height: number): Promise<BlockInfo> {
     const response = await fetch(`${this.rpcUrl}/block?height=${height}`);
-    const data = await response.json();
+    const data = await response.json() as any;
     const block = data.result?.block;
     return {
       height: parseInt(block?.header?.height || "0"),
@@ -438,7 +438,7 @@ export class BlockchainClient {
 
   async getStatus(): Promise<any> {
     const response = await fetch(`${this.rpcUrl}/status`);
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.result;
   }
 }
@@ -479,7 +479,7 @@ export class GovernanceClient {
       url += `&proposal_status=${status}`;
     }
     const response = await fetch(url);
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.proposals || [];
   }
 
@@ -490,7 +490,7 @@ export class GovernanceClient {
     if (response.status === 404) {
       throw new NotFoundError(`Proposal not found: ${proposalId}`);
     }
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.proposal;
   }
 
@@ -498,7 +498,7 @@ export class GovernanceClient {
     const response = await fetch(
       `${this.restUrl}/cosmos/gov/v1beta1/proposals/${proposalId}/tally`
     );
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.tally;
   }
 
@@ -506,7 +506,7 @@ export class GovernanceClient {
     const response = await fetch(
       `${this.restUrl}/cosmos/gov/v1beta1/proposals/${proposalId}/votes?pagination.limit=${limit}`
     );
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.votes || [];
   }
 }
@@ -541,7 +541,7 @@ export class StakingClient {
     const response = await fetch(
       `${this.restUrl}/cosmos/staking/v1beta1/validators?status=${status}&pagination.limit=${limit}`
     );
-    const data = await response.json();
+    const data = await response.json() as any;
     return (data.validators || []).map((v: any) => ({
       operator_address: v.operator_address,
       moniker: v.description?.moniker || "",
@@ -559,7 +559,7 @@ export class StakingClient {
     if (response.status === 404) {
       throw new NotFoundError(`Validator not found: ${operatorAddress}`);
     }
-    const data = await response.json();
+    const data = await response.json() as any;
     const v = data.validator;
     return {
       operator_address: v.operator_address,
@@ -575,7 +575,7 @@ export class StakingClient {
     const response = await fetch(
       `${this.restUrl}/cosmos/staking/v1beta1/delegations/${delegatorAddress}?pagination.limit=${limit}`
     );
-    const data = await response.json();
+    const data = await response.json() as any;
     return (data.delegation_responses || []).map((d: any) => ({
       delegator_address: d.delegation.delegator_address,
       validator_address: d.delegation.validator_address,
@@ -588,13 +588,13 @@ export class StakingClient {
     const response = await fetch(
       `${this.restUrl}/cosmos/staking/v1beta1/delegators/${delegatorAddress}/unbonding_delegations?pagination.limit=${limit}`
     );
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.unbonding_responses || [];
   }
 
   async getStakingPool(): Promise<StakingPool> {
     const response = await fetch(`${this.restUrl}/cosmos/staking/v1beta1/pool`);
-    const data = await response.json();
+    const data = await response.json() as any;
     return data.pool;
   }
 

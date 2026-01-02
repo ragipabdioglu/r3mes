@@ -12,8 +12,16 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-r3mes}
       PGDATA: /var/lib/postgresql/data/pgdata
+      # Connection pooling and performance tuning
+      POSTGRES_MAX_CONNECTIONS: ${POSTGRES_MAX_CONNECTIONS:-200}
+      POSTGRES_SHARED_BUFFERS: ${POSTGRES_SHARED_BUFFERS:-256MB}
+      POSTGRES_EFFECTIVE_CACHE_SIZE: ${POSTGRES_EFFECTIVE_CACHE_SIZE:-1GB}
+      POSTGRES_WORK_MEM: ${POSTGRES_WORK_MEM:-4MB}
+      POSTGRES_MAINTENANCE_WORK_MEM: ${POSTGRES_MAINTENANCE_WORK_MEM:-64MB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     networks:
@@ -24,13 +32,30 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
 
   redis:
     image: redis:7-alpine
     container_name: r3mes-redis
     # SECURITY: Password must be provided via REDIS_PASSWORD environment variable
     # Create a .env file in this directory (see .env.example)
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    command: >
+      redis-server 
+      --appendonly yes 
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory ${REDIS_MAX_MEMORY:-512mb}
+      --maxmemory-policy allkeys-lru
+      --tcp-keepalive 300
+      --timeout 0
+      --tcp-backlog 511
+      --maxclients ${REDIS_MAX_CLIENTS:-10000}
     volumes:
       - redis_data:/data
     ports:
@@ -43,6 +68,14 @@ services:
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
 
   backend:
     build:
@@ -60,6 +93,14 @@ services:
       # For production, set BLOCKCHAIN_RPC_URL environment variable explicitly
       BLOCKCHAIN_RPC_URL: ${BLOCKCHAIN_RPC_URL}
       R3MES_ENV: ${R3MES_ENV:-development}
+      # Connection pooling configuration
+      DB_POOL_MIN_SIZE: ${DB_POOL_MIN_SIZE:-5}
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-20}
+      REDIS_MAX_CONNECTIONS: ${REDIS_MAX_CONNECTIONS:-50}
+      # Performance tuning
+      MAX_WORKERS: ${MAX_WORKERS:-4}
+      BACKEND_METRICS_INTERVAL: ${BACKEND_METRICS_INTERVAL:-10.0}
+      BACKEND_SHUTDOWN_TIMEOUT: ${BACKEND_SHUTDOWN_TIMEOUT:-30.0}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
@@ -77,6 +118,14 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
 
   frontend:
     build:

@@ -18,6 +18,8 @@ from .graceful_shutdown import get_graceful_shutdown
 
 logger = logging.getLogger(__name__)
 
+# Configuration constants
+WS_TOKEN_CLEANUP_INTERVAL = int(os.getenv("WS_TOKEN_CLEANUP_INTERVAL", "300"))  # 5 minutes
 
 # Channel security configuration
 PUBLIC_CHANNELS = {"network_status", "block_updates"}
@@ -36,7 +38,7 @@ class WebSocketAuthenticator:
         # Token cache: token_hash -> (wallet_address, expires_at)
         self._token_cache: Dict[str, tuple] = {}
         # Cleanup interval
-        self._cleanup_interval = 300  # 5 minutes
+        self._cleanup_interval = WS_TOKEN_CLEANUP_INTERVAL
     
     def generate_ws_token(self, wallet_address: str, expires_in_seconds: int = 3600) -> str:
         """

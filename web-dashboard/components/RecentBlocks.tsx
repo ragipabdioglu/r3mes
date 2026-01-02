@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import "./RecentBlocks.css";
 
 interface Block {
   height: number;
@@ -23,7 +22,7 @@ export default function RecentBlocks() {
       const data = await response.json();
       return data.blocks || [];
     },
-    refetchInterval: 10000, // Refetch every 10 seconds
+    refetchInterval: 10000,
   });
 
   const formatTime = (time: string) => {
@@ -39,50 +38,52 @@ export default function RecentBlocks() {
 
   if (isLoading) {
     return (
-      <div className="recent-blocks-container">
-        <div className="loading">Loading blocks...</div>
+      <div className="mb-8">
+        <div className="text-center py-10 text-slate-400 col-span-full">Loading blocks...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="recent-blocks-container">
-        <div className="error">Failed to load blocks. Please try again.</div>
+      <div className="mb-8">
+        <div className="text-center py-10 text-red-500 col-span-full">Failed to load blocks. Please try again.</div>
       </div>
     );
   }
 
   return (
-    <div className="recent-blocks-container">
-      <h3 className="table-title">Recent Blocks</h3>
-      <div className="blocks-list">
+    <div className="mb-8">
+      <h3 className="text-xl font-semibold text-slate-100 mb-5">Recent Blocks</h3>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
         {blocks && blocks.length > 0 ? (
           blocks.map((block) => (
-            <div key={block.hash} className="block-item">
-              <div className="block-header">
-                <div className="block-height">#{block.height}</div>
-                <div className="block-time">{formatTime(block.time)}</div>
+            <div 
+              key={block.hash} 
+              className="bg-slate-800 border border-slate-700 rounded-lg p-4 transition-all hover:border-slate-600 hover:shadow-lg hover:shadow-black/30"
+            >
+              <div className="flex justify-between items-center mb-3">
+                <div className="text-lg font-semibold text-blue-500">#{block.height}</div>
+                <div className="text-xs text-slate-500">{formatTime(block.time)}</div>
               </div>
-              <div className="block-hash">
+              <div className="font-mono text-xs text-slate-400 mb-3 break-all">
                 {block.hash.slice(0, 16)}...{block.hash.slice(-8)}
               </div>
-              <div className="block-footer">
-                <div className="block-tx">
-                  <span className="tx-icon">📦</span>
+              <div className="flex justify-between items-center pt-3 border-t border-slate-700 text-xs">
+                <div className="flex items-center gap-1.5 text-slate-400">
+                  <span className="text-sm">📦</span>
                   <span>{block.tx_count} transactions</span>
                 </div>
-                <div className="block-proposer">
+                <div className="text-slate-500 font-mono">
                   Proposer: {block.proposer.slice(0, 12)}...
                 </div>
               </div>
             </div>
           ))
         ) : (
-          <div className="blocks-empty">No blocks found</div>
+          <div className="py-10 text-center text-slate-400 col-span-full">No blocks found</div>
         )}
       </div>
     </div>
   );
 }
-

@@ -1,9 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import dynamic from "next/dynamic";
 import { Download, TrendingUp, Cpu, Thermometer, Clock, Activity } from "lucide-react";
-import { getRecentBlocks, Block } from "@/lib/api";
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer 
+} from "recharts";
 import { logger } from "@/lib/logger";
 import { useUserInfo, useMinerStats, useEarningsHistory, useHashrateHistory } from "@/hooks/useMinerData";
 import { useRecentBlocks } from "@/hooks/useNetworkStats";
@@ -11,36 +18,10 @@ import StatCard from "@/components/StatCard";
 import StatusBadge from "@/components/StatusBadge";
 import WalletGuard from "@/components/WalletGuard";
 import { SkeletonStatCard, SkeletonChart } from "@/components/SkeletonLoader";
+import { formatTimeAgo, formatAddress } from "@/utils/formatters";
 
-// Lazy load Recharts (large library, only needed for charts)
-const LineChart = dynamic(
-  () => import("recharts").then((mod) => mod.LineChart),
-  { ssr: false, loading: () => <SkeletonChart /> }
-);
-const Line = dynamic(
-  () => import("recharts").then((mod) => mod.Line),
-  { ssr: false }
-);
-const XAxis = dynamic(
-  () => import("recharts").then((mod) => mod.XAxis),
-  { ssr: false }
-);
-const YAxis = dynamic(
-  () => import("recharts").then((mod) => mod.YAxis),
-  { ssr: false }
-);
-const CartesianGrid = dynamic(
-  () => import("recharts").then((mod) => mod.CartesianGrid),
-  { ssr: false }
-);
-const Tooltip = dynamic(
-  () => import("recharts").then((mod) => mod.Tooltip),
-  { ssr: false }
-);
-const ResponsiveContainer = dynamic(
-  () => import("recharts").then((mod) => mod.ResponsiveContainer),
-  { ssr: false }
-);
+// Constants
+const DEFAULT_BLOCK_REWARD = 10.5; // REMES per block
 
 function MinePageContent() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -303,15 +284,17 @@ function MinePageContent() {
                         Block #{block.height?.toLocaleString() || "N/A"}
                       </div>
                       <div className="text-xs sm:text-sm text-slate-400">
-                        {block.miner
-                          ? `${block.miner.slice(0, 10)}...${block.miner.slice(-8)}`
-                          : "Unknown"}
+                        {block.miner ? formatAddress(block.miner) : "Unknown"}
                       </div>
                     </div>
                   </div>
                   <div className="text-left sm:text-right ml-11 sm:ml-0">
-                    <div className="text-xs sm:text-sm font-medium text-[#06b6d4]">+10.5 REMES</div>
-                    <div className="text-[10px] sm:text-xs text-slate-400">2s ago</div>
+                    <div className="text-xs sm:text-sm font-medium text-[#06b6d4]">
+                      +{(block as any).reward || DEFAULT_BLOCK_REWARD} REMES
+                    </div>
+                    <div className="text-[10px] sm:text-xs text-slate-400">
+                      {formatTimeAgo(block.timestamp)}
+                    </div>
                   </div>
                 </div>
               ))}

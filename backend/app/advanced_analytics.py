@@ -17,6 +17,11 @@ from .database_async import AsyncDatabase
 from .config_manager import get_config_manager
 from .blockchain_query_client import get_blockchain_client
 from .metrics import api_request_duration_seconds, cache_hits_total, cache_misses_total
+from .constants import (
+    ANALYTICS_TIMELINE_MAX_POINTS,
+    ANALYTICS_HASHRATE_MULTIPLIER,
+    ANALYTICS_DEFAULT_GRANULARITY_DAYS
+)
 from prometheus_client import REGISTRY
 import statistics
 
@@ -77,26 +82,22 @@ async def _build_timeline_data(days: int, granularity: str, blockchain_client) -
                     timeline.sort(key=lambda x: x.get("date", ""))
                     
                     # Limit to requested number of points
-                    if len(timeline) > 100:
-                        step = len(timeline) // 100
+                    if len(timeline) > ANALYTICS_TIMELINE_MAX_POINTS:
+                        step = len(timeline) // ANALYTICS_TIMELINE_MAX_POINTS
                         timeline = timeline[::step]
                     
                     logger.debug(f"Built timeline from {len(snapshots)} indexed snapshots")
                     return timeline
             except Exception as e:
-                logger.debug(f"Could not use indexed data, falling back to current data: {e}")
+                logger.error(f"Could not use indexed data, falling back to current data: {e}")
+                # Continue with fallback
         
         # Fallback: use current data (old behavior)
         timeline = []
         end_date = datetime.now()
         
         # Determine time intervals based on granularity
-        if granularity == "day":
-            interval_days = 1
-        elif granularity == "week":
-            interval_days = 7
-        else:  # month
-            interval_days = 30
+        interval_days = ANALYTICS_DEFAULT_GRANULARITY_DAYS.get(granularity, 30)
         
         # Generate timeline points
         current_date = end_date - timedelta(days=days)
@@ -113,7 +114,7 @@ async def _build_timeline_data(days: int, granularity: str, blockchain_client) -
                 total_stake = staking_info.get("total_stake", 0.0) if staking_info else 0.0
                 
             except Exception as e:
-                logger.debug(f"Could not fetch blockchain data for timeline: {e}")
+                logger.error(f"Could not fetch blockchain data for timeline: {e}")
                 miners_count = 0
                 validators_count = 0
                 total_stake = 0.0
@@ -123,15 +124,15 @@ async def _build_timeline_data(days: int, granularity: str, blockchain_client) -
                 "miners": miners_count,
                 "validators": validators_count,
                 "total_stake": total_stake,
-                "hashrate": miners_count * 10.0,  # Estimate
+                "hashrate": miners_count * ANALYTICS_HASHRATE_MULTIPLIER,  # Estimate
             })
             
             current_date += timedelta(days=interval_days)
         
         # Limit to requested number of points (avoid too many data points)
-        if len(timeline) > 100:
+        if len(timeline) > ANALYTICS_TIMELINE_MAX_POINTS:
             # Sample evenly
-            step = len(timeline) // 100
+            step = len(timeline) // ANALYTICS_TIMELINE_MAX_POINTS
             timeline = timeline[::step]
         
         return timeline

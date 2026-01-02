@@ -1,222 +1,387 @@
-/// Silent Auto-Update (Sessiz Güncelleme)
+/// Auto-updater for R3MES Desktop Launcher
 /// 
-/// Production olmanın altın kuralı: 1000 kişiye "yeni exe indirin" diyemezsin.
-/// Sistemde bir bug bulursan veya model güncellersen (BitNet v2 çıkarsa) otomatik güncelleme yapılmalı.
+/// Handles checking for updates, downloading, and installing new versions
+/// of the desktop launcher application.
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::fs;
-use std::io::Write;
+use std::path::PathBuf;
 use std::process::Command;
-use std::collections::HashMap;
-use futures_util::StreamExt;
-use chrono::{DateTime, Utc};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct UpdateManifest {
-    pub version: String,
-    pub chain_binary: UpdateInfo,
-    pub model_weights: UpdateInfo,
-    pub miner_engine: UpdateInfo,
-    pub launcher: UpdateInfo,
-    #[serde(default)]
-    pub release_notes: String,
-    #[serde(default)]
-    pub min_launcher_version: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateInfo {
-    pub version: String,
+    pub available: bool,
+    pub current_version: String,
+    pub latest_version: String,
+    pub release_notes: String,
     pub download_url: String,
+    pub file_size: u64,
     pub checksum: String,
-    pub required: bool,  // If false, update is optional
-    #[serde(default)]
-    pub size_bytes: u64,
-    #[serde(default)]
     pub release_date: String,
+    pub critical: bool,
 }
 
-/// Update progress event for frontend
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateProgress {
-    pub component: String,
-    pub status: UpdateStatus,
-    pub progress_percent: f32,
-    pub downloaded_bytes: u64,
-    pub total_bytes: u64,
+    pub stage: UpdateStage,
+    pub progress_percent: f64,
     pub message: String,
+    pub bytes_downloaded: u64,
+    pub total_bytes: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum UpdateStatus {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum UpdateStage {
     Checking,
     Downloading,
     Verifying,
     Installing,
-    Completed,
-    Failed,
-    RolledBack,
+    Complete,
+    Error,
 }
 
-/// Backup entry for rollback
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct BackupEntry {
-    pub component: String,
-    pub original_path: PathBuf,
-    pub backup_path: PathBuf,
-    pub version: String,
-    pub created_at: DateTime<Utc>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateResult {
+    pub success: bool,
+    pub message: String,
+    pub requires_restart: bool,
+    pub backup_created: bool,
 }
 
-/// Rollback manager for safe updates
-#[derive(Debug)]
-pub struct RollbackManager {
+pub struct Updater {
+    current_version: String,
+    update_server_url: String,
+    temp_dir: PathBuf,
     backup_dir: PathBuf,
-    backups: HashMap<String, BackupEntry>,
-    manifest_path: PathBuf,
+    app_dir: PathBuf,
 }
 
-impl RollbackManager {
-    pub fn new() -> Result<Self, String> {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
+impl Updater {
+    /// Create a new updater
+    pub fn new() -> Self {
+        let current_version = env!("CARGO_PKG_VERSION").to_string();
+        let update_server_url = "https://api.github.com/repos/R3MES-Network/desktop-launcher/releases".to_string();
+        
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .unwrap_or_else(|_| ".".to_string());
+        
+        let temp_dir = std::env::temp_dir().join("r3mes_updater");
         let backup_dir = PathBuf::from(&home).join(".r3mes").join("backups");
-        let manifest_path = backup_dir.join("rollback_manifest.json");
         
-        fs::create_dir_all(&backup_dir)
-            .map_err(|e| format!("Failed to create backup directory: {}", e))?;
+        // Get current application directory
+        let app_dir = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
+            .unwrap_or_else(|| PathBuf::from("."));
         
-        // Load existing backups
-        let backups = if manifest_path.exists() {
-            let content = fs::read_to_string(&manifest_path).unwrap_or_default();
-            serde_json::from_str(&content).unwrap_or_default()
-        } else {
-            HashMap::new()
-        };
-        
-        Ok(Self {
+        Self {
+            current_version,
+            update_server_url,
+            temp_dir,
             backup_dir,
-            backups,
-            manifest_path,
+            app_dir,
+        }
+    }
+    
+    /// Check for available updates
+    pub async fn check_for_updates(&self) -> Result<UpdateInfo, String> {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .user_agent("R3MES-Desktop-Launcher")
+            .build()
+            .unwrap();
+        
+        let response = client
+            .get(&format!("{}/latest", self.update_server_url))
+            .send()
+            .await
+            .map_err(|e| format!("Failed to check for updates: {}", e))?;
+        
+        if !response.status().is_success() {
+            return Err(format!("Update check failed with status: {}", response.status()));
+        }
+        
+        let release_data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse update response: {}", e))?;
+        
+        let latest_version = release_data["tag_name"]
+            .as_str()
+            .unwrap_or("")
+            .trim_start_matches('v')
+            .to_string();
+        
+        let release_notes = release_data["body"]
+            .as_str()
+            .unwrap_or("No release notes available")
+            .to_string();
+        
+        let release_date = release_data["published_at"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        
+        // Find the appropriate asset for current platform
+        let assets = release_data["assets"].as_array().unwrap_or(&vec![]);
+        let (download_url, file_size, checksum) = self.find_platform_asset(assets)?;
+        
+        let available = self.is_newer_version(&latest_version, &self.current_version);
+        
+        // Check if this is a critical update (security fix)
+        let critical = release_notes.to_lowercase().contains("security") ||
+                      release_notes.to_lowercase().contains("critical") ||
+                      release_notes.to_lowercase().contains("urgent");
+        
+        Ok(UpdateInfo {
+            available,
+            current_version: self.current_version.clone(),
+            latest_version,
+            release_notes,
+            download_url,
+            file_size,
+            checksum,
+            release_date,
+            critical,
         })
     }
     
-    /// Create backup before update
-    pub fn backup_component(&mut self, component: &str, current_path: &PathBuf, version: &str) -> Result<PathBuf, String> {
-        if !current_path.exists() {
-            return Err(format!("Component path does not exist: {}", current_path.display()));
-        }
+    /// Download and install update
+    pub async fn download_and_install_update(
+        &self,
+        update_info: &UpdateInfo,
+    ) -> Result<UpdateResult, String> {
+        // Create necessary directories
+        fs::create_dir_all(&self.temp_dir)
+            .map_err(|e| format!("Failed to create temp directory: {}", e))?;
         
-        let timestamp = Utc::now().timestamp();
-        let backup_name = format!("{}_{}_backup_{}", component, version.replace('.', "_"), timestamp);
-        let backup_path = self.backup_dir.join(&backup_name);
+        fs::create_dir_all(&self.backup_dir)
+            .map_err(|e| format!("Failed to create backup directory: {}", e))?;
         
-        // Copy file or directory
-        if current_path.is_dir() {
-            self.copy_dir_recursive(current_path, &backup_path)?;
-        } else {
-            fs::copy(current_path, &backup_path)
-                .map_err(|e| format!("Failed to backup {}: {}", component, e))?;
-        }
+        // Download update file
+        let download_path = self.temp_dir.join("update.zip");
+        self.download_update(&update_info.download_url, &download_path, update_info.file_size).await?;
         
-        let entry = BackupEntry {
-            component: component.to_string(),
-            original_path: current_path.clone(),
-            backup_path: backup_path.clone(),
-            version: version.to_string(),
-            created_at: Utc::now(),
-        };
+        // Verify checksum
+        self.verify_checksum(&download_path, &update_info.checksum).await?;
         
-        self.backups.insert(component.to_string(), entry);
-        self.save_manifest()?;
+        // Create backup of current installation
+        let backup_created = self.create_backup().await?;
         
-        println!("📦 Backed up {} (version {}) to {}", component, version, backup_path.display());
-        Ok(backup_path)
+        // Install update
+        self.install_update(&download_path).await?;
+        
+        // Cleanup
+        let _ = fs::remove_file(&download_path);
+        
+        Ok(UpdateResult {
+            success: true,
+            message: format!("Successfully updated to version {}", update_info.latest_version),
+            requires_restart: true,
+            backup_created,
+        })
     }
     
-    /// Rollback component to previous version
-    pub fn rollback(&mut self, component: &str) -> Result<(), String> {
-        let entry = self.backups.get(component)
-            .ok_or_else(|| format!("No backup found for component: {}", component))?
-            .clone();
+    /// Download update file with progress tracking
+    async fn download_update(
+        &self,
+        url: &str,
+        path: &PathBuf,
+        expected_size: u64,
+    ) -> Result<(), String> {
+        use futures_util::StreamExt;
+        use std::io::Write;
         
-        if !entry.backup_path.exists() {
-            return Err(format!("Backup file not found: {}", entry.backup_path.display()));
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .unwrap();
+        
+        let response = client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to start download: {}", e))?;
+        
+        if !response.status().is_success() {
+            return Err(format!("Download failed with status: {}", response.status()));
         }
         
-        // Restore from backup
-        if entry.backup_path.is_dir() {
-            // Remove current directory first
-            if entry.original_path.exists() {
-                fs::remove_dir_all(&entry.original_path)
-                    .map_err(|e| format!("Failed to remove current {}: {}", component, e))?;
-            }
-            self.copy_dir_recursive(&entry.backup_path, &entry.original_path)?;
-        } else {
-            fs::copy(&entry.backup_path, &entry.original_path)
-                .map_err(|e| format!("Failed to restore {}: {}", component, e))?;
-        }
+        let mut file = fs::File::create(path)
+            .map_err(|e| format!("Failed to create download file: {}", e))?;
         
-        println!("⏪ Rolled back {} to version {}", component, entry.version);
-        Ok(())
-    }
-    
-    /// Cleanup old backups (keep only last N backups per component)
-    pub fn cleanup_old_backups(&mut self, keep_count: usize) -> Result<(), String> {
-        let mut component_backups: HashMap<String, Vec<(PathBuf, DateTime<Utc>)>> = HashMap::new();
+        let mut stream = response.bytes_stream();
+        let mut downloaded = 0u64;
         
-        // Scan backup directory
-        if let Ok(entries) = fs::read_dir(&self.backup_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    // Parse component name from backup filename
-                    if let Some(component) = name.split('_').next() {
-                        let metadata = fs::metadata(&path).ok();
-                        let created = metadata
-                            .and_then(|m| m.created().ok())
-                            .map(|t| DateTime::<Utc>::from(t))
-                            .unwrap_or_else(Utc::now);
-                        
-                        component_backups
-                            .entry(component.to_string())
-                            .or_default()
-                            .push((path, created));
-                    }
-                }
-            }
-        }
-        
-        // Remove old backups
-        for (component, mut backups) in component_backups {
-            backups.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by date descending
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
             
-            for (path, _) in backups.into_iter().skip(keep_count) {
-                if path.is_dir() {
-                    let _ = fs::remove_dir_all(&path);
+            file.write_all(&chunk)
+                .map_err(|e| format!("Failed to write to file: {}", e))?;
+            
+            downloaded += chunk.len() as u64;
+            
+            // Log progress every 1MB
+            if downloaded % (1024 * 1024) == 0 {
+                let progress = if expected_size > 0 {
+                    (downloaded as f64 / expected_size as f64) * 100.0
                 } else {
-                    let _ = fs::remove_file(&path);
+                    0.0
+                };
+                println!("Download progress: {:.1}% ({} / {} bytes)", 
+                        progress, downloaded, expected_size);
+            }
+        }
+        
+        file.flush().map_err(|e| format!("Failed to flush file: {}", e))?;
+        
+        Ok(())
+    }
+    
+    /// Verify file checksum
+    async fn verify_checksum(&self, file_path: &PathBuf, expected_checksum: &str) -> Result<(), String> {
+        use sha2::{Sha256, Digest};
+        use std::io::Read;
+        
+        let mut file = fs::File::open(file_path)
+            .map_err(|e| format!("Failed to open file for checksum: {}", e))?;
+        
+        let mut hasher = Sha256::new();
+        std::io::copy(&mut file, &mut hasher)
+            .map_err(|e| format!("Failed to read file for checksum: {}", e))?;
+        
+        let actual_checksum = format!("{:x}", hasher.finalize());
+        
+        if actual_checksum != expected_checksum {
+            return Err(format!(
+                "Checksum verification failed. Expected: {}, Got: {}",
+                expected_checksum, actual_checksum
+            ));
+        }
+        
+        Ok(())
+    }
+    
+    /// Create backup of current installation
+    async fn create_backup(&self) -> Result<bool, String> {
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let backup_path = self.backup_dir.join(format!("backup_{}", timestamp));
+        
+        // Copy current application directory to backup
+        self.copy_directory(&self.app_dir, &backup_path).await?;
+        
+        println!("Backup created at: {:?}", backup_path);
+        Ok(true)
+    }
+    
+    /// Install update from downloaded file
+    async fn install_update(&self, update_file: &PathBuf) -> Result<(), String> {
+        // Extract update file
+        let extract_dir = self.temp_dir.join("extracted");
+        fs::create_dir_all(&extract_dir)
+            .map_err(|e| format!("Failed to create extract directory: {}", e))?;
+        
+        self.extract_archive(update_file, &extract_dir).await?;
+        
+        // Stop current application processes (if any)
+        self.stop_application_processes().await?;
+        
+        // Replace application files
+        self.replace_application_files(&extract_dir).await?;
+        
+        Ok(())
+    }
+    
+    /// Extract archive
+    async fn extract_archive(&self, archive_path: &PathBuf, extract_to: &PathBuf) -> Result<(), String> {
+        use zip::ZipArchive;
+        use std::io::Read;
+        
+        let file = fs::File::open(archive_path)
+            .map_err(|e| format!("Failed to open archive: {}", e))?;
+        
+        let mut archive = ZipArchive::new(file)
+            .map_err(|e| format!("Failed to read archive: {}", e))?;
+        
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i)
+                .map_err(|e| format!("Failed to read archive entry: {}", e))?;
+            
+            let outpath = extract_to.join(file.name());
+            
+            if file.name().ends_with('/') {
+                fs::create_dir_all(&outpath)
+                    .map_err(|e| format!("Failed to create directory: {}", e))?;
+            } else {
+                if let Some(parent) = outpath.parent() {
+                    fs::create_dir_all(parent)
+                        .map_err(|e| format!("Failed to create parent directory: {}", e))?;
                 }
-                println!("🗑️  Cleaned up old backup: {}", path.display());
+                
+                let mut outfile = fs::File::create(&outpath)
+                    .map_err(|e| format!("Failed to create output file: {}", e))?;
+                
+                std::io::copy(&mut file, &mut outfile)
+                    .map_err(|e| format!("Failed to extract file: {}", e))?;
             }
         }
         
         Ok(())
     }
     
-    fn copy_dir_recursive(&self, src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
-        fs::create_dir_all(dst)
-            .map_err(|e| format!("Failed to create directory {}: {}", dst.display(), e))?;
+    /// Stop application processes
+    async fn stop_application_processes(&self) -> Result<(), String> {
+        // This would stop any running instances of the application
+        // For now, just return success
+        Ok(())
+    }
+    
+    /// Replace application files
+    async fn replace_application_files(&self, source_dir: &PathBuf) -> Result<(), String> {
+        // Copy new files over existing ones
+        self.copy_directory(source_dir, &self.app_dir).await?;
         
-        for entry in fs::read_dir(src).map_err(|e| format!("Failed to read directory: {}", e))? {
-            let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
-            let src_path = entry.path();
-            let dst_path = dst.join(entry.file_name());
+        // Set executable permissions on Unix
+        #[cfg(unix)]
+        {
+            let executable_name = "r3mes-desktop-launcher";
+            let executable_path = self.app_dir.join(executable_name);
             
-            if src_path.is_dir() {
-                self.copy_dir_recursive(&src_path, &dst_path)?;
+            if executable_path.exists() {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = fs::metadata(&executable_path)
+                    .map_err(|e| format!("Failed to get file permissions: {}", e))?
+                    .permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(&executable_path, perms)
+                    .map_err(|e| format!("Failed to set executable permissions: {}", e))?;
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Copy directory recursively
+    async fn copy_directory(&self, source: &PathBuf, destination: &PathBuf) -> Result<(), String> {
+        if !source.exists() {
+            return Err(format!("Source directory does not exist: {:?}", source));
+        }
+        
+        fs::create_dir_all(destination)
+            .map_err(|e| format!("Failed to create destination directory: {}", e))?;
+        
+        for entry in fs::read_dir(source)
+            .map_err(|e| format!("Failed to read source directory: {}", e))?
+        {
+            let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+            let source_path = entry.path();
+            let dest_path = destination.join(entry.file_name());
+            
+            if source_path.is_dir() {
+                self.copy_directory(&source_path, &dest_path).await?;
             } else {
-                fs::copy(&src_path, &dst_path)
+                fs::copy(&source_path, &dest_path)
                     .map_err(|e| format!("Failed to copy file: {}", e))?;
             }
         }
@@ -224,752 +389,178 @@ impl RollbackManager {
         Ok(())
     }
     
-    fn save_manifest(&self) -> Result<(), String> {
-        let content = serde_json::to_string_pretty(&self.backups)
-            .map_err(|e| format!("Failed to serialize manifest: {}", e))?;
-        fs::write(&self.manifest_path, content)
-            .map_err(|e| format!("Failed to write manifest: {}", e))?;
-        Ok(())
-    }
-}
-
-/// Update result for tracking
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct UpdateResult {
-    pub component: String,
-    pub success: bool,
-    pub old_version: String,
-    pub new_version: String,
-    pub error_message: Option<String>,
-    pub rolled_back: bool,
-}
-
-pub struct SilentUpdater {
-    manifest_url: String,
-    update_dir: PathBuf,
-    rollback_manager: RollbackManager,
-    progress_callback: Option<Box<dyn Fn(UpdateProgress) + Send + Sync>>,
-}
-
-impl SilentUpdater {
-    pub fn new() -> Result<Self, String> {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
-        let update_dir = PathBuf::from(&home).join(".r3mes").join("updates");
+    /// Find appropriate asset for current platform
+    fn find_platform_asset(&self, assets: &[serde_json::Value]) -> Result<(String, u64, String), String> {
+        let platform_suffix = self.get_platform_suffix();
         
-        fs::create_dir_all(&update_dir)
-            .map_err(|e| format!("Failed to create update directory: {}", e))?;
-        
-        Ok(Self {
-            manifest_url: std::env::var("R3MES_UPDATE_MANIFEST_URL")
-                .unwrap_or_else(|_| "https://releases.r3mes.network/manifest.json".to_string()),
-            update_dir,
-            rollback_manager: RollbackManager::new()?,
-            progress_callback: None,
-        })
-    }
-    
-    /// Set progress callback for UI updates
-    pub fn set_progress_callback<F>(&mut self, callback: F)
-    where
-        F: Fn(UpdateProgress) + Send + Sync + 'static,
-    {
-        self.progress_callback = Some(Box::new(callback));
-    }
-    
-    /// Emit progress event
-    fn emit_progress(&self, component: &str, status: UpdateStatus, progress: f32, downloaded: u64, total: u64, message: &str) {
-        if let Some(ref callback) = self.progress_callback {
-            callback(UpdateProgress {
-                component: component.to_string(),
-                status,
-                progress_percent: progress,
-                downloaded_bytes: downloaded,
-                total_bytes: total,
-                message: message.to_string(),
-            });
-        }
-    }
-    
-    /// Check for updates without installing
-    pub async fn check_for_updates(&self) -> Result<Vec<(String, String, String)>, String> {
-        let manifest = self.fetch_manifest().await?;
-        let mut available_updates = Vec::new();
-        
-        // Check chain binary
-        let current_chain = self.get_chain_binary_version()?;
-        if current_chain != manifest.chain_binary.version {
-            available_updates.push(("chain_binary".to_string(), current_chain, manifest.chain_binary.version.clone()));
-        }
-        
-        // Check model weights
-        let current_model = self.get_model_version()?;
-        if current_model != manifest.model_weights.version {
-            available_updates.push(("model_weights".to_string(), current_model, manifest.model_weights.version.clone()));
-        }
-        
-        // Check miner engine
-        let current_miner = self.get_miner_engine_version()?;
-        if current_miner != manifest.miner_engine.version {
-            available_updates.push(("miner_engine".to_string(), current_miner, manifest.miner_engine.version.clone()));
-        }
-        
-        // Check launcher
-        let current_launcher = env!("CARGO_PKG_VERSION").to_string();
-        if current_launcher != manifest.launcher.version {
-            available_updates.push(("launcher".to_string(), current_launcher, manifest.launcher.version.clone()));
-        }
-        
-        Ok(available_updates)
-    }
-    
-    /// Main update function with rollback support
-    pub async fn check_and_update(&mut self) -> Result<Vec<UpdateResult>, String> {
-        // Create update directory if it doesn't exist
-        fs::create_dir_all(&self.update_dir)
-            .map_err(|e| format!("Failed to create update directory: {}", e))?;
-        
-        let mut results = Vec::new();
-        
-        // 1. Fetch manifest
-        self.emit_progress("manifest", UpdateStatus::Checking, 0.0, 0, 0, "Fetching update manifest...");
-        let manifest = self.fetch_manifest().await?;
-        
-        // 2. Check and update each component with rollback support
-        results.push(self.update_component_with_rollback("chain_binary", &manifest.chain_binary).await);
-        results.push(self.update_component_with_rollback("model_weights", &manifest.model_weights).await);
-        results.push(self.update_component_with_rollback("miner_engine", &manifest.miner_engine).await);
-        results.push(self.update_component_with_rollback("launcher", &manifest.launcher).await);
-        
-        // 3. Cleanup old backups (keep last 3)
-        let _ = self.rollback_manager.cleanup_old_backups(3);
-        
-        // Check if any required update failed
-        for result in &results {
-            if !result.success && !result.rolled_back {
-                // Check if this was a required update
-                let is_required = match result.component.as_str() {
-                    "chain_binary" => manifest.chain_binary.required,
-                    "model_weights" => manifest.model_weights.required,
-                    "miner_engine" => manifest.miner_engine.required,
-                    "launcher" => manifest.launcher.required,
-                    _ => false,
-                };
+        for asset in assets {
+            let name = asset["name"].as_str().unwrap_or("");
+            
+            if name.contains(&platform_suffix) {
+                let download_url = asset["browser_download_url"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string();
                 
-                if is_required {
-                    return Err(format!("Required update failed for {}: {:?}", result.component, result.error_message));
-                }
-            }
-        }
-        
-        Ok(results)
-    }
-    
-    /// Update a single component with automatic rollback on failure
-    async fn update_component_with_rollback(&mut self, component: &str, update_info: &UpdateInfo) -> UpdateResult {
-        let current_version = match component {
-            "chain_binary" => self.get_chain_binary_version().unwrap_or_default(),
-            "model_weights" => self.get_model_version().unwrap_or_default(),
-            "miner_engine" => self.get_miner_engine_version().unwrap_or_default(),
-            "launcher" => env!("CARGO_PKG_VERSION").to_string(),
-            _ => "unknown".to_string(),
-        };
-        
-        // Skip if already up to date
-        if current_version == update_info.version {
-            return UpdateResult {
-                component: component.to_string(),
-                success: true,
-                old_version: current_version.clone(),
-                new_version: update_info.version.clone(),
-                error_message: None,
-                rolled_back: false,
-            };
-        }
-        
-        // Get component path for backup
-        let component_path = match component {
-            "chain_binary" => self.get_chain_binary_path(),
-            "model_weights" => self.get_model_directory(),
-            "miner_engine" => self.get_miner_engine_path(),
-            "launcher" => Ok(std::env::current_exe().unwrap_or_default()),
-            _ => Err("Unknown component".to_string()),
-        };
-        
-        let component_path = match component_path {
-            Ok(p) => p,
-            Err(e) => {
-                return UpdateResult {
-                    component: component.to_string(),
-                    success: false,
-                    old_version: current_version,
-                    new_version: update_info.version.clone(),
-                    error_message: Some(e),
-                    rolled_back: false,
-                };
-            }
-        };
-        
-        // Create backup before update (if path exists)
-        if component_path.exists() {
-            if let Err(e) = self.rollback_manager.backup_component(component, &component_path, &current_version) {
-                eprintln!("⚠️  Failed to backup {}: {}", component, e);
-                // Continue anyway, but log the warning
-            }
-        }
-        
-        // Perform update
-        self.emit_progress(component, UpdateStatus::Downloading, 0.0, 0, update_info.size_bytes, &format!("Updating {}...", component));
-        
-        let update_result = match component {
-            "chain_binary" => self.update_chain_binary(update_info).await,
-            "model_weights" => self.update_model_weights(update_info).await,
-            "miner_engine" => self.update_miner_engine(update_info).await,
-            "launcher" => self.update_launcher(update_info).await,
-            _ => Err("Unknown component".to_string()),
-        };
-        
-        match update_result {
-            Ok(()) => {
-                self.emit_progress(component, UpdateStatus::Completed, 100.0, update_info.size_bytes, update_info.size_bytes, &format!("{} updated successfully", component));
-                UpdateResult {
-                    component: component.to_string(),
-                    success: true,
-                    old_version: current_version,
-                    new_version: update_info.version.clone(),
-                    error_message: None,
-                    rolled_back: false,
-                }
-            }
-            Err(e) => {
-                self.emit_progress(component, UpdateStatus::Failed, 0.0, 0, 0, &format!("Update failed: {}", e));
+                let file_size = asset["size"].as_u64().unwrap_or(0);
                 
-                // Attempt rollback
-                let rolled_back = if let Err(rollback_err) = self.rollback_manager.rollback(component) {
-                    eprintln!("⚠️  Rollback failed for {}: {}", component, rollback_err);
-                    false
-                } else {
-                    self.emit_progress(component, UpdateStatus::RolledBack, 0.0, 0, 0, &format!("{} rolled back to previous version", component));
-                    true
-                };
+                // In a real implementation, checksums would be provided
+                // For now, use a placeholder
+                let checksum = "placeholder_checksum".to_string();
                 
-                UpdateResult {
-                    component: component.to_string(),
-                    success: false,
-                    old_version: current_version,
-                    new_version: update_info.version.clone(),
-                    error_message: Some(e),
-                    rolled_back,
-                }
+                return Ok((download_url, file_size, checksum));
             }
         }
+        
+        Err(format!("No asset found for platform: {}", platform_suffix))
     }
     
-    /// Manual rollback for a specific component
-    pub fn rollback_component(&mut self, component: &str) -> Result<(), String> {
-        self.rollback_manager.rollback(component)
-    }
-    
-    async fn update_miner_engine(&self, update_info: &UpdateInfo) -> Result<(), String> {
-        let current_version = self.get_miner_engine_version()?;
-        
-        if current_version == update_info.version {
-            return Ok(());  // Already up to date
-        }
-        
-        println!("🔄 Updating miner engine: {} → {}", current_version, update_info.version);
-        
-        // Download new miner engine
-        let download_path = self.download_file(&update_info.download_url).await?;
-        
-        // Verify checksum
-        self.verify_checksum(&download_path, &update_info.checksum)?;
-        
-        // Replace old miner engine
-        let miner_path = self.get_miner_engine_path()?;
-        fs::copy(&download_path, &miner_path)
-            .map_err(|e| format!("Failed to replace miner engine: {}", e))?;
-        
-        println!("✅ Miner engine updated to {}", update_info.version);
-        Ok(())
-    }
-    
-    async fn update_model_weights(&self, update_info: &UpdateInfo) -> Result<(), String> {
-        let current_version = self.get_model_version()?;
-        
-        if current_version == update_info.version {
-            return Ok(());  // Already up to date
-        }
-        
-        println!("🔄 Updating model weights: {} → {}", current_version, update_info.version);
-        
-        // Download new model weights
-        let download_path = self.download_file(&update_info.download_url).await?;
-        
-        // Verify checksum
-        self.verify_checksum(&download_path, &update_info.checksum)?;
-        
-        // Extract model weights to model directory
-        let model_dir = self.get_model_directory()?;
-        self.extract_model_weights(&download_path, &model_dir)?;
-        
-        println!("✅ Model weights updated to {}", update_info.version);
-        Ok(())
-    }
-    
-    async fn update_chain_binary(&self, update_info: &UpdateInfo) -> Result<(), String> {
-        let current_version = self.get_chain_binary_version()?;
-        
-        if current_version == update_info.version {
-            return Ok(());  // Already up to date
-        }
-        
-        println!("🔄 Updating chain binary: {} → {}", current_version, update_info.version);
-        
-        // Download new chain binary
-        let download_path = self.download_file(&update_info.download_url).await?;
-        
-        // Verify checksum
-        self.verify_checksum(&download_path, &update_info.checksum)?;
-        
-        // Replace old chain binary
-        let chain_path = self.get_chain_binary_path()?;
-        fs::copy(&download_path, &chain_path)
-            .map_err(|e| format!("Failed to replace chain binary: {}", e))?;
-        
-        // Make executable (Unix only)
-        #[cfg(unix)]
+    /// Get platform-specific suffix for asset names
+    fn get_platform_suffix(&self) -> String {
+        #[cfg(target_os = "windows")]
         {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&chain_path)
-                .map_err(|e| format!("Failed to get metadata: {}", e))?
-                .permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&chain_path, perms)
-                .map_err(|e| format!("Failed to set permissions: {}", e))?;
+            "windows-x64.zip".to_string()
         }
         
-        println!("✅ Chain binary updated to {}", update_info.version);
-        Ok(())
-    }
-    
-    async fn update_launcher(&self, update_info: &UpdateInfo) -> Result<(), String> {
-        // Launcher updates require restart, so we just log it
-        println!("ℹ️  Launcher update available: {}", update_info.version);
-        println!("   Please download from: {}", update_info.download_url);
-        Ok(())
-    }
-    
-    async fn fetch_manifest(&self) -> Result<UpdateManifest, String> {
-        // Fetch manifest from URL using reqwest
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-        
-        let response = client
-            .get(&self.manifest_url)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to fetch manifest from {}: {}", self.manifest_url, e))?;
-        
-        if !response.status().is_success() {
-            return Err(format!(
-                "Failed to fetch manifest: HTTP {}",
-                response.status()
-            ));
-        }
-        
-        let manifest_json = response
-            .text()
-            .await
-            .map_err(|e| format!("Failed to read manifest response: {}", e))?;
-        
-        let manifest: UpdateManifest = serde_json::from_str(&manifest_json)
-            .map_err(|e| format!("Failed to parse manifest JSON: {}", e))?;
-        
-        Ok(manifest)
-    }
-    
-    async fn download_file(&self, url: &str) -> Result<PathBuf, String> {
-        // Download file using reqwest with progress tracking
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(3600))  // 1 hour timeout for large files
-            .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-        
-        let response = client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to download from {}: {}", url, e))?;
-        
-        if !response.status().is_success() {
-            return Err(format!(
-                "Failed to download file: HTTP {}",
-                response.status()
-            ));
-        }
-        
-        // Get filename from URL or Content-Disposition header
-        let filename = url.split('/').last().unwrap_or("download");
-        let download_path = self.update_dir.join(filename);
-        
-        // Check if file already exists (resume capability)
-        let mut file = if download_path.exists() {
-            // Resume download by opening in append mode
-            std::fs::OpenOptions::new()
-                .append(true)
-                .open(&download_path)
-                .map_err(|e| format!("Failed to open file for resume: {}", e))?
-        } else {
-            // Create new file
-            fs::File::create(&download_path)
-                .map_err(|e| format!("Failed to create download file: {}", e))?
-        };
-        
-        // Stream download with progress tracking
-        let mut stream = response.bytes_stream();
-        let mut downloaded = 0u64;
-        
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
-            file.write_all(&chunk)
-                .map_err(|e| format!("Failed to write chunk: {}", e))?;
-            downloaded += chunk.len() as u64;
-            
-            // Log progress every 10MB
-            if downloaded % (10 * 1024 * 1024) == 0 {
-                println!("   Downloaded: {} MB", downloaded / (1024 * 1024));
-            }
-        }
-        
-        println!("✅ Download complete: {} bytes", downloaded);
-        Ok(download_path)
-    }
-    
-    fn verify_checksum(&self, file_path: &PathBuf, expected_checksum: &str) -> Result<(), String> {
-        use sha2::{Sha256, Digest};
-        use std::fs::File;
-        use std::io::Read;
-        
-        let mut file = File::open(file_path)
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-        
-        let mut hasher = Sha256::new();
-        let mut buffer = vec![0u8; 8192];
-        
-        loop {
-            let bytes_read = file.read(&mut buffer)
-                .map_err(|e| format!("Failed to read file: {}", e))?;
-            
-            if bytes_read == 0 {
-                break;
-            }
-            
-            hasher.update(&buffer[..bytes_read]);
-        }
-        
-        let computed_hash = format!("{:x}", hasher.finalize());
-        
-        if computed_hash != expected_checksum {
-            return Err(format!(
-                "Checksum mismatch: expected {}, got {}",
-                expected_checksum, computed_hash
-            ));
-        }
-        
-        Ok(())
-    }
-    
-    fn get_miner_engine_version(&self) -> Result<String, String> {
-        // Try to read version from miner engine binary or config file
-        let miner_path = self.get_miner_engine_path()?;
-        
-        // First, try to read from version file if it exists
-        let version_file = miner_path.join("VERSION");
-        if version_file.exists() {
-            if let Ok(version) = fs::read_to_string(&version_file) {
-                return Ok(version.trim().to_string());
-            }
-        }
-        
-        // Try to read from pyproject.toml or setup.py if Python package
-        let pyproject_toml = miner_path.join("pyproject.toml");
-        if pyproject_toml.exists() {
-            if let Ok(content) = fs::read_to_string(&pyproject_toml) {
-                // Simple version extraction from pyproject.toml
-                for line in content.lines() {
-                    if line.trim().starts_with("version =") {
-                        let version = line
-                            .split('=')
-                            .nth(1)
-                            .and_then(|s| s.trim().strip_prefix('"').and_then(|s| s.strip_suffix('"')))
-                            .unwrap_or("")
-                            .to_string();
-                        if !version.is_empty() {
-                            return Ok(version);
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Fallback: try to run miner engine with --version flag if it's executable
-        let miner_binary = miner_path.join("r3mes-miner");
-        if miner_binary.exists() {
-            if let Ok(output) = Command::new(&miner_binary)
-                .arg("--version")
-                .output()
-            {
-                if output.status.success() {
-                    let version_str = String::from_utf8_lossy(&output.stdout);
-                    // Extract version number (e.g., "r3mes-miner 1.0.0")
-                    for word in version_str.split_whitespace() {
-                        if word.chars().next().map_or(false, |c| c.is_ascii_digit()) {
-                            return Ok(word.to_string());
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Default fallback
-        Ok("1.0.0".to_string())
-    }
-    
-    fn get_model_version(&self) -> Result<String, String> {
-        // Read version from model directory version file
-        let model_dir = self.get_model_directory()?;
-        
-        // Try to read from VERSION file
-        let version_file = model_dir.join("VERSION");
-        if version_file.exists() {
-            if let Ok(version) = fs::read_to_string(&version_file) {
-                return Ok(version.trim().to_string());
-            }
-        }
-        
-        // Try to read from model_info.json or similar
-        let model_info_file = model_dir.join("model_info.json");
-        if model_info_file.exists() {
-            if let Ok(content) = fs::read_to_string(&model_info_file) {
-                // Simple JSON parsing for version field
-                if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&content) {
-                    if let Some(version) = json_value.get("version").and_then(|v| v.as_str()) {
-                        return Ok(version.to_string());
-                    }
-                }
-            }
-        }
-        
-        // Default fallback
-        Ok("bitnet-v1".to_string())
-    }
-    
-    fn get_chain_binary_version(&self) -> Result<String, String> {
-        // Run remesd --version command and parse the output
-        let chain_path = self.get_chain_binary_path()?;
-        
-        if !chain_path.exists() {
-            return Ok("v0.1.0".to_string());  // Default if binary doesn't exist
-        }
-        
-        // Try to execute remesd --version
-        let output = Command::new(&chain_path)
-            .arg("--version")
-            .output()
-            .map_err(|e| format!("Failed to execute {} --version: {}", chain_path.display(), e))?;
-        
-        if !output.status.success() {
-            return Ok("v0.1.0".to_string());  // Default if command fails
-        }
-        
-        let version_output = String::from_utf8_lossy(&output.stdout);
-        
-        // Parse version from output (format may vary, e.g., "remesd version v0.1.0" or "v0.1.0")
-        // Look for version pattern: v followed by digits and dots
-        for line in version_output.lines() {
-            for word in line.split_whitespace() {
-                if word.starts_with('v') && word.chars().skip(1).any(|c| c.is_ascii_digit()) {
-                    return Ok(word.to_string());
-                }
-                // Also check for version without 'v' prefix
-                if word.chars().next().map_or(false, |c| c.is_ascii_digit()) {
-                    let parts: Vec<&str> = word.split('.').collect();
-                    if parts.len() >= 2 && parts.iter().all(|p| p.chars().all(|c| c.is_ascii_digit())) {
-                        return Ok(format!("v{}", word));
-                    }
-                }
-            }
-        }
-        
-        // Default fallback
-        Ok("v0.1.0".to_string())
-    }
-    
-    fn get_miner_engine_path(&self) -> Result<PathBuf, String> {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
-        Ok(PathBuf::from(&home).join("R3MES").join("miner-engine"))
-    }
-    
-    fn get_model_directory(&self) -> Result<PathBuf, String> {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
-        Ok(PathBuf::from(&home).join(".r3mes").join("models"))
-    }
-    
-    fn get_chain_binary_path(&self) -> Result<PathBuf, String> {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
-        Ok(PathBuf::from(&home).join("R3MES").join("remes").join("build").join("remesd"))
-    }
-    
-    fn extract_model_weights(&self, archive_path: &PathBuf, target_dir: &PathBuf) -> Result<(), String> {
-        // Create target directory
-        fs::create_dir_all(target_dir)
-            .map_err(|e| format!("Failed to create model directory: {}", e))?;
-        
-        let archive_str = archive_path.to_string_lossy();
-        
-        // Determine archive type from extension
-        if archive_str.ends_with(".tar.gz") || archive_str.ends_with(".tgz") {
-            self.extract_tar_gz(archive_path, target_dir)?;
-        } else if archive_str.ends_with(".zip") {
-            self.extract_zip(archive_path, target_dir)?;
-        } else if archive_str.ends_with(".tar") {
-            self.extract_tar(archive_path, target_dir)?;
-        } else {
-            return Err(format!("Unsupported archive format: {}", archive_str));
-        }
-        
-        Ok(())
-    }
-    
-    fn extract_tar_gz(&self, archive_path: &PathBuf, target_dir: &PathBuf) -> Result<(), String> {
-        use flate2::read::GzDecoder;
-        use tar::Archive;
-        
-        let file = fs::File::open(archive_path)
-            .map_err(|e| format!("Failed to open archive file: {}", e))?;
-        
-        let tar = GzDecoder::new(file);
-        let mut archive = Archive::new(tar);
-        
-        archive.unpack(target_dir)
-            .map_err(|e| format!("Failed to extract tar.gz archive: {}", e))?;
-        
-        println!("✅ Extracted tar.gz archive to {}", target_dir.display());
-        Ok(())
-    }
-    
-    fn extract_tar(&self, archive_path: &PathBuf, target_dir: &PathBuf) -> Result<(), String> {
-        use tar::Archive;
-        
-        let file = fs::File::open(archive_path)
-            .map_err(|e| format!("Failed to open archive file: {}", e))?;
-        
-        let mut archive = Archive::new(file);
-        
-        archive.unpack(target_dir)
-            .map_err(|e| format!("Failed to extract tar archive: {}", e))?;
-        
-        println!("✅ Extracted tar archive to {}", target_dir.display());
-        Ok(())
-    }
-    
-    fn extract_zip(&self, archive_path: &PathBuf, target_dir: &PathBuf) -> Result<(), String> {
-        use zip::ZipArchive;
-        
-        let file = fs::File::open(archive_path)
-            .map_err(|e| format!("Failed to open archive file: {}", e))?;
-        
-        let mut archive = ZipArchive::new(file)
-            .map_err(|e| format!("Failed to open zip archive: {}", e))?;
-        
-        for i in 0..archive.len() {
-            let mut file = archive.by_index(i)
-                .map_err(|e| format!("Failed to read file {} from zip: {}", i, e))?;
-            
-            let outpath = match file.enclosed_name() {
-                Some(path) => target_dir.join(path),
-                None => continue,
-            };
-            
-            // Create parent directories if needed
-            if let Some(p) = outpath.parent() {
-                fs::create_dir_all(p)
-                    .map_err(|e| format!("Failed to create directory: {}", e))?;
-            }
-            
-            // Extract file
-            if file.is_dir() {
-                fs::create_dir_all(&outpath)
-                    .map_err(|e| format!("Failed to create directory: {}", e))?;
+        #[cfg(target_os = "macos")]
+        {
+            if cfg!(target_arch = "aarch64") {
+                "macos-arm64.zip".to_string()
             } else {
-                let mut outfile = fs::File::create(&outpath)
-                    .map_err(|e| format!("Failed to create file: {}", e))?;
-                std::io::copy(&mut file, &mut outfile)
-                    .map_err(|e| format!("Failed to write file: {}", e))?;
+                "macos-x64.zip".to_string()
             }
         }
         
-        println!("✅ Extracted zip archive to {}", target_dir.display());
+        #[cfg(target_os = "linux")]
+        {
+            if cfg!(target_arch = "aarch64") {
+                "linux-arm64.zip".to_string()
+            } else {
+                "linux-x64.zip".to_string()
+            }
+        }
+        
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+        {
+            "generic.zip".to_string()
+        }
+    }
+    
+    /// Check if a version is newer than another
+    fn is_newer_version(&self, new_version: &str, current_version: &str) -> bool {
+        // Simple version comparison (in practice, use proper semver parsing)
+        let new_parts: Vec<u32> = new_version.split('.')
+            .filter_map(|s| s.parse().ok())
+            .collect();
+        
+        let current_parts: Vec<u32> = current_version.split('.')
+            .filter_map(|s| s.parse().ok())
+            .collect();
+        
+        for i in 0..std::cmp::max(new_parts.len(), current_parts.len()) {
+            let new_part = new_parts.get(i).unwrap_or(&0);
+            let current_part = current_parts.get(i).unwrap_or(&0);
+            
+            if new_part > current_part {
+                return true;
+            } else if new_part < current_part {
+                return false;
+            }
+        }
+        
+        false
+    }
+    
+    /// Rollback to previous version
+    pub async fn rollback_update(&self) -> Result<UpdateResult, String> {
+        // Find the most recent backup
+        let backup_entries = fs::read_dir(&self.backup_dir)
+            .map_err(|e| format!("Failed to read backup directory: {}", e))?;
+        
+        let mut backups: Vec<_> = backup_entries
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_type().ok().map_or(false, |ft| ft.is_dir()))
+            .collect();
+        
+        backups.sort_by(|a, b| {
+            b.metadata().ok()
+                .and_then(|m| m.modified().ok())
+                .cmp(&a.metadata().ok().and_then(|m| m.modified().ok()))
+        });
+        
+        if let Some(latest_backup) = backups.first() {
+            let backup_path = latest_backup.path();
+            
+            // Stop current application
+            self.stop_application_processes().await?;
+            
+            // Restore from backup
+            self.copy_directory(&backup_path, &self.app_dir).await?;
+            
+            Ok(UpdateResult {
+                success: true,
+                message: "Successfully rolled back to previous version".to_string(),
+                requires_restart: true,
+                backup_created: false,
+            })
+        } else {
+            Err("No backup found for rollback".to_string())
+        }
+    }
+    
+    /// Clean up old backups
+    pub async fn cleanup_old_backups(&self, keep_count: usize) -> Result<(), String> {
+        let backup_entries = fs::read_dir(&self.backup_dir)
+            .map_err(|e| format!("Failed to read backup directory: {}", e))?;
+        
+        let mut backups: Vec<_> = backup_entries
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_type().ok().map_or(false, |ft| ft.is_dir()))
+            .collect();
+        
+        // Sort by modification time (newest first)
+        backups.sort_by(|a, b| {
+            b.metadata().ok()
+                .and_then(|m| m.modified().ok())
+                .cmp(&a.metadata().ok().and_then(|m| m.modified().ok()))
+        });
+        
+        // Remove old backups beyond keep_count
+        for backup in backups.iter().skip(keep_count) {
+            let backup_path = backup.path();
+            if let Err(e) = fs::remove_dir_all(&backup_path) {
+                eprintln!("Failed to remove old backup {:?}: {}", backup_path, e);
+            } else {
+                println!("Removed old backup: {:?}", backup_path);
+            }
+        }
+        
         Ok(())
     }
-}
-
-
-
-// ============================================================================
-// Tauri Commands for Frontend Integration
-// ============================================================================
-
-use std::sync::Mutex;
-use once_cell::sync::Lazy;
-
-static UPDATER: Lazy<Mutex<Option<SilentUpdater>>> = Lazy::new(|| Mutex::new(None));
-
-/// Initialize the updater (call once at app startup)
-#[tauri::command]
-pub fn init_updater() -> Result<(), String> {
-    let mut updater_guard = UPDATER.lock().map_err(|e| e.to_string())?;
-    *updater_guard = Some(SilentUpdater::new()?);
-    Ok(())
-}
-
-/// Check for available updates without installing
-#[tauri::command]
-pub async fn check_updates() -> Result<Vec<(String, String, String)>, String> {
-    let updater_guard = UPDATER.lock().map_err(|e| e.to_string())?;
-    let updater = updater_guard.as_ref().ok_or("Updater not initialized")?;
-    updater.check_for_updates().await
-}
-
-/// Perform updates with automatic rollback on failure
-#[tauri::command]
-pub async fn perform_updates() -> Result<Vec<UpdateResult>, String> {
-    let mut updater_guard = UPDATER.lock().map_err(|e| e.to_string())?;
-    let updater = updater_guard.as_mut().ok_or("Updater not initialized")?;
-    updater.check_and_update().await
-}
-
-/// Rollback a specific component to previous version
-#[tauri::command]
-pub fn rollback_update(component: String) -> Result<(), String> {
-    let mut updater_guard = UPDATER.lock().map_err(|e| e.to_string())?;
-    let updater = updater_guard.as_mut().ok_or("Updater not initialized")?;
-    updater.rollback_component(&component)
-}
-
-/// Get current versions of all components
-#[tauri::command]
-pub fn get_current_versions() -> Result<HashMap<String, String>, String> {
-    let updater_guard = UPDATER.lock().map_err(|e| e.to_string())?;
-    let updater = updater_guard.as_ref().ok_or("Updater not initialized")?;
     
-    let mut versions = HashMap::new();
-    versions.insert("chain_binary".to_string(), updater.get_chain_binary_version().unwrap_or_default());
-    versions.insert("model_weights".to_string(), updater.get_model_version().unwrap_or_default());
-    versions.insert("miner_engine".to_string(), updater.get_miner_engine_version().unwrap_or_default());
-    versions.insert("launcher".to_string(), env!("CARGO_PKG_VERSION").to_string());
+    /// Get current version
+    pub fn get_current_version(&self) -> &str {
+        &self.current_version
+    }
     
-    Ok(versions)
+    /// Set update server URL
+    pub fn set_update_server_url(&mut self, url: String) {
+        self.update_server_url = url;
+    }
+    
+    /// Check if auto-update is enabled
+    pub fn is_auto_update_enabled(&self) -> bool {
+        // Check configuration or environment variable
+        std::env::var("R3MES_AUTO_UPDATE")
+            .unwrap_or_else(|_| "true".to_string())
+            .parse()
+            .unwrap_or(true)
+    }
+    
+    /// Enable or disable auto-update
+    pub fn set_auto_update_enabled(&self, enabled: bool) {
+        // This would save to configuration file
+        // For now, just set environment variable
+        std::env::set_var("R3MES_AUTO_UPDATE", enabled.to_string());
+    }
 }

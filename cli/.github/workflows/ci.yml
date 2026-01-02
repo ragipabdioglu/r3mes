@@ -1,0 +1,154 @@
+name: CLI Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths: [ 'cli/**' ]
+  pull_request:
+    branches: [ main ]
+    paths: [ 'cli/**' ]
+  release:
+    types: [ created ]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
+    - name: Download dependencies
+      working-directory: cli/r3mes-cli
+      run: go mod download
+    
+    - name: Run tests
+      working-directory: cli/r3mes-cli
+      run: go test -v -race -coverprofile=coverage.out ./...
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: cli/r3mes-cli/coverage.out
+        flags: cli
+        name: cli-coverage
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        working-directory: cli/r3mes-cli
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Run Gosec Security Scanner
+      uses: securecodewarrior/github-action-gosec@master
+      with:
+        args: './cli/r3mes-cli/...'
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Build binary
+      working-directory: cli/r3mes-cli
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        if [[ "$VERSION" == "refs/heads/"* ]]; then
+          VERSION=${GITHUB_SHA::8}
+        fi
+        
+        BINARY_NAME=r3mes-cli-$VERSION-${{ matrix.goos }}-${{ matrix.goarch }}
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          BINARY_NAME=${BINARY_NAME}.exe
+        fi
+        
+        go build -ldflags="-X main.Version=$VERSION -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.GitCommit=${GITHUB_SHA::8}" -o $BINARY_NAME .
+        
+        mkdir -p ../../build
+        mv $BINARY_NAME ../../build/
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: r3mes-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: build/
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'release'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: build/
+    
+    - name: Create checksums
+      run: |
+        cd build
+        find . -name "r3mes-cli-*" -type f -exec sha256sum {} \; > checksums.txt
+    
+    - name: Upload release assets
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          build/*/r3mes-cli-*
+          build/checksums.txt
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

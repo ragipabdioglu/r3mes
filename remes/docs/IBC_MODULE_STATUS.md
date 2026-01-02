@@ -1,130 +1,105 @@
 # IBC Module Status Documentation
 
-## Current Status: DISABLED
+## Current Status: ENABLED ✅
 
-The IBC (Inter-Blockchain Communication) module is currently **disabled** in the R3MES blockchain application.
+The IBC (Inter-Blockchain Communication) module is now **enabled** in the R3MES blockchain application.
 
-## Why is IBC Disabled?
+## Enabled Features
 
-The IBC module has been temporarily disabled due to compatibility issues between IBC-go v8 and Cosmos SDK v0.50.x. Specifically:
+### IBC Core
+- Full IBC keeper initialization
+- Channel, connection, and client management
+- Packet routing and handling
 
-1. **Constructor Signature Mismatch**: IBC-go v8 requires different constructor signatures than what Cosmos SDK v0.50.x provides through App Wiring (dependency injection).
+### IBC Transfer
+- Cross-chain token transfers
+- Send and receive tokens from other Cosmos chains
+- Denomination tracing
 
-2. **Build Compatibility**: The IBC module initialization was causing build failures, so it was disabled to allow the application to compile and run successfully.
+### Interchain Accounts (ICA)
+- ICA Controller - Create and manage accounts on other chains
+- ICA Host - Allow other chains to create accounts on R3MES
+- Cross-chain transaction execution
 
-3. **App Wiring Support**: IBC modules don't fully support Cosmos SDK's App Wiring (dependency injection) system yet, requiring manual registration which conflicts with the current architecture.
+### Capability Management
+- Scoped keepers for IBC, Transfer, ICA Controller, ICA Host
+- Secure capability-based access control
 
-## Affected Files
+## Configuration
 
-- `remes/app/ibc.go`: Contains the disabled IBC module registration functions
-  - `registerIBCModules()`: Returns `nil` (IBC modules not registered)
-  - `RegisterIBC()`: Returns empty map (no IBC modules)
-  - `GetIBCKeeper()`: Returns `nil` (IBC keeper not available)
+### Store Keys
+- `ibc` - IBC core store
+- `transfer` - IBC transfer store
+- `icacontroller` - ICA controller store
+- `icahost` - ICA host store
+- `capability` - Capability store
 
-## What Functionality is Missing?
+### Default Parameters
+- Allowed Clients: `07-tendermint`
+- Max Expected Time Per Block: 30 seconds
+- Send Enabled: true
+- Receive Enabled: true
 
-With IBC disabled, the following features are not available:
+## Usage
 
-1. **Inter-Chain Token Transfers**: Cannot transfer tokens to/from other Cosmos chains
-2. **Inter-Chain Accounts (ICA)**: Cannot create or manage accounts on other chains
-3. **Cross-Chain Communication**: Cannot send messages or execute transactions on other chains
-4. **IBC Relayer Support**: Cannot use IBC relayers to connect to other chains
+### Cross-Chain Token Transfer
+```bash
+# Send tokens to another chain
+remesd tx ibc-transfer transfer <channel-id> <recipient> <amount> --from <key>
 
-## Re-Enable Plan
-
-To re-enable IBC support, the following steps need to be completed:
-
-### Phase 1: Dependency Compatibility (Priority: High)
-
-1. **Upgrade IBC-go**: Ensure IBC-go v8 is compatible with Cosmos SDK v0.50.x
-   - Check for updated versions that support App Wiring
-   - Verify constructor signatures match current SDK expectations
-
-2. **Update Imports**: Re-enable IBC imports in `remes/app/ibc.go`
-```go
-   icamodule "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts"
-   icacontrollerkeeper "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/keeper"
-   icahostkeeper "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/keeper"
-   ibctransferkeeper "github.com/cosmos/ibc-go/v8/modules/apps/transfer/keeper"
-   ibckeeper "github.com/cosmos/ibc-go/v8/modules/core/keeper"
+# Query pending transfers
+remesd query ibc-transfer escrow-address <channel-id>
 ```
 
-### Phase 2: Module Registration (Priority: High)
+### Interchain Accounts
+```bash
+# Register an interchain account
+remesd tx ica controller register <connection-id> --from <key>
 
-1. **Implement `registerIBCModules()`**: 
-   - Initialize IBC keeper with proper dependencies
-   - Register IBC transfer module
-   - Register ICA (Inter-Chain Accounts) modules
-   - Handle App Wiring compatibility
+# Send a message via interchain account
+remesd tx ica controller send-tx <connection-id> <packet-data> --from <key>
+```
 
-2. **Implement `RegisterIBC()`**:
-   - Return proper IBC module map
-   - Ensure modules are properly registered in the app
+## Relayer Setup
 
-3. **Implement `GetIBCKeeper()`**:
-   - Return the actual IBC keeper instance
-   - Ensure keeper is properly initialized
+To enable cross-chain communication, you need to set up an IBC relayer:
 
-### Phase 3: Testing (Priority: Medium)
+1. Install Hermes or Go Relayer
+2. Configure chain endpoints
+3. Create clients and connections
+4. Start the relayer
 
-1. **Unit Tests**: Test IBC module initialization
-2. **Integration Tests**: Test IBC transfer functionality
-3. **E2E Tests**: Test cross-chain communication with testnet chains
+### Example Hermes Configuration
+```toml
+[[chains]]
+id = 'remes-1'
+rpc_addr = 'http://localhost:26657'
+grpc_addr = 'http://localhost:9090'
+websocket_addr = 'ws://localhost:26657/websocket'
+account_prefix = 'remes'
+key_name = 'relayer'
+store_prefix = 'ibc'
+gas_price = { price = 0.025, denom = 'uremes' }
+```
 
-### Phase 4: Documentation (Priority: Low)
+## Implementation Details
 
-1. **User Guide**: Document how to use IBC features
-2. **Relayer Setup**: Document relayer configuration
-3. **Migration Guide**: Document migration from disabled to enabled state
+### Files Modified
+- `remes/app/app.go` - IBC keeper declarations and imports
+- `remes/app/ibc.go` - Full IBC module registration
+- `remes/x/remes/keeper/keeper.go` - Genesis and aggregation methods
+- `remes/x/remes/keeper/dashboard.go` - Dashboard API and WebSocket
+- `remes/x/remes/keeper/sentry.go` - Error tracking
 
-## Migration Guide
-
-When IBC is re-enabled, follow these steps:
-
-1. **Update Dependencies**:
-   ```bash
-   go get github.com/cosmos/ibc-go/v8@latest
-   go mod tidy
-   ```
-
-2. **Uncomment IBC Code**: 
-   - Remove `//` comments from IBC imports in `remes/app/ibc.go`
-   - Implement the three functions: `registerIBCModules()`, `RegisterIBC()`, `GetIBCKeeper()`
-
-3. **Update App Initialization**:
-   - Ensure IBC modules are registered in app initialization
-   - Verify keeper dependencies are properly injected
-
-4. **Test Build**:
-   ```bash
-   make build
-   ```
-
-5. **Test Functionality**:
-   - Test IBC transfer on testnet
-   - Verify relayer connectivity
-   - Test ICA functionality
-
-## Current Workarounds
-
-Until IBC is re-enabled, the following workarounds can be used:
-
-1. **Direct Chain Integration**: Use direct RPC calls to other chains (not IBC)
-2. **Bridge Contracts**: Use bridge smart contracts for cross-chain transfers (if available)
-3. **Centralized Exchanges**: Use CEX for token transfers between chains
-
-## Related Issues
-
-- IBC-go v8 compatibility with Cosmos SDK v0.50.x
-- App Wiring support for IBC modules
-- Constructor signature mismatches
-
-## References
-
-- [IBC-go Documentation](https://ibc.cosmos.network/)
-- [Cosmos SDK App Wiring](https://docs.cosmos.network/main/building-apps/app-wiring)
-- [IBC-go v8 Release Notes](https://github.com/cosmos/ibc-go/releases)
+### Keeper Structure
+```go
+// IBC Keepers in App struct
+IBCKeeper           *ibckeeper.Keeper
+ICAControllerKeeper icacontrollerkeeper.Keeper
+ICAHostKeeper       icahostkeeper.Keeper
+TransferKeeper      ibctransferkeeper.Keeper
+CapabilityKeeper    *capabilitykeeper.Keeper
+```
 
 ## Last Updated
-
-This documentation was last updated when IBC module was disabled. It should be updated when IBC is re-enabled.
+2 Ocak 2026 - IBC modules fully enabled

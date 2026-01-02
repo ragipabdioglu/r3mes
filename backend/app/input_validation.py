@@ -12,7 +12,7 @@ from .exceptions import InvalidInputError, InvalidWalletAddressError
 
 
 # Regex patterns for validation
-WALLET_ADDRESS_PATTERN = re.compile(r'^remes1[a-z0-9]{38,58}$')
+WALLET_ADDRESS_PATTERN = re.compile(r'^remes1[a-z0-9]{38,58}$')  # More flexible length
 IPFS_HASH_PATTERN = re.compile(r'^(Qm[1-9A-HJ-NP-Za-km-z]{44}|bafy[a-z0-9]{50,60})$')
 TX_HASH_PATTERN = re.compile(r'^[A-Fa-f0-9]{64}$')
 HEX_PATTERN = re.compile(r'^[A-Fa-f0-9]+$')
@@ -36,11 +36,12 @@ def validate_wallet_address(address: str) -> str:
     
     address = address.strip().lower()
     
-    if not address.startswith("remes"):
-        raise InvalidWalletAddressError("Invalid address format: must start with 'remes'")
+    if not address.startswith("remes1"):
+        raise InvalidWalletAddressError("Invalid address format: must start with 'remes1'")
     
-    if len(address) < 40 or len(address) > 65:
-        raise InvalidWalletAddressError(f"Invalid address length: {len(address)} (expected 40-65)")
+    # More flexible length validation (Cosmos addresses can vary)
+    if len(address) < 44 or len(address) > 64:  # remes1 (6) + 38-58 characters
+        raise InvalidWalletAddressError(f"Invalid address length: {len(address)} (expected 44-64 characters)")
     
     if not WALLET_ADDRESS_PATTERN.match(address):
         raise InvalidWalletAddressError("Invalid address format: contains invalid characters")

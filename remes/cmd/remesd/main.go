@@ -13,6 +13,14 @@ import (
 )
 
 func main() {
+	// Validate environment configuration before starting
+	if validationErrors := app.ValidateEnvironment(); len(validationErrors) > 0 {
+		app.PrintValidationErrors(validationErrors)
+		// In development, show warnings but continue
+		// In production, this could be made fatal
+		fmt.Println("⚠️  Continuing with validation warnings...")
+	}
+
 	// Initialize Sentry for error tracking
 	if err := remeskeeper.InitSentry(); err != nil {
 		// Sentry initialization failure should not prevent app from starting

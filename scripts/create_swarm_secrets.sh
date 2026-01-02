@@ -1,12 +1,15 @@
 #!/bin/bash
-# Create Docker Swarm Secrets
-# This script creates secrets for Docker Swarm deployment
-# Usage: bash scripts/create_swarm_secrets.sh [--rotate]
+# Create Docker Swarm Secrets - Production Ready
+# This script creates secrets for Docker Swarm deployment with enhanced security
+# Usage: bash scripts/create_swarm_secrets.sh [--rotate] [--non-interactive]
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Disable history for this session to prevent password leakage
+set +o history
 
 # Colors
 RED='\033[0;31m'
@@ -16,11 +19,33 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-log_header() { echo -e "\n${CYAN}=== $1 ===${NC}\n"; }
+log_info() { echo -e "${BLUE}[INFO]${NC} $1" >&2; }
+log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1" >&2; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
+log_header() { echo -e "\n${CYAN}=== $1 ===${NC}\n" >&2; }
+
+# Cleanup function
+cleanup() {
+    local exit_code=$?
+    # Clear any sensitive variables
+    unset POSTGRES_PASSWORD REDIS_PASSWORD JWT_SECRET API_SECRET_KEY GRAFANA_PASSWORD
+    # Re-enable history
+    set -o history
+    exit $exit_code
+}
+
+trap cleanup EXIT ERR
+
+# Secure password reading
+read_secret() {
+    local prompt="$1"
+    local secret
+    echo -n "$prompt" >&2
+    read -s secret
+    echo >&2  # New line after hidden input
+    echo "$secret"
+}
 
 # Check if Docker Swarm is initialized
 check_swarm() {
@@ -32,15 +57,25 @@ check_swarm() {
     log_success "Docker Swarm is active"
 }
 
-# Generate secure random password
+# Generate cryptographically secure password
 generate_password() {
     local length=${1:-32}
-    openssl rand -base64 48 | tr -d "=+/" | cut -c1-$length
+    # Use /dev/urandom for better entropy
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -base64 $((length * 3 / 4)) | tr -d '\n' | cut -c1-$length
+    else
+        # Fallback to /dev/urandom
+        head -c $length /dev/urandom | base64 | tr -d '\n' | cut -c1-$length
+    fi
 }
 
 # Generate secure random key
 generate_key() {
-    openssl rand -hex 32
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -hex 32
+    else
+        head -c 32 /dev/urandom | xxd -p -c 32
+    fi
 }
 
 # Create or update a secret
@@ -48,6 +83,12 @@ create_secret() {
     local name=$1
     local value=$2
     local rotate=${3:-false}
+    
+    # Validate secret name
+    if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        log_error "Invalid secret name: $name"
+        return 1
+    fi
     
     # Check if secret exists
     if docker secret inspect "$name" &>/dev/null; then
@@ -66,15 +107,26 @@ create_secret() {
     fi
 }
 
-# Create secret from file
+# Create secret from file with validation
 create_secret_from_file() {
     local name=$1
     local file=$2
     local rotate=${3:-false}
     
+    # Validate inputs
+    if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        log_error "Invalid secret name: $name"
+        return 1
+    fi
+    
     if [ ! -f "$file" ]; then
         log_error "File not found: $file"
         return 1
+    fi
+    
+    # Check file permissions (should not be world-readable)
+    if [ "$(stat -c %a "$file" 2>/dev/null || stat -f %A "$file" 2>/dev/null)" -gt 600 ]; then
+        log_warn "File $file has overly permissive permissions"
     fi
     
     if docker secret inspect "$name" &>/dev/null; then
@@ -90,6 +142,28 @@ create_secret_from_file() {
         docker secret create "$name" "$file"
         log_success "Secret created from file: $name"
     fi
+}
+
+# Validate password strength
+validate_password_strength() {
+    local password="$1"
+    local min_length=12
+    
+    if [ ${#password} -lt $min_length ]; then
+        log_error "Password too short (minimum $min_length characters)"
+        return 1
+    fi
+    
+    # Check for common weak passwords
+    local weak_passwords=("password" "123456" "admin" "root" "test")
+    for weak in "${weak_passwords[@]}"; do
+        if [[ "$password" == *"$weak"* ]]; then
+            log_error "Password contains weak pattern: $weak"
+            return 1
+        fi
+    done
+    
+    return 0
 }
 
 # Parse arguments
@@ -122,11 +196,15 @@ check_swarm
 log_header "Database Secrets"
 
 if [ "$INTERACTIVE" = true ]; then
-    read -sp "Enter PostgreSQL password (press Enter to generate): " POSTGRES_PASSWORD
-    echo
+    POSTGRES_PASSWORD=$(read_secret "Enter PostgreSQL password (press Enter to generate): ")
     [ -z "$POSTGRES_PASSWORD" ] && POSTGRES_PASSWORD=$(generate_password)
     
-    read -p "Enter PostgreSQL user [r3mes]: " POSTGRES_USER
+    if ! validate_password_strength "$POSTGRES_PASSWORD"; then
+        log_error "Password validation failed"
+        exit 1
+    fi
+    
+    read -p "Enter PostgreSQL user [r3mes]: " POSTGRES_USER >&2
     [ -z "$POSTGRES_USER" ] && POSTGRES_USER="r3mes"
 else
     POSTGRES_PASSWORD=$(generate_password)
@@ -140,9 +218,13 @@ create_secret "postgres_user" "$POSTGRES_USER" $ROTATE
 log_header "Redis Secret"
 
 if [ "$INTERACTIVE" = true ]; then
-    read -sp "Enter Redis password (press Enter to generate): " REDIS_PASSWORD
-    echo
+    REDIS_PASSWORD=$(read_secret "Enter Redis password (press Enter to generate): ")
     [ -z "$REDIS_PASSWORD" ] && REDIS_PASSWORD=$(generate_password)
+    
+    if ! validate_password_strength "$REDIS_PASSWORD"; then
+        log_error "Redis password validation failed"
+        exit 1
+    fi
 else
     REDIS_PASSWORD=$(generate_password)
 fi
@@ -153,12 +235,10 @@ create_secret "redis_password" "$REDIS_PASSWORD" $ROTATE
 log_header "Application Secrets"
 
 if [ "$INTERACTIVE" = true ]; then
-    read -sp "Enter JWT secret (press Enter to generate): " JWT_SECRET
-    echo
+    JWT_SECRET=$(read_secret "Enter JWT secret (press Enter to generate): ")
     [ -z "$JWT_SECRET" ] && JWT_SECRET=$(generate_key)
     
-    read -sp "Enter API secret key (press Enter to generate): " API_SECRET_KEY
-    echo
+    API_SECRET_KEY=$(read_secret "Enter API secret key (press Enter to generate): ")
     [ -z "$API_SECRET_KEY" ] && API_SECRET_KEY=$(generate_key)
 else
     JWT_SECRET=$(generate_key)
@@ -172,9 +252,13 @@ create_secret "api_secret_key" "$API_SECRET_KEY" $ROTATE
 log_header "Grafana Secret"
 
 if [ "$INTERACTIVE" = true ]; then
-    read -sp "Enter Grafana admin password (press Enter to generate): " GRAFANA_PASSWORD
-    echo
+    GRAFANA_PASSWORD=$(read_secret "Enter Grafana admin password (press Enter to generate): ")
     [ -z "$GRAFANA_PASSWORD" ] && GRAFANA_PASSWORD=$(generate_password 24)
+    
+    if ! validate_password_strength "$GRAFANA_PASSWORD"; then
+        log_error "Grafana password validation failed"
+        exit 1
+    fi
 else
     GRAFANA_PASSWORD=$(generate_password 24)
 fi
@@ -223,31 +307,60 @@ fi
 # Summary
 log_header "Secrets Summary"
 
-echo "Created/Updated secrets:"
+echo "Created/Updated secrets:" >&2
 docker secret ls --format "table {{.Name}}\t{{.CreatedAt}}"
 
 log_header "Next Steps"
 
-echo "1. Create Docker configs (if needed):"
-echo "   docker config create prometheus_config monitoring/prometheus/prometheus.prod.yml"
-echo "   docker config create prometheus_alerts monitoring/prometheus/alerts.prod.yml"
-echo ""
-echo "2. Deploy the stack:"
-echo "   docker stack deploy -c docker/docker-compose.swarm.yml r3mes"
-echo ""
-echo "3. Check services:"
-echo "   docker service ls"
-echo ""
+echo "1. Create Docker configs (if needed):" >&2
+echo "   docker config create prometheus_config monitoring/prometheus/prometheus.prod.yml" >&2
+echo "   docker config create prometheus_alerts monitoring/prometheus/alerts.prod.yml" >&2
+echo "" >&2
+echo "2. Deploy the stack:" >&2
+echo "   docker stack deploy -c docker/docker-compose.swarm.yml r3mes" >&2
+echo "" >&2
+echo "3. Check services:" >&2
+echo "   docker service ls" >&2
+echo "" >&2
 
+# Create secure backup file with restricted permissions
 if [ "$INTERACTIVE" = true ]; then
-    log_warn "IMPORTANT: Save these credentials securely!"
-    echo ""
-    echo "PostgreSQL User: $POSTGRES_USER"
-    echo "PostgreSQL Password: $POSTGRES_PASSWORD"
-    echo "Redis Password: $REDIS_PASSWORD"
-    echo "JWT Secret: $JWT_SECRET"
-    echo "API Secret Key: $API_SECRET_KEY"
-    echo "Grafana Admin Password: $GRAFANA_PASSWORD"
+    log_warn "IMPORTANT: Saving credentials to secure backup file"
+    
+    BACKUP_FILE="/tmp/r3mes_secrets_backup_$(date +%Y%m%d_%H%M%S).txt"
+    umask 0077  # Ensure file is created with 600 permissions
+    
+    cat > "$BACKUP_FILE" << EOF
+# R3MES Secrets Backup - $(date)
+# KEEP THIS FILE SECURE AND DELETE AFTER COPYING TO SECURE STORAGE
+
+PostgreSQL User: $POSTGRES_USER
+PostgreSQL Password: $POSTGRES_PASSWORD
+Redis Password: $REDIS_PASSWORD
+JWT Secret: $JWT_SECRET
+API Secret Key: $API_SECRET_KEY
+Grafana Admin Password: $GRAFANA_PASSWORD
+
+# IMPORTANT: 
+# 1. Copy these credentials to your secure password manager
+# 2. Delete this file: rm "$BACKUP_FILE"
+# 3. Verify deletion: shred -vfz -n 3 "$BACKUP_FILE" (if available)
+EOF
+    
+    log_success "Credentials saved to: $BACKUP_FILE"
+    log_warn "Remember to copy to secure storage and delete this file!"
+    echo "" >&2
+    echo "To securely delete the backup file:" >&2
+    echo "  rm '$BACKUP_FILE'" >&2
+    echo "  # Or for secure deletion:" >&2
+    echo "  shred -vfz -n 3 '$BACKUP_FILE' 2>/dev/null || rm '$BACKUP_FILE'" >&2
 fi
 
 log_success "Swarm secrets creation completed!"
+
+# Final security reminder
+log_header "Security Reminders"
+echo "1. ✅ Secrets are stored securely in Docker Swarm" >&2
+echo "2. ⚠️  Backup file (if created) should be moved to secure storage" >&2
+echo "3. 🔒 Consider rotating secrets periodically with --rotate flag" >&2
+echo "4. 📝 Document secret rotation procedures for your team" >&2

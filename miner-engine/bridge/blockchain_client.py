@@ -82,6 +82,10 @@ except Exception:
 try:
     from remes.remes.v1 import tx_pb2, tx_pb2_grpc
     from remes.remes.v1 import query_pb2, query_pb2_grpc
+    from remes.remes.v1 import stored_gradient_pb2, stored_gradient_pb2_grpc
+    from remes.remes.v1 import task_pool_pb2, task_pool_pb2_grpc
+    from remes.remes.v1 import node_pb2, node_pb2_grpc
+    print("✅ Proto imports successful")
 except ImportError as e:
     # Fallback for development/testing
     print(f"Warning: Proto imports failed: {e}")
@@ -89,6 +93,12 @@ except ImportError as e:
     tx_pb2_grpc = None
     query_pb2 = None
     query_pb2_grpc = None
+    stored_gradient_pb2 = None
+    stored_gradient_pb2_grpc = None
+    task_pool_pb2 = None
+    task_pool_pb2_grpc = None
+    node_pb2 = None
+    node_pb2_grpc = None
 
 
 class BlockchainClient:
@@ -894,6 +904,60 @@ class BlockchainClient:
             }
         
         try:
+            # Create and send RegisterNode message
+            msg = tx_pb2.MsgRegisterNode(
+                node_address=node_address,
+                node_type=node_type,
+                stake=stake,
+                roles=roles or [],
+            )
+            
+            response = self.stub.RegisterNode(msg)
+            tx_hash = getattr(response, 'tx_hash', '')
+            success = getattr(response, 'success', False)
+            registration_id = getattr(response, 'registration_id', 0)
+            
+            if not tx_hash:
+                tx_hash = "pending"
+            
+            if not success:
+                return {
+                    "success": False,
+                    "error": "RegisterNode transaction failed",
+                    "tx_hash": tx_hash,
+                }
+            
+            logger.info(f"Node registered successfully: {node_address}, Registration ID: {registration_id}, TX: {tx_hash}")
+            return {
+                "success": True,
+                "registration_id": registration_id,
+                "tx_hash": tx_hash,
+                "message": "Node registered successfully",
+            }
+        except grpc.RpcError as e:
+            logger.error(f"Failed to register node: {e.code()}: {e.details()}")
+            return {
+                "success": False,
+                "error": str(e.details()) if hasattr(e, 'details') else str(e),
+                "code": str(e.code()),
+            }
+        except Exception as e:
+            logger.error(f"Error registering node: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+            }
+    
+    def close(self):
+        """Close gRPC channel."""
+        if self.channel:
+            self.channel.close()
+            return {
+                "success": False,
+                "error": "Transaction stub not available (proto files not loaded)",
+            }
+        
+        try:
             # Create RegisterNode message
             # Note: MsgRegisterNode requires ResourceSpec and other fields
             # For now, we'll create a minimal message with default/empty values
@@ -1297,3 +1361,478 @@ class BlockchainClient:
         if self.channel:
             self.channel.close()
 
+    def update_serving_node_status(
+        self,
+        serving_node: str,
+        is_available: bool,
+        model_version: str,
+        model_ipfs_hash: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Update serving node status on blockchain.
+        
+        Args:
+            serving_node: Serving node address
+            is_available: Whether node is available for requests
+            model_version: Model version being served
+            model_ipfs_hash: IPFS hash of model (optional)
+            
+        Returns:
+            Dictionary with success status and transaction hash
+        """
+        if self.stub is None or tx_pb2 is None:
+            logger.warning("Transaction stub not available")
+            return {
+                "success": False,
+                "error": "Transaction stub not available (proto files not loaded)",
+            }
+        
+        try:
+            msg = tx_pb2.MsgUpdateServingNodeStatus(
+                serving_node=serving_node,
+                is_available=is_available,
+                model_version=model_version,
+                model_ipfs_hash=model_ipfs_hash or "",
+            )
+            
+            response = self.stub.UpdateServingNodeStatus(msg)
+            tx_hash = getattr(response, 'tx_hash', 'pending')
+            success = getattr(response, 'success', True)
+            
+            if success:
+                logger.info(f"Serving node status updated: {serving_node}, available={is_available}")
+                return {
+                    "success": True,
+                    "tx_hash": tx_hash,
+                    "message": "Serving node status updated successfully",
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "UpdateServingNodeStatus transaction failed",
+                    "tx_hash": tx_hash,
+                }
+        except grpc.RpcError as e:
+            logger.error(f"Failed to update serving node status: {e.code()}: {e.details()}")
+            return {
+                "success": False,
+                "error": str(e.details()) if hasattr(e, 'details') else str(e),
+                "code": str(e.code()),
+            }
+        except Exception as e:
+            logger.error(f"Error updating serving node status: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+            }
+    
+    def get_pending_inference_requests(self, serving_node: str) -> List[Dict[str, Any]]:
+        """
+        Get pending inference requests for a serving node.
+        
+        Args:
+            serving_node: Serving node address
+            
+        Returns:
+            List of pending inference requests
+        """
+        if self.query_stub is None or query_pb2 is None:
+            logger.warning("Query stub not available")
+            return []
+        
+        try:
+            request = query_pb2.QueryPendingInferenceRequestsRequest(
+                serving_node=serving_node
+            )
+            response = self.query_stub.QueryPendingInferenceRequests(request)
+            
+            requests = []
+            for req in response.requests:
+                requests.append({
+                    "request_id": req.request_id,
+                    "input_data_ipfs_hash": req.input_data_ipfs_hash,
+                    "requester": req.requester,
+                    "created_at": req.created_at,
+                })
+            
+            return requests
+        except grpc.RpcError as e:
+            logger.error(f"Failed to get pending inference requests: {e.code()}: {e.details()}")
+            return []
+        except AttributeError:
+            logger.warning("QueryPendingInferenceRequests not available in proto")
+            return []
+        except Exception as e:
+            logger.error(f"Error getting pending inference requests: {e}", exc_info=True)
+            return []
+    
+    def submit_inference_result(
+        self,
+        serving_node: str,
+        request_id: str,
+        result_ipfs_hash: str,
+        latency_ms: int,
+    ) -> Dict[str, Any]:
+        """
+        Submit inference result to blockchain.
+        
+        Args:
+            serving_node: Serving node address
+            request_id: Inference request ID
+            result_ipfs_hash: IPFS hash of result
+            latency_ms: Inference latency in milliseconds
+            
+        Returns:
+            Dictionary with success status and transaction hash
+        """
+        if self.stub is None or tx_pb2 is None:
+            logger.warning("Transaction stub not available")
+            return {
+                "success": False,
+                "error": "Transaction stub not available (proto files not loaded)",
+            }
+        
+        try:
+            msg = tx_pb2.MsgSubmitInferenceResult(
+                serving_node=serving_node,
+                request_id=request_id,
+                result_ipfs_hash=result_ipfs_hash,
+                latency_ms=latency_ms,
+            )
+            
+            response = self.stub.SubmitInferenceResult(msg)
+            tx_hash = getattr(response, 'tx_hash', 'pending')
+            success = getattr(response, 'success', True)
+            
+            if success:
+                return {
+                    "success": True,
+                    "tx_hash": tx_hash,
+                    "message": "Inference result submitted successfully",
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "SubmitInferenceResult transaction failed",
+                    "tx_hash": tx_hash,
+                }
+        except grpc.RpcError as e:
+            logger.error(f"Failed to submit inference result: {e.code()}: {e.details()}")
+            return {
+                "success": False,
+                "error": str(e.details()) if hasattr(e, 'details') else str(e),
+                "code": str(e.code()),
+            }
+        except Exception as e:
+            logger.error(f"Error submitting inference result: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+            }
+    
+    def submit_inference_error(
+        self,
+        serving_node: str,
+        request_id: str,
+        error_message: str,
+        latency_ms: int,
+    ) -> Dict[str, Any]:
+        """
+        Submit inference error to blockchain.
+        
+        Args:
+            serving_node: Serving node address
+            request_id: Inference request ID
+            error_message: Error message
+            latency_ms: Processing time before error
+            
+        Returns:
+            Dictionary with success status and transaction hash
+        """
+        if self.stub is None or tx_pb2 is None:
+            logger.warning("Transaction stub not available")
+            return {
+                "success": False,
+                "error": "Transaction stub not available (proto files not loaded)",
+            }
+        
+        try:
+            msg = tx_pb2.MsgSubmitInferenceError(
+                serving_node=serving_node,
+                request_id=request_id,
+                error_message=error_message,
+                latency_ms=latency_ms,
+            )
+            
+            response = self.stub.SubmitInferenceError(msg)
+            tx_hash = getattr(response, 'tx_hash', 'pending')
+            success = getattr(response, 'success', True)
+            
+            if success:
+                return {
+                    "success": True,
+                    "tx_hash": tx_hash,
+                    "message": "Inference error submitted successfully",
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "SubmitInferenceError transaction failed",
+                    "tx_hash": tx_hash,
+                }
+        except grpc.RpcError as e:
+            logger.error(f"Failed to submit inference error: {e.code()}: {e.details()}")
+            return {
+                "success": False,
+                "error": str(e.details()) if hasattr(e, 'details') else str(e),
+                "code": str(e.code()),
+            }
+        except Exception as e:
+            logger.error(f"Error submitting inference error: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+            }
+    
+    def close(self):
+        """Close gRPC channel."""
+        if self.channel:
+            self.channel.close()
+    def get_stored_gradient_by_id(self, gradient_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get stored gradient by ID from blockchain.
+        
+        Args:
+            gradient_id: Gradient ID
+            
+        Returns:
+            Dictionary with gradient information including IPFS hash
+        """
+        if self.query_stub is None or query_pb2 is None:
+            logger.warning("Query stub not available")
+            return None
+        
+        try:
+            request = query_pb2.QueryGetStoredGradientRequest(id=gradient_id)
+            response = self.query_stub.GetStoredGradient(request)
+            
+            if response and hasattr(response, 'stored_gradient'):
+                gradient = response.stored_gradient
+                return {
+                    "id": getattr(gradient, 'id', 0),
+                    "gradient_ipfs_hash": getattr(gradient, 'gradient_ipfs_hash', ''),
+                    "status": getattr(gradient, 'status', ''),
+                    "miner_address": getattr(gradient, 'miner_address', ''),
+                    "submission_time": getattr(gradient, 'submission_time', None),
+                    "gradient_hash": getattr(gradient, 'gradient_hash', ''),
+                    "model_version": getattr(gradient, 'model_version', ''),
+                }
+            return None
+        except grpc.RpcError as e:
+            logger.error(f"Failed to get stored gradient: {e.code()}: {e.details()}")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting stored gradient: {e}", exc_info=True)
+            return None
+    
+    def commit_aggregation(
+        self,
+        proposer: str,
+        gradient_ids: List[int],
+        training_round_id: int,
+        commitment_hash: str,
+    ) -> Dict[str, Any]:
+        """
+        Commit aggregation to blockchain (commit-reveal scheme).
+        
+        Args:
+            proposer: Proposer address
+            gradient_ids: List of gradient IDs to aggregate
+            training_round_id: Training round ID
+            commitment_hash: Commitment hash
+            
+        Returns:
+            Dictionary with success status and commitment_id
+        """
+        if self.stub is None or tx_pb2 is None:
+            logger.warning("Transaction stub not available")
+            return {
+                "success": False,
+                "error": "Transaction stub not available (proto files not loaded)",
+            }
+        
+        try:
+            msg = tx_pb2.MsgCommitAggregation(
+                proposer=proposer,
+                gradient_ids=gradient_ids,
+                training_round_id=training_round_id,
+                commitment_hash=commitment_hash,
+            )
+            
+            response = self.stub.CommitAggregation(msg)
+            tx_hash = getattr(response, 'tx_hash', 'pending')
+            success = getattr(response, 'success', True)
+            commitment_id = getattr(response, 'commitment_id', 0)
+            
+            if success:
+                return {
+                    "success": True,
+                    "commitment_id": commitment_id,
+                    "tx_hash": tx_hash,
+                    "message": "Aggregation committed successfully",
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "CommitAggregation transaction failed",
+                    "tx_hash": tx_hash,
+                }
+        except grpc.RpcError as e:
+            logger.error(f"Failed to commit aggregation: {e.code()}: {e.details()}")
+            return {
+                "success": False,
+                "error": str(e.details()) if hasattr(e, 'details') else str(e),
+                "code": str(e.code()),
+            }
+        except Exception as e:
+            logger.error(f"Error committing aggregation: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+            }
+    
+    def reveal_aggregation(
+        self,
+        proposer: str,
+        commitment_id: int,
+        aggregated_hash: str,
+        merkle_root: str,
+        training_round_id: int,
+    ) -> Dict[str, Any]:
+        """
+        Reveal committed aggregation.
+        
+        Args:
+            proposer: Proposer address
+            commitment_id: Commitment ID from commit step
+            aggregated_hash: IPFS hash of aggregated gradient
+            merkle_root: Merkle root of included gradients
+            training_round_id: Training round ID
+            
+        Returns:
+            Dictionary with success status
+        """
+        if self.stub is None or tx_pb2 is None:
+            logger.warning("Transaction stub not available")
+            return {
+                "success": False,
+                "error": "Transaction stub not available (proto files not loaded)",
+            }
+        
+        try:
+            msg = tx_pb2.MsgRevealAggregation(
+                proposer=proposer,
+                commitment_id=commitment_id,
+                aggregated_hash=aggregated_hash,
+                merkle_root=merkle_root,
+                training_round_id=training_round_id,
+            )
+            
+            response = self.stub.RevealAggregation(msg)
+            tx_hash = getattr(response, 'tx_hash', 'pending')
+            success = getattr(response, 'success', True)
+            
+            if success:
+                return {
+                    "success": True,
+                    "tx_hash": tx_hash,
+                    "message": "Aggregation revealed successfully",
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "RevealAggregation transaction failed",
+                    "tx_hash": tx_hash,
+                }
+        except grpc.RpcError as e:
+            logger.error(f"Failed to reveal aggregation: {e.code()}: {e.details()}")
+            return {
+                "success": False,
+                "error": str(e.details()) if hasattr(e, 'details') else str(e),
+                "code": str(e.code()),
+            }
+        except Exception as e:
+            logger.error(f"Error revealing aggregation: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+            }
+    
+    def submit_aggregation(
+        self,
+        proposer: str,
+        gradient_ids: List[int],
+        aggregated_hash: str,
+        merkle_root: str,
+        training_round_id: int,
+    ) -> Dict[str, Any]:
+        """
+        Submit aggregation to blockchain.
+        
+        Args:
+            proposer: Proposer address
+            gradient_ids: List of gradient IDs included in aggregation
+            aggregated_hash: IPFS hash of aggregated gradient
+            merkle_root: Merkle root of included gradients
+            training_round_id: Training round ID
+            
+        Returns:
+            Dictionary with success status and aggregation_id
+        """
+        if self.stub is None or tx_pb2 is None:
+            logger.warning("Transaction stub not available")
+            return {
+                "success": False,
+                "error": "Transaction stub not available (proto files not loaded)",
+            }
+        
+        try:
+            msg = tx_pb2.MsgSubmitAggregation(
+                proposer=proposer,
+                gradient_ids=gradient_ids,
+                aggregated_hash=aggregated_hash,
+                merkle_root=merkle_root,
+                training_round_id=training_round_id,
+            )
+            
+            response = self.stub.SubmitAggregation(msg)
+            tx_hash = getattr(response, 'tx_hash', 'pending')
+            success = getattr(response, 'success', True)
+            aggregation_id = getattr(response, 'aggregation_id', 0)
+            
+            if success:
+                return {
+                    "success": True,
+                    "aggregation_id": aggregation_id,
+                    "tx_hash": tx_hash,
+                    "message": "Aggregation submitted successfully",
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "SubmitAggregation transaction failed",
+                    "tx_hash": tx_hash,
+                }
+        except grpc.RpcError as e:
+            logger.error(f"Failed to submit aggregation: {e.code()}: {e.details()}")
+            return {
+                "success": False,
+                "error": str(e.details()) if hasattr(e, 'details') else str(e),
+                "code": str(e.code()),
+            }
+        except Exception as e:
+            logger.error(f"Error submitting aggregation: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+            }

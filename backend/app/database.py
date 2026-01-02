@@ -1,7 +1,7 @@
 """
 Database - Kredi ve Cüzdan Veritabanı Yönetimi
 
-Kimin ne kadar kredisi var, kim madenci? Bunu tutan basit ama sağlam bir yapı.
+Production-ready database management with proper error handling and security.
 """
 
 import sqlite3
@@ -9,6 +9,7 @@ import json
 import threading
 import time
 import secrets
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from pathlib import Path
@@ -16,59 +17,54 @@ import os
 import requests
 import logging
 
-from .exceptions import InvalidInputError
+from .exceptions import InvalidInputError, DatabaseError, ProductionConfigurationError
+from .config import get_config, validate_localhost_usage
+from .constants import (
+    CREDITS_PER_BLOCK, API_KEY_PREFIX, API_KEY_LENGTH,
+    DEFAULT_DATABASE_CACHE_SIZE, DEFAULT_DATABASE_TIMEOUT,
+    DEFAULT_DATABASE_PATH, DEFAULT_CHAIN_JSON_PATH
+)
 
 logger = logging.getLogger(__name__)
 
 
 class Database:
     """
-    Kredi ve Cüzdan Veritabanı Yönetimi
+    Production-ready Kredi ve Cüzdan Veritabanı Yönetimi
     
-    Özellikler:
-    - SQLite tabanlı kullanıcı ve kredi yönetimi
-    - Blockchain senkronizasyonu
-    - Otomatik kredi dağıtımı
+    Features:
+    - SQLite-based user and credit management
+    - Blockchain synchronization
+    - Automatic credit distribution
+    - Production security validation
     """
     
     def __init__(self, db_path: Optional[str] = None, chain_json_path: Optional[str] = None):
         """
-        Veritabanını başlatır.
+        Initialize database with production-ready configuration.
         
         Args:
-            db_path: SQLite veritabanı dosya yolu
-            chain_json_path: Blockchain JSON dosya yolu
+            db_path: SQLite database file path
+            chain_json_path: Blockchain JSON file path
         """
+        config = get_config()
+        
         if db_path is None:
-            db_path = os.getenv("DATABASE_PATH", "backend/database.db")
+            db_path = os.getenv("DATABASE_PATH", DEFAULT_DATABASE_PATH)
         
         if chain_json_path is None:
-            chain_json_path = os.getenv("CHAIN_JSON_PATH", "chain.json")
+            chain_json_path = os.getenv("CHAIN_JSON_PATH", DEFAULT_CHAIN_JSON_PATH)
         
         self.db_path = db_path
         self.chain_json_path = chain_json_path
         self.lock = threading.Lock()
         
-        # RPC endpoint for blockchain queries
-        # In production, BLOCKCHAIN_RPC_URL must be set (no localhost fallback)
-        is_production = os.getenv("R3MES_ENV", "development").lower() == "production"
-        rpc_url = os.getenv("BLOCKCHAIN_RPC_URL")
-        if not rpc_url:
-            if is_production:
-                raise MissingEnvironmentVariableError(
-                    "BLOCKCHAIN_RPC_URL environment variable must be set in production. "
-                    "Do not use localhost in production."
-                )
-            # Development fallback
-            self.rpc_endpoint = "http://localhost:26657"
-            logger.warning("BLOCKCHAIN_RPC_URL not set, using localhost fallback (development only)")
-        else:
-            self.rpc_endpoint = rpc_url
-            # Validate that production doesn't use localhost
-            if is_production and ("localhost" in self.rpc_endpoint or "127.0.0.1" in self.rpc_endpoint):
-                raise ProductionConfigurationError(
-                    f"BLOCKCHAIN_RPC_URL cannot use localhost in production: {self.rpc_endpoint}"
-                )
+        # RPC endpoint configuration with production validation
+        self.rpc_endpoint = config.BLOCKCHAIN_RPC_URL or config.RPC_URL
+        
+        # Validate RPC endpoint for production
+        if config.ENV == "production":
+            validate_localhost_usage(self.rpc_endpoint, "BLOCKCHAIN_RPC_URL")
         
         # Create database directory if needed
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -76,10 +72,8 @@ class Database:
         # Create database and tables
         self._init_database()
         
-        # NOTE: Blockchain sync is now handled by AsyncDatabase and event-driven mechanisms
-        # The sync_loop thread has been removed to eliminate blocking polling
-        # For production, use AsyncDatabase which handles sync via async tasks
-        # For manual sync, call sync_with_blockchain() directly when needed
+        logger.info(f"Database initialized: {db_path}")
+        logger.info(f"RPC endpoint: {self.rpc_endpoint}")
     
     def _init_database(self):
         """Veritabanı tablolarını oluşturur."""
@@ -89,7 +83,7 @@ class Database:
         # Enable WAL (Write-Ahead Logging) mode for better concurrency
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")  # Better performance with WAL
-        cursor.execute("PRAGMA cache_size=-64000")  # 64MB cache
+        cursor.execute(f"PRAGMA cache_size={DEFAULT_DATABASE_CACHE_SIZE}")  # 64MB cache
         cursor.execute("PRAGMA foreign_keys=ON")
         
         # Users table
@@ -140,11 +134,11 @@ class Database:
             )
         """)
         
-        # API Keys table
+        # API Keys table (with hashed keys for security)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS api_keys (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                api_key TEXT UNIQUE NOT NULL,
+                api_key_hash TEXT UNIQUE NOT NULL,
                 wallet_address TEXT NOT NULL,
                 name TEXT,
                 is_active BOOLEAN DEFAULT 1,
@@ -155,14 +149,31 @@ class Database:
             )
         """)
         
-        # Create index on api_key for faster lookups
+        # Create index on api_key_hash for faster lookups
         cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_api_key ON api_keys(api_key)
+            CREATE INDEX IF NOT EXISTS idx_api_key_hash ON api_keys(api_key_hash)
         """)
+        
+        # Apply additional performance indexes
+        self._apply_performance_indexes(cursor)
         
         conn.commit()
         conn.close()
         logger.info("Database initialized with WAL mode")
+    
+    def _apply_performance_indexes(self, cursor):
+        """Apply performance indexes for better query performance."""
+        from .database_optimization import get_sqlite_index_queries
+        
+        indexes = get_sqlite_index_queries()
+        
+        for index_sql in indexes:
+            try:
+                cursor.execute(index_sql)
+                logger.debug(f"Applied index: {index_sql}")
+            except Exception as e:
+                logger.warning(f"Failed to create index: {e}")
+                # Continue with other indexes
     
     def add_credits(self, wallet: str, amount: float) -> bool:
         """
@@ -711,6 +722,9 @@ class Database:
         # Generate secure API key (32 bytes = 64 hex characters)
         api_key = f"r3mes_{secrets.token_urlsafe(32)}"
         
+        # Hash the API key for secure storage
+        api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        
         # Calculate expiration date
         expires_at = None
         if expires_days:
@@ -722,20 +736,20 @@ class Database:
             
             try:
                 cursor.execute("""
-                    INSERT INTO api_keys (api_key, wallet_address, name, expires_at)
+                    INSERT INTO api_keys (api_key_hash, wallet_address, name, expires_at)
                     VALUES (?, ?, ?, ?)
-                """, (api_key, wallet_address, name, expires_at))
+                """, (api_key_hash, wallet_address, name, expires_at))
                 
                 conn.commit()
                 
                 return {
-                    "api_key": api_key,
+                    "api_key": api_key,  # Return plain key to user (only time they see it)
                     "name": name or "Unnamed",
                     "created_at": datetime.now().isoformat(),
                     "expires_at": expires_at
                 }
             except sqlite3.IntegrityError:
-                # API key already exists (very unlikely), try again
+                # API key hash collision (extremely unlikely), try again
                 conn.close()
                 return self.create_api_key(wallet_address, name, expires_days)
             finally:
@@ -751,6 +765,9 @@ class Database:
         Returns:
             {"wallet_address": "...", "name": "...", "is_active": True/False} veya None
         """
+        # Hash the provided API key for comparison
+        api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        
         with self.lock:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -758,8 +775,8 @@ class Database:
             cursor.execute("""
                 SELECT wallet_address, name, is_active, expires_at, last_used
                 FROM api_keys
-                WHERE api_key = ?
-            """, (api_key,))
+                WHERE api_key_hash = ?
+            """, (api_key_hash,))
             
             result = cursor.fetchone()
             conn.close()
@@ -776,7 +793,7 @@ class Database:
                     return None
             
             # Update last_used timestamp
-            self._update_api_key_last_used(api_key)
+            self._update_api_key_last_used(api_key_hash)
             
             return {
                 "wallet_address": wallet_address,
@@ -786,7 +803,7 @@ class Database:
                 "last_used": last_used
             }
     
-    def _update_api_key_last_used(self, api_key: str):
+    def _update_api_key_last_used(self, api_key_hash: str):
         """API key'in son kullanım zamanını günceller."""
         with self.lock:
             conn = sqlite3.connect(self.db_path)
@@ -795,8 +812,8 @@ class Database:
             cursor.execute("""
                 UPDATE api_keys
                 SET last_used = CURRENT_TIMESTAMP
-                WHERE api_key = ?
-            """, (api_key,))
+                WHERE api_key_hash = ?
+            """, (api_key_hash,))
             
             conn.commit()
             conn.close()
@@ -809,14 +826,14 @@ class Database:
             wallet_address: Cüzdan adresi
             
         Returns:
-            API key listesi
+            API key listesi (hashed keys are not returned for security)
         """
         with self.lock:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT api_key, name, is_active, created_at, expires_at, last_used
+                SELECT api_key_hash, name, is_active, created_at, expires_at, last_used
                 FROM api_keys
                 WHERE wallet_address = ?
                 ORDER BY created_at DESC
@@ -827,14 +844,13 @@ class Database:
             
             keys = []
             for row in results:
-                api_key, name, is_active, created_at, expires_at, last_used = row
+                api_key_hash, name, is_active, created_at, expires_at, last_used = row
                 
-                # Mask API key for security (show only first 12 and last 8 chars)
-                masked_key = f"{api_key[:12]}...{api_key[-8:]}" if len(api_key) > 20 else "***"
+                # Show only hash prefix for identification (first 12 chars of hash)
+                key_id = f"r3mes_***{api_key_hash[:8]}"
                 
                 keys.append({
-                    "api_key": masked_key,
-                    "full_api_key": api_key,  # Only for creation response
+                    "key_id": key_id,  # For identification only
                     "name": name,
                     "is_active": bool(is_active),
                     "created_at": created_at,
@@ -855,6 +871,9 @@ class Database:
         Returns:
             True if successful, False otherwise
         """
+        # Hash the API key for lookup
+        api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        
         with self.lock:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -862,8 +881,8 @@ class Database:
             # Verify ownership
             cursor.execute("""
                 SELECT wallet_address FROM api_keys
-                WHERE api_key = ?
-            """, (api_key,))
+                WHERE api_key_hash = ?
+            """, (api_key_hash,))
             
             result = cursor.fetchone()
             if not result or result[0] != wallet_address:
@@ -874,8 +893,8 @@ class Database:
             cursor.execute("""
                 UPDATE api_keys
                 SET is_active = 0
-                WHERE api_key = ? AND wallet_address = ?
-            """, (api_key, wallet_address))
+                WHERE api_key_hash = ? AND wallet_address = ?
+            """, (api_key_hash, wallet_address))
             
             conn.commit()
             conn.close()
@@ -892,6 +911,9 @@ class Database:
         Returns:
             True if successful, False otherwise
         """
+        # Hash the API key for lookup
+        api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        
         with self.lock:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -899,8 +921,8 @@ class Database:
             # Verify ownership
             cursor.execute("""
                 SELECT wallet_address FROM api_keys
-                WHERE api_key = ?
-            """, (api_key,))
+                WHERE api_key_hash = ?
+            """, (api_key_hash,))
             
             result = cursor.fetchone()
             if not result or result[0] != wallet_address:
@@ -910,8 +932,8 @@ class Database:
             # Delete
             cursor.execute("""
                 DELETE FROM api_keys
-                WHERE api_key = ? AND wallet_address = ?
-            """, (api_key, wallet_address))
+                WHERE api_key_hash = ? AND wallet_address = ?
+            """, (api_key_hash, wallet_address))
             
             conn.commit()
             conn.close()

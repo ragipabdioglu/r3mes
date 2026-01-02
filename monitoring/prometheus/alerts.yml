@@ -1,76 +1,406 @@
+# R3MES Prometheus Alert Rules - Production Ready
+# Comprehensive monitoring and alerting for all R3MES components
+
 groups:
-  - name: r3mes_backend_alerts
-    interval: 30s
-    rules:
-      - alert: HighAPIErrorRate
-        expr: rate(api_requests_total{status_code=~"5.."}[5m]) > 0.1
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "High API error rate detected"
-          description: "API error rate is {{ $value }} errors/sec"
+- name: r3mes_critical_alerts
+  interval: 30s
+  rules:
+  
+  # Backend Service Alerts
+  - alert: BackendServiceDown
+    expr: up{job="r3mes-backend"} == 0
+    for: 2m
+    labels:
+      severity: critical
+      component: backend
+      team: r3mes-core
+    annotations:
+      summary: "R3MES Backend service is down"
+      description: "Backend service {{ $labels.instance }} has been down for more than 2 minutes"
+      runbook_url: "https://docs.r3mes.network/runbooks/backend-down"
+      
+  - alert: BackendHighErrorRate
+    expr: rate(http_requests_total{job="r3mes-backend",status=~"5.."}[5m]) > 0.05
+    for: 5m
+    labels:
+      severity: critical
+      component: backend
+      team: r3mes-core
+    annotations:
+      summary: "High error rate in R3MES Backend"
+      description: "Backend error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+      runbook_url: "https://docs.r3mes.network/runbooks/high-error-rate"
+      
+  - alert: BackendHighLatency
+    expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="r3mes-backend"}[5m])) > 2
+    for: 10m
+    labels:
+      severity: warning
+      component: backend
+      team: r3mes-core
+    annotations:
+      summary: "High latency in R3MES Backend"
+      description: "95th percentile latency is {{ $value }}s over the last 10 minutes"
+      
+  # Database Alerts
+  - alert: DatabaseConnectionPoolExhausted
+    expr: db_connection_pool_usage{job="r3mes-backend"} > 0.9
+    for: 2m
+    labels:
+      severity: critical
+      component: database
+      team: r3mes-core
+    annotations:
+      summary: "Database connection pool nearly exhausted"
+      description: "Connection pool usage is {{ $value | humanizePercentage }}"
+      runbook_url: "https://docs.r3mes.network/runbooks/db-connection-pool"
+      
+  - alert: DatabaseHighQueryTime
+    expr: rate(db_query_duration_seconds_sum[5m]) / rate(db_query_duration_seconds_count[5m]) > 1
+    for: 5m
+    labels:
+      severity: warning
+      component: database
+      team: r3mes-core
+    annotations:
+      summary: "High database query time"
+      description: "Average query time is {{ $value }}s over the last 5 minutes"
+      
+  - alert: DatabaseDiskSpaceHigh
+    expr: (node_filesystem_size_bytes{mountpoint="/var/lib/postgresql"} - node_filesystem_free_bytes{mountpoint="/var/lib/postgresql"}) / node_filesystem_size_bytes{mountpoint="/var/lib/postgresql"} > 0.85
+    for: 10m
+    labels:
+      severity: warning
+      component: database
+      team: r3mes-infra
+    annotations:
+      summary: "Database disk space usage high"
+      description: "Database disk usage is {{ $value | humanizePercentage }}"
 
-      - alert: HighAPILatency
-        expr: histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m])) > 2
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High API latency detected"
-          description: "95th percentile latency is {{ $value }}s"
+- name: r3mes_blockchain_alerts
+  interval: 30s
+  rules:
+  
+  # Blockchain Node Alerts
+  - alert: BlockchainNodeDown
+    expr: up{job="r3mes-blockchain"} == 0
+    for: 3m
+    labels:
+      severity: critical
+      component: blockchain
+      team: r3mes-blockchain
+    annotations:
+      summary: "Blockchain node is down"
+      description: "Blockchain node {{ $labels.instance }} has been down for more than 3 minutes"
+      runbook_url: "https://docs.r3mes.network/runbooks/blockchain-node-down"
+      
+  - alert: BlockchainSyncLagging
+    expr: increase(tendermint_consensus_height[5m]) < 10
+    for: 10m
+    labels:
+      severity: warning
+      component: blockchain
+      team: r3mes-blockchain
+    annotations:
+      summary: "Blockchain sync is lagging"
+      description: "Block height increased by only {{ $value }} blocks in the last 5 minutes"
+      
+  - alert: BlockchainHighMemoryUsage
+    expr: process_resident_memory_bytes{job="r3mes-blockchain"} / 1024 / 1024 / 1024 > 8
+    for: 15m
+    labels:
+      severity: warning
+      component: blockchain
+      team: r3mes-blockchain
+    annotations:
+      summary: "Blockchain node high memory usage"
+      description: "Memory usage is {{ $value }}GB"
+      
+  - alert: BlockchainPeerCountLow
+    expr: tendermint_p2p_peers < 3
+    for: 10m
+    labels:
+      severity: warning
+      component: blockchain
+      team: r3mes-blockchain
+    annotations:
+      summary: "Low peer count on blockchain node"
+      description: "Only {{ $value }} peers connected"
 
-      - alert: LowCacheHitRate
-        expr: rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) < 0.5
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Low cache hit rate"
-          description: "Cache hit rate is {{ $value | humanizePercentage }}"
+- name: r3mes_mining_alerts
+  interval: 60s
+  rules:
+  
+  # Mining Engine Alerts
+  - alert: MinerEngineDown
+    expr: up{job="r3mes-miner"} == 0
+    for: 5m
+    labels:
+      severity: warning
+      component: miner
+      team: r3mes-mining
+    annotations:
+      summary: "Miner engine is down"
+      description: "Miner engine {{ $labels.instance }} has been down for more than 5 minutes"
+      
+  - alert: MinerHighGPUTemperature
+    expr: gpu_temperature_celsius{job="r3mes-miner"} > 85
+    for: 5m
+    labels:
+      severity: critical
+      component: miner
+      team: r3mes-mining
+    annotations:
+      summary: "High GPU temperature detected"
+      description: "GPU temperature is {{ $value }}°C on {{ $labels.instance }}"
+      runbook_url: "https://docs.r3mes.network/runbooks/gpu-overheating"
+      
+  - alert: MinerLowHashrate
+    expr: mining_hashrate{job="r3mes-miner"} < 10
+    for: 15m
+    labels:
+      severity: warning
+      component: miner
+      team: r3mes-mining
+    annotations:
+      summary: "Low mining hashrate"
+      description: "Hashrate is {{ $value }} gradients/hour on {{ $labels.instance }}"
+      
+  - alert: MinerHighVRAMUsage
+    expr: gpu_memory_usage_percent{job="r3mes-miner"} > 95
+    for: 10m
+    labels:
+      severity: warning
+      component: miner
+      team: r3mes-mining
+    annotations:
+      summary: "High VRAM usage on miner"
+      description: "VRAM usage is {{ $value }}% on {{ $labels.instance }}"
 
-      - alert: HighMemoryUsage
-        expr: system_memory_usage_bytes / (1024^3) > 14
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High memory usage"
-          description: "Memory usage is {{ $value }} GB"
+- name: r3mes_infrastructure_alerts
+  interval: 60s
+  rules:
+  
+  # System Resource Alerts
+  - alert: HighCPUUsage
+    expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+    for: 10m
+    labels:
+      severity: warning
+      component: system
+      team: r3mes-infra
+    annotations:
+      summary: "High CPU usage"
+      description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+      
+  - alert: HighMemoryUsage
+    expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+    for: 10m
+    labels:
+      severity: critical
+      component: system
+      team: r3mes-infra
+    annotations:
+      summary: "High memory usage"
+      description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+      
+  - alert: DiskSpaceHigh
+    expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes > 0.85
+    for: 10m
+    labels:
+      severity: warning
+      component: system
+      team: r3mes-infra
+    annotations:
+      summary: "High disk usage"
+      description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+      
+  - alert: DiskSpaceCritical
+    expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes > 0.95
+    for: 5m
+    labels:
+      severity: critical
+      component: system
+      team: r3mes-infra
+    annotations:
+      summary: "Critical disk usage"
+      description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+      runbook_url: "https://docs.r3mes.network/runbooks/disk-space-critical"
 
-      - alert: HighCPUUsage
-        expr: system_cpu_usage_percent > 80
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High CPU usage"
-          description: "CPU usage is {{ $value }}%"
+- name: r3mes_network_alerts
+  interval: 30s
+  rules:
+  
+  # Network and Connectivity Alerts
+  - alert: HighNetworkLatency
+    expr: probe_duration_seconds{job="blackbox"} > 1
+    for: 5m
+    labels:
+      severity: warning
+      component: network
+      team: r3mes-infra
+    annotations:
+      summary: "High network latency"
+      description: "Network latency is {{ $value }}s to {{ $labels.instance }}"
+      
+  - alert: ServiceUnavailable
+    expr: probe_success{job="blackbox"} == 0
+    for: 3m
+    labels:
+      severity: critical
+      component: network
+      team: r3mes-infra
+    annotations:
+      summary: "Service unavailable"
+      description: "Service {{ $labels.instance }} is not responding to health checks"
+      runbook_url: "https://docs.r3mes.network/runbooks/service-unavailable"
+      
+  # Redis Alerts
+  - alert: RedisDown
+    expr: up{job="redis"} == 0
+    for: 2m
+    labels:
+      severity: critical
+      component: redis
+      team: r3mes-infra
+    annotations:
+      summary: "Redis is down"
+      description: "Redis instance {{ $labels.instance }} is down"
+      
+  - alert: RedisHighMemoryUsage
+    expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+    for: 10m
+    labels:
+      severity: warning
+      component: redis
+      team: r3mes-infra
+    annotations:
+      summary: "Redis high memory usage"
+      description: "Redis memory usage is {{ $value | humanizePercentage }}"
 
-      - alert: DatabaseConnectionFailure
-        expr: database_connections_active == 0
-        for: 2m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Database connection failure"
-          description: "No active database connections"
+- name: r3mes_business_alerts
+  interval: 60s
+  rules:
+  
+  # Business Logic Alerts
+  - alert: LowActiveMiners
+    expr: count(up{job="r3mes-miner"} == 1) < 5
+    for: 15m
+    labels:
+      severity: warning
+      component: business
+      team: r3mes-core
+    annotations:
+      summary: "Low number of active miners"
+      description: "Only {{ $value }} miners are currently active"
+      
+  - alert: HighCreditConsumptionRate
+    expr: rate(credits_consumed_total[1h]) > 1000
+    for: 30m
+    labels:
+      severity: warning
+      component: business
+      team: r3mes-core
+    annotations:
+      summary: "High credit consumption rate"
+      description: "Credits are being consumed at {{ $value }} credits/hour"
+      
+  - alert: NoGradientSubmissions
+    expr: increase(gradient_submissions_total[1h]) == 0
+    for: 2h
+    labels:
+      severity: warning
+      component: business
+      team: r3mes-mining
+    annotations:
+      summary: "No gradient submissions in the last hour"
+      description: "No gradient submissions have been received for 2 hours"
+      
+  - alert: HighFailedInferences
+    expr: rate(inference_requests_total{status="failed"}[10m]) / rate(inference_requests_total[10m]) > 0.1
+    for: 15m
+    labels:
+      severity: warning
+      component: business
+      team: r3mes-core
+    annotations:
+      summary: "High inference failure rate"
+      description: "Inference failure rate is {{ $value | humanizePercentage }}"
 
-      - alert: HighInferenceLatency
-        expr: histogram_quantile(0.95, rate(model_inference_duration_seconds_bucket[5m])) > 10
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High model inference latency"
-          description: "95th percentile inference latency is {{ $value }}s"
+- name: r3mes_security_alerts
+  interval: 30s
+  rules:
+  
+  # Security Alerts
+  - alert: HighFailedAuthenticationRate
+    expr: rate(authentication_failures_total[5m]) > 10
+    for: 5m
+    labels:
+      severity: warning
+      component: security
+      team: r3mes-security
+    annotations:
+      summary: "High authentication failure rate"
+      description: "{{ $value }} authentication failures per second"
+      
+  - alert: SuspiciousAPIUsage
+    expr: rate(api_requests_total{status=~"4.."}[5m]) > 50
+    for: 10m
+    labels:
+      severity: warning
+      component: security
+      team: r3mes-security
+    annotations:
+      summary: "Suspicious API usage pattern"
+      description: "High rate of 4xx errors: {{ $value }} requests/second"
+      
+  - alert: UnauthorizedAccessAttempts
+    expr: increase(unauthorized_access_attempts_total[15m]) > 100
+    for: 5m
+    labels:
+      severity: critical
+      component: security
+      team: r3mes-security
+    annotations:
+      summary: "High number of unauthorized access attempts"
+      description: "{{ $value }} unauthorized access attempts in the last 15 minutes"
+      runbook_url: "https://docs.r3mes.network/runbooks/security-incident"
 
-      - alert: GPUOverheating
-        expr: gpu_temperature_celsius > 85
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "GPU overheating"
-          description: "GPU {{ $labels.gpu_id }} temperature is {{ $value }}°C"
-
+- name: r3mes_data_alerts
+  interval: 300s  # 5 minutes
+  rules:
+  
+  # Data Quality Alerts
+  - alert: IPFSContentUnavailable
+    expr: increase(ipfs_content_fetch_failures_total[1h]) > 10
+    for: 30m
+    labels:
+      severity: warning
+      component: ipfs
+      team: r3mes-infra
+    annotations:
+      summary: "IPFS content frequently unavailable"
+      description: "{{ $value }} IPFS content fetch failures in the last hour"
+      
+  - alert: DatabaseReplicationLag
+    expr: pg_replication_lag_seconds > 300
+    for: 10m
+    labels:
+      severity: warning
+      component: database
+      team: r3mes-infra
+    annotations:
+      summary: "Database replication lag high"
+      description: "Replication lag is {{ $value }} seconds"
+      
+  - alert: BackupFailure
+    expr: time() - backup_last_success_timestamp > 86400
+    for: 1h
+    labels:
+      severity: critical
+      component: backup
+      team: r3mes-infra
+    annotations:
+      summary: "Backup has not completed successfully"
+      description: "Last successful backup was {{ $value | humanizeDuration }} ago"
+      runbook_url: "https://docs.r3mes.network/runbooks/backup-failure"

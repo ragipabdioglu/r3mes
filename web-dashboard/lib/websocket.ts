@@ -8,9 +8,9 @@ import { logger } from './logger';
 
 export type WebSocketChannel = "miner_stats" | "training_metrics" | "network_status" | "block_updates";
 
-export interface WebSocketMessage {
+export interface WebSocketMessage<T = unknown> {
   type: string;
-  data: any;
+  data: T;
 }
 
 export class WebSocketClient {
@@ -20,7 +20,7 @@ export class WebSocketClient {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
-  private listeners: Map<string, Set<(data: any) => void>> = new Map();
+  private listeners: Map<string, Set<(data: unknown) => void>> = new Map();
 
   constructor(channel: WebSocketChannel) {
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -48,7 +48,7 @@ export class WebSocketClient {
         this.ws = new WebSocket(this.url);
 
         this.ws.onopen = () => {
-          logger.log(`WebSocket connected to ${this.channel}`);
+          logger.info(`WebSocket connected to ${this.channel}`);
           this.reconnectAttempts = 0;
           resolve();
         };
@@ -75,7 +75,7 @@ export class WebSocketClient {
         };
 
         this.ws.onclose = () => {
-          logger.log(`WebSocket disconnected from ${this.channel}`);
+          logger.info(`WebSocket disconnected from ${this.channel}`);
           this.attemptReconnect();
         };
       } catch (error) {
@@ -89,7 +89,7 @@ export class WebSocketClient {
       this.reconnectAttempts++;
       const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
       
-      logger.log(`Attempting to reconnect to ${this.channel} (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay}ms`);
+      logger.info(`Attempting to reconnect to ${this.channel} (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay}ms`);
       
       setTimeout(() => {
         this.connect().catch((error) => {
@@ -109,21 +109,21 @@ export class WebSocketClient {
     this.listeners.clear();
   }
 
-  on(messageType: string, callback: (data: any) => void): void {
+  on(messageType: string, callback: (data: unknown) => void): void {
     if (!this.listeners.has(messageType)) {
       this.listeners.set(messageType, new Set());
     }
     this.listeners.get(messageType)!.add(callback);
   }
 
-  off(messageType: string, callback: (data: any) => void): void {
+  off(messageType: string, callback: (data: unknown) => void): void {
     const callbacks = this.listeners.get(messageType);
     if (callbacks) {
       callbacks.delete(callback);
     }
   }
 
-  private notifyListeners(messageType: string, data: any): void {
+  private notifyListeners(messageType: string, data: unknown): void {
     const callbacks = this.listeners.get(messageType);
     if (callbacks) {
       callbacks.forEach((callback) => {
@@ -136,7 +136,7 @@ export class WebSocketClient {
     }
   }
 
-  send(message: any): void {
+  send(message: Record<string, unknown>): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     } else {

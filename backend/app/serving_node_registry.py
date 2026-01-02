@@ -4,6 +4,7 @@ Serving Node Registry
 Manages LoRA registry and serving node registration/status tracking.
 """
 
+import os
 import json
 import logging
 from datetime import datetime, timedelta
@@ -12,6 +13,9 @@ from typing import List, Dict, Optional, Any
 from .database_config import DatabaseConfig
 
 logger = logging.getLogger(__name__)
+
+# Configuration constants
+SERVING_NODE_MAX_AGE = int(os.getenv("SERVING_NODE_MAX_AGE", "120"))
 
 
 class ServingNodeRegistry:
@@ -449,7 +453,7 @@ class ServingNodeRegistry:
             logger.error(f"Failed to get serving nodes for LoRA {lora_name}: {e}", exc_info=True)
             return []
     
-    async def cleanup_stale_nodes(self, max_age_seconds: int = 120) -> int:
+    async def cleanup_stale_nodes(self, max_age_seconds: int = SERVING_NODE_MAX_AGE) -> int:
         """
         Remove serving nodes that haven't sent heartbeat in max_age_seconds.
         

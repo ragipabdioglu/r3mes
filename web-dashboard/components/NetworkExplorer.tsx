@@ -181,7 +181,7 @@ export default function NetworkExplorer() {
                 pointRadius="size"
                 pointResolution={2}
                 onGlobeReady={() => {
-                  logger.log("Globe ready");
+                  logger.info("Globe ready");
                 }}
               />
             ) : (

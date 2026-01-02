@@ -128,8 +128,51 @@ def cmd_start(args):
 def cmd_stop(args):
     """Stop serving node."""
     print("🛑 Stopping serving node...")
-    # TODO: Implement process management to stop running serving node
-    print("⚠️  Stop command not yet implemented. Use Ctrl+C to stop the serving node.")
+    
+    try:
+        import psutil
+        
+        # Find serving node processes
+        serving_processes = []
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline = proc.info['cmdline']
+                if cmdline and any('serving' in arg.lower() for arg in cmdline):
+                    if any('r3mes' in arg.lower() for arg in cmdline):
+                        serving_processes.append(proc)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        
+        if not serving_processes:
+            print("❌ No serving node processes found")
+            return
+        
+        # Stop processes
+        for proc in serving_processes:
+            try:
+                print(f"Stopping serving node process: PID {proc.pid}")
+                proc.terminate()
+                
+                # Wait for graceful shutdown
+                try:
+                    proc.wait(timeout=10)
+                    print(f"✅ Process {proc.pid} stopped gracefully")
+                except psutil.TimeoutExpired:
+                    # Force kill if not stopped
+                    proc.kill()
+                    print(f"⚠️  Process {proc.pid} force killed")
+                    
+            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                print(f"❌ Error stopping process {proc.pid}: {e}")
+        
+        print("✅ Serving node stop command completed")
+        
+    except ImportError:
+        print("❌ psutil not available. Install with: pip install psutil")
+        print("⚠️  Use Ctrl+C to stop the serving node manually.")
+    except Exception as e:
+        print(f"❌ Error stopping serving node: {e}")
+        print("⚠️  Use Ctrl+C to stop the serving node manually.")
 
 
 def cmd_status(args):
@@ -167,9 +210,50 @@ def cmd_register(args):
     print(f"📍 Blockchain URL: {cfg['blockchain_url']}")
     print(f"🔗 Chain ID: {cfg['chain_id']}")
     
-    # TODO: Implement blockchain registration
-    # This would use BlockchainClient.register_node with NODE_TYPE_SERVING
-    print("⚠️  Registration not yet implemented. Use blockchain client directly.")
+    try:
+        from bridge.blockchain_client import BlockchainClient
+        from bridge.crypto import derive_address_from_public_key, hex_to_private_key
+        
+        # Create blockchain client
+        blockchain_client = BlockchainClient(
+            node_url=cfg['blockchain_url'],
+            chain_id=cfg['chain_id'],
+            private_key=cfg['private_key'],
+        )
+        
+        # Get node address
+        node_address = derive_address_from_public_key(
+            hex_to_private_key(cfg['private_key']).public_key()
+        )
+        
+        print(f"🏷️  Node Address: {node_address}")
+        
+        # Register node (NODE_TYPE_SERVING = 3)
+        result = blockchain_client.register_node(
+            node_address=node_address,
+            node_type=3,  # SERVING node type
+            stake="0",    # No stake required for serving nodes
+            roles=[3],    # SERVING role
+        )
+        
+        if result.get("success", False):
+            registration_id = result.get("registration_id", 0)
+            tx_hash = result.get("tx_hash", "")
+            print(f"✅ Registration successful!")
+            print(f"📋 Registration ID: {registration_id}")
+            print(f"🔗 Transaction Hash: {tx_hash}")
+        else:
+            error = result.get("error", "Unknown error")
+            print(f"❌ Registration failed: {error}")
+            sys.exit(1)
+            
+    except ImportError as e:
+        print(f"❌ Import error: {e}")
+        print("💡 Make sure blockchain client dependencies are installed")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Registration error: {e}")
+        sys.exit(1)
 
 
 def main():

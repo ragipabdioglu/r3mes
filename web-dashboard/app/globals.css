@@ -4,6 +4,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import accessibility styles */
+@import '../styles/accessibility.css';
+
 :root {
   /* Modern Minimal Palette - Light Mode (Bittensor/Gensyn Style) */
   --bg-primary: #ffffff;           /* White background */

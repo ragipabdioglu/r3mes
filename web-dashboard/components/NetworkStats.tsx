@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import "./NetworkStats.css";
 
 interface NetworkStats {
   total_stake: string;
@@ -28,7 +27,7 @@ export default function NetworkStats() {
   });
 
   const formatStake = (stake: string) => {
-    const num = parseFloat(stake) / 1e6; // Convert from uremes to REMES
+    const num = parseFloat(stake) / 1e6;
     if (num >= 1e9) return `${(num / 1e9).toFixed(2)}B REMES`;
     if (num >= 1e6) return `${(num / 1e6).toFixed(2)}M REMES`;
     if (num >= 1e3) return `${(num / 1e3).toFixed(2)}K REMES`;
@@ -44,68 +43,42 @@ export default function NetworkStats() {
 
   if (isLoading) {
     return (
-      <div className="network-stats-container">
-        <div className="loading">Loading network stats...</div>
+      <div className="mb-8">
+        <div className="text-center py-10 text-slate-400">Loading network stats...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="network-stats-container">
-        <div className="error">Failed to load network stats. Please try again.</div>
+      <div className="mb-8">
+        <div className="text-center py-10 text-red-500">Failed to load network stats. Please try again.</div>
       </div>
     );
   }
 
   return (
-    <div className="network-stats-container">
-      <h3 className="stats-title">Network Statistics</h3>
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-label">Total Stake</div>
-          <div className="stat-value">
-            {stats ? formatStake(stats.total_stake) : "0 REMES"}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Inflation Rate</div>
-          <div className="stat-value">
-            {stats ? `${(parseFloat(stats.inflation_rate) * 100).toFixed(2)}%` : "0%"}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Model Version</div>
-          <div className="stat-value">{stats?.model_version || "N/A"}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Active Validators</div>
-          <div className="stat-value">{stats?.active_validators || 0}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Total Miners</div>
-          <div className="stat-value">{stats?.total_miners || 0}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Network Hashrate</div>
-          <div className="stat-value">
-            {stats ? formatHashrate(stats.network_hashrate) : "0 gradients/h"}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Bonded Tokens</div>
-          <div className="stat-value">
-            {stats ? formatStake(stats.bonded_tokens) : "0 REMES"}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Unbonded Tokens</div>
-          <div className="stat-value">
-            {stats ? formatStake(stats.unbonded_tokens) : "0 REMES"}
-          </div>
-        </div>
+    <div className="mb-8">
+      <h3 className="text-xl font-semibold text-slate-100 mb-5">Network Statistics</h3>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+        <StatCard label="Total Stake" value={stats ? formatStake(stats.total_stake) : "0 REMES"} />
+        <StatCard label="Inflation Rate" value={stats ? `${(parseFloat(stats.inflation_rate) * 100).toFixed(2)}%` : "0%"} />
+        <StatCard label="Model Version" value={stats?.model_version || "N/A"} />
+        <StatCard label="Active Validators" value={String(stats?.active_validators || 0)} />
+        <StatCard label="Total Miners" value={String(stats?.total_miners || 0)} />
+        <StatCard label="Network Hashrate" value={stats ? formatHashrate(stats.network_hashrate) : "0 gradients/h"} />
+        <StatCard label="Bonded Tokens" value={stats ? formatStake(stats.bonded_tokens) : "0 REMES"} />
+        <StatCard label="Unbonded Tokens" value={stats ? formatStake(stats.unbonded_tokens) : "0 REMES"} />
       </div>
     </div>
   );
 }
 
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-5 transition-all hover:border-slate-600 hover:shadow-lg hover:shadow-black/30">
+      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">{label}</div>
+      <div className="text-lg font-semibold text-slate-100">{value}</div>
+    </div>
+  );
+}

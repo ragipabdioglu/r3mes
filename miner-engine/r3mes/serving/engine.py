@@ -384,9 +384,130 @@ class ServingEngine:
             # No event loop, create new one
             return asyncio.run(self.start_async())
     
-    def stop(self):
-        """Stop serving engine."""
-        self.logger.info("Stopping serving engine...")
-        self._shutdown_requested = True
-        self.update_status(is_available=False)
+    async def _poll_and_process_requests(self):
+        """
+        Poll blockchain for new inference requests and process them.
+        
+        This method queries the blockchain for pending inference requests
+        assigned to this serving node and processes them.
+        """
+        try:
+            if not self.blockchain_client or not self.serving_node_address:
+                self.logger.warning("Blockchain client or serving node address not available")
+                return
+            
+            # Query blockchain for pending inference requests
+            pending_requests = self.blockchain_client.get_pending_inference_requests(
+                serving_node=self.serving_node_address
+            )
+            
+            if not pending_requests:
+                # No pending requests
+                return
+            
+            self.logger.info(f"Found {len(pending_requests)} pending inference requests")
+            
+            # Process each request
+            for request in pending_requests:
+                if self._shutdown_requested:
+                    break
+                
+                request_id = request.get("request_id", "")
+                input_data_ipfs_hash = request.get("input_data_ipfs_hash", "")
+                
+                if not request_id or not input_data_ipfs_hash:
+                    self.logger.warning(f"Invalid request: {request}")
+                    continue
+                
+                # Record start time for latency measurement
+                start_time = time.time()
+                
+                # Process inference request
+                result_ipfs_hash = self.process_inference_request(request_id, input_data_ipfs_hash)
+                
+                # Calculate latency
+                latency_ms = int((time.time() - start_time) * 1000)
+                
+                if result_ipfs_hash:
+                    # Submit result to blockchain
+                    self.submit_inference_result(request_id, result_ipfs_hash, latency_ms)
+                else:
+                    self.logger.error(f"Failed to process inference request: {request_id}")
+                    # Submit error result to blockchain
+                    self.submit_inference_error(request_id, "Processing failed", latency_ms)
+                
+        except Exception as e:
+            self.logger.error(f"Error polling and processing requests: {e}", exc_info=True)
+    
+    def submit_inference_error(self, request_id: str, error_message: str, latency_ms: int):
+        """
+        Submit inference error to blockchain.
+        
+        Args:
+            request_id: Inference request ID
+            error_message: Error message
+            latency_ms: Processing time before error
+        """
+        try:
+            self.logger.info(f"Submitting inference error: request_id={request_id}, error={error_message}")
+            
+            # Submit error to blockchain
+            if self.blockchain_client and self.serving_node_address:
+                result = self.blockchain_client.submit_inference_error(
+                    serving_node=self.serving_node_address,
+                    request_id=request_id,
+                    error_message=error_message,
+                    latency_ms=latency_ms,
+                )
+                if not result.get("success", False):
+                    self.logger.error(f"Failed to submit inference error to blockchain: {result.get('error', 'Unknown error')}")
+                    return False
+                self.logger.info(f"Inference error submitted to blockchain: TX {result.get('tx_hash', 'pending')}")
+                return True
+            else:
+                self.logger.warning("Blockchain client or serving node address not available, skipping blockchain submission")
+                return False
+            
+        except Exception as e:
+            self.logger.error(f"Error submitting inference error: {e}", exc_info=True)
+            return False
+
+
+def main():
+    """Main entry point for serving engine."""
+    parser = argparse.ArgumentParser(description="R3MES Serving Engine")
+    parser.add_argument("--private-key", required=True, help="Private key for blockchain transactions")
+    parser.add_argument("--blockchain-url", default="localhost:9090", help="Blockchain gRPC URL")
+    parser.add_argument("--chain-id", default="remes-test", help="Chain ID")
+    parser.add_argument("--model-ipfs-hash", help="IPFS hash of model to load")
+    parser.add_argument("--model-version", default="v1.0.0", help="Model version")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Log level")
+    parser.add_argument("--json-logs", action="store_true", help="Use JSON-formatted logs")
+    
+    args = parser.parse_args()
+    
+    try:
+        # Create and start serving engine
+        engine = ServingEngine(
+            private_key=args.private_key,
+            blockchain_url=args.blockchain_url,
+            chain_id=args.chain_id,
+            model_ipfs_hash=args.model_ipfs_hash,
+            model_version=args.model_version,
+            log_level=args.log_level,
+            use_json_logs=args.json_logs,
+        )
+        
+        # Start serving (blocking)
+        engine.start()
+        
+    except KeyboardInterrupt:
+        print("\nShutdown requested by user")
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
 

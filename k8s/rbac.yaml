@@ -1,0 +1,228 @@
+# R3MES Kubernetes RBAC Configuration
+# Production-ready Role-Based Access Control
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: r3mes
+  labels:
+    name: r3mes
+    app.kubernetes.io/name: r3mes
+    app.kubernetes.io/version: "1.0.0"
+
+---
+# Service Account for Backend
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: r3mes-backend
+  namespace: r3mes
+  labels:
+    app.kubernetes.io/name: r3mes
+    app.kubernetes.io/component: backend
+
+---
+# Service Account for Blockchain Node
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: r3mes-blockchain
+  namespace: r3mes
+  labels:
+    app.kubernetes.io/name: r3mes
+    app.kubernetes.io/component: blockchain
+
+---
+# Service Account for Miner Engine
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: r3mes-miner
+  namespace: r3mes
+  labels:
+    app.kubernetes.io/name: r3mes
+    app.kubernetes.io/component: miner
+
+---
+# Service Account for Monitoring
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: r3mes-monitoring
+  namespace: r3mes
+  labels:
+    app.kubernetes.io/name: r3mes
+    app.kubernetes.io/component: monitoring
+
+---
+# Role for Backend - Limited permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: r3mes-backend
+  namespace: r3mes
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+  resourceNames: ["r3mes-secrets", "database-secrets", "jwt-secrets"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+  resourceNames: ["r3mes-config"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list"]
+
+---
+# Role for Blockchain Node
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: r3mes-blockchain
+  namespace: r3mes
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+  resourceNames: ["blockchain-secrets", "validator-key"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+  resourceNames: ["blockchain-config"]
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list"]
+
+---
+# Role for Miner Engine
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: r3mes-miner
+  namespace: r3mes
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+  resourceNames: ["miner-secrets"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+  resourceNames: ["miner-config"]
+
+---
+# Role for Monitoring - Read-only access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: r3mes-monitoring
+  namespace: r3mes
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+
+---
+# RoleBinding for Backend
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: r3mes-backend
+  namespace: r3mes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: r3mes-backend
+subjects:
+- kind: ServiceAccount
+  name: r3mes-backend
+  namespace: r3mes
+
+---
+# RoleBinding for Blockchain
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: r3mes-blockchain
+  namespace: r3mes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: r3mes-blockchain
+subjects:
+- kind: ServiceAccount
+  name: r3mes-blockchain
+  namespace: r3mes
+
+---
+# RoleBinding for Miner
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: r3mes-miner
+  namespace: r3mes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: r3mes-miner
+subjects:
+- kind: ServiceAccount
+  name: r3mes-miner
+  namespace: r3mes
+
+---
+# RoleBinding for Monitoring
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: r3mes-monitoring
+  namespace: r3mes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: r3mes-monitoring
+subjects:
+- kind: ServiceAccount
+  name: r3mes-monitoring
+  namespace: r3mes
+
+---
+# ClusterRole for Monitoring (cross-namespace access)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: r3mes-monitoring-cluster
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "nodes/metrics", "services", "endpoints", "pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+
+---
+# ClusterRoleBinding for Monitoring
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: r3mes-monitoring-cluster
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: r3mes-monitoring-cluster
+subjects:
+- kind: ServiceAccount
+  name: r3mes-monitoring
+  namespace: r3mes

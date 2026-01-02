@@ -15,6 +15,7 @@ mod installer;
 mod engine_downloader;
 mod config;
 mod websocket_client;
+mod debug;
 
 use commands::*;
 use tauri::{Manager, SystemTray, SystemTrayEvent, SystemTrayMenu, WindowEvent};
@@ -103,7 +104,14 @@ fn main() {
             register_node_roles,
             get_config,
             save_config,
-            reset_config_to_defaults
+            reset_config_to_defaults,
+            check_setup_status,
+            get_setup_steps,
+            validate_component,
+            get_setup_progress,
+            collect_debug_info,
+            export_debug_info,
+            get_troubleshooting_recommendations
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

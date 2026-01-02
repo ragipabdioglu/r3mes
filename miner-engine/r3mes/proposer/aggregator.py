@@ -400,10 +400,25 @@ class ProposerAggregator:
             gradient_hashes = []
             
             for grad_id in gradient_ids:
-                # TODO: Get gradient IPFS hash from blockchain query
-                # For now, placeholder
-                self.logger.warning(f"Gradient {grad_id} IPFS hash lookup not implemented")
-                continue
+                # Get gradient IPFS hash from blockchain query
+                gradient_info = self.blockchain_client.get_stored_gradient_by_id(grad_id)
+                if not gradient_info:
+                    self.logger.warning(f"Failed to get gradient info for ID {grad_id}")
+                    continue
+                
+                gradient_ipfs_hash = gradient_info.get('gradient_ipfs_hash', '')
+                if not gradient_ipfs_hash:
+                    self.logger.warning(f"No IPFS hash for gradient ID {grad_id}")
+                    continue
+                
+                # Download gradient data
+                gradient_data = self.download_gradient(gradient_ipfs_hash)
+                if gradient_data:
+                    gradients_data.append(gradient_data)
+                    gradient_hashes.append(gradient_ipfs_hash)
+                    self.logger.debug(f"Downloaded gradient {grad_id}: {len(gradient_data)} bytes")
+                else:
+                    self.logger.warning(f"Failed to download gradient {grad_id} from IPFS: {gradient_ipfs_hash}")
             
             if not gradients_data:
                 self.logger.error("No gradients downloaded")
@@ -448,3 +463,59 @@ class ProposerAggregator:
             self.logger.error(f"Error in aggregation workflow: {e}", exc_info=True)
             return False
 
+
+def main():
+    """Main entry point for proposer aggregator."""
+    import argparse
+    import sys
+    
+    parser = argparse.ArgumentParser(description="R3MES Proposer Aggregator")
+    parser.add_argument("--private-key", required=True, help="Private key for blockchain transactions")
+    parser.add_argument("--blockchain-url", default="localhost:9090", help="Blockchain gRPC URL")
+    parser.add_argument("--chain-id", default="remes-test", help="Chain ID")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Log level")
+    parser.add_argument("--json-logs", action="store_true", help="Use JSON-formatted logs")
+    parser.add_argument("--training-round-id", type=int, default=1, help="Training round ID to aggregate")
+    parser.add_argument("--limit", type=int, default=100, help="Maximum number of gradients to query")
+    
+    args = parser.parse_args()
+    
+    try:
+        # Create proposer aggregator
+        aggregator = ProposerAggregator(
+            private_key=args.private_key,
+            blockchain_url=args.blockchain_url,
+            chain_id=args.chain_id,
+            log_level=args.log_level,
+            use_json_logs=args.json_logs,
+        )
+        
+        # Query pending gradients
+        pending_gradients = aggregator.query_pending_gradients(limit=args.limit)
+        if not pending_gradients:
+            print("No pending gradients found")
+            return
+        
+        print(f"Found {len(pending_gradients)} pending gradients")
+        
+        # Extract gradient IDs
+        gradient_ids = [grad['id'] for grad in pending_gradients]
+        
+        # Run aggregation workflow
+        success = aggregator.aggregate_and_submit(gradient_ids, args.training_round_id)
+        
+        if success:
+            print("Aggregation completed successfully")
+        else:
+            print("Aggregation failed")
+            sys.exit(1)
+        
+    except KeyboardInterrupt:
+        print("\nShutdown requested by user")
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,7 +1,8 @@
 """
 Configuration Manager - Centralized configuration management
 
-Manages application settings with environment variable support and UI-configurable options.
+Manages application settings with environment variable support, UI-configurable options,
+and HashiCorp Vault integration for secure secrets management.
 """
 
 import os
@@ -96,8 +97,9 @@ class ConfigManager:
     
     Loads configuration from:
     1. Environment variables (highest priority)
-    2. Config file (~/.r3mes/config.json)
-    3. Default values
+    2. HashiCorp Vault (production secrets)
+    3. Config file (~/.r3mes/config.json)
+    4. Default values
     """
     
     def __init__(self, config_file: Optional[str] = None):
@@ -133,6 +135,70 @@ class ConfigManager:
         else:
             self.config_file = None
         self._config: Optional[AppConfig] = None
+        self._vault_client = None
+    
+    async def _get_vault_client(self):
+        """Get or create Vault client for secure configuration."""
+        if self._vault_client is None:
+            # Only initialize Vault in production or when explicitly configured
+            vault_addr = os.getenv("VAULT_ADDR")
+            if vault_addr:
+                try:
+                    from .vault_client import get_vault_client
+                    self._vault_client = get_vault_client()
+                    await self._vault_client.initialize()
+                    logger.info("✅ Vault client initialized for configuration")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize Vault client: {e}")
+                    self._vault_client = None
+        return self._vault_client
+    
+    async def _load_from_vault(self, config: AppConfig) -> AppConfig:
+        """Load sensitive configuration from Vault."""
+        vault_client = await self._get_vault_client()
+        if not vault_client:
+            return config
+        
+        try:
+            # Load database configuration from Vault
+            try:
+                db_config = await vault_client.get_secret("database")
+                if isinstance(db_config, dict):
+                    # Build database URL from Vault secrets
+                    db_user = db_config.get("user", "r3mes")
+                    db_password = db_config.get("password")
+                    db_host = db_config.get("host", "localhost")
+                    db_port = db_config.get("port", "5432")
+                    db_name = db_config.get("database", "r3mes")
+                    
+                    if db_password:
+                        # Override database path with PostgreSQL URL from Vault
+                        config.database_path = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+                        logger.info("✅ Database configuration loaded from Vault")
+            except Exception as e:
+                logger.debug(f"Database config not found in Vault: {e}")
+            
+            # Load blockchain configuration from Vault
+            try:
+                blockchain_config = await vault_client.get_secret("blockchain")
+                if isinstance(blockchain_config, dict):
+                    rpc_url = blockchain_config.get("rpc_url")
+                    grpc_url = blockchain_config.get("grpc_url")
+                    
+                    if rpc_url:
+                        config.blockchain_rpc_url = rpc_url
+                        logger.info("✅ Blockchain RPC URL loaded from Vault")
+                    
+                    if grpc_url:
+                        config.blockchain_grpc_url = grpc_url
+                        logger.info("✅ Blockchain gRPC URL loaded from Vault")
+            except Exception as e:
+                logger.debug(f"Blockchain config not found in Vault: {e}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to load configuration from Vault: {e}")
+        
+        return config
     
     def load(self) -> AppConfig:
         """Load configuration from file and environment."""
@@ -257,6 +323,17 @@ class ConfigManager:
         # Feature flags
         config.auto_start_mining = os.getenv("AUTO_START_MINING", "false").lower() == "true"
         config.enable_notifications = os.getenv("ENABLE_NOTIFICATIONS", "true").lower() != "false"
+        
+        self._config = config
+        return config
+    
+    async def load_async(self) -> AppConfig:
+        """Load configuration asynchronously with Vault support."""
+        # Load basic configuration first
+        config = self.load()
+        
+        # Load sensitive configuration from Vault if available
+        config = await self._load_from_vault(config)
         
         self._config = config
         return config

@@ -1,468 +1,471 @@
+#!/usr/bin/env python3
 """
-Task Pool Client for Open Buffet / Asenkron İş Havuzu
+R3MES Task Pool Client
 
-Implements prefetching and task claiming for variable-speed mining.
-RTX 4090 can claim 20 tasks while GTX 1650 claims 1 task.
-
-FAZ 5 Integration: Blind delivery support for trap jobs.
+Production-ready task pool client that:
+1. Queries available tasks from blockchain
+2. Claims tasks for processing
+3. Downloads task data from IPFS
+4. Manages task lifecycle
+5. Submits task completion to blockchain
 """
 
-from typing import List, Optional, Dict, Any
-import os
-import time
 import logging
-import json
-import pickle
-import torch
+import time
+from typing import List, Dict, Any, Optional
+from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from r3mes.utils.logger import setup_logger
+from r3mes.utils.ipfs_manager import IPFSClient
+from bridge.blockchain_client import BlockchainClient
 
 
 class TaskPoolClient:
-    """
-    Client for interacting with Task Pool system.
+    """Task pool client for miners."""
     
-    Features:
-    - Prefetching: Claim multiple tasks ahead of time
-    - Variable Speed: Fast GPUs can claim more tasks
-    - Async Processing: Process tasks independently of block time
-    - Blind Delivery: Trap jobs mixed with real tasks (FAZ 5)
-    """
-    
-    def __init__(self, grpc_client, max_prefetch: int = 5):
+    def __init__(
+        self,
+        blockchain_client: BlockchainClient,
+        ipfs_client: Optional[IPFSClient] = None,
+        miner_address: Optional[str] = None,
+        log_level: str = "INFO",
+        use_json_logs: bool = False,
+    ):
         """
-        Initialize Task Pool Client.
+        Initialize task pool client.
         
         Args:
-            grpc_client: gRPC client for blockchain communication
-            max_prefetch: Maximum number of tasks to prefetch (default: 5)
+            blockchain_client: Blockchain client instance
+            ipfs_client: IPFS client instance (optional, will create if not provided)
+            miner_address: Miner's blockchain address
+            log_level: Logging level (DEBUG, INFO, WARNING, ERROR)
+            use_json_logs: Whether to use JSON-formatted logs
         """
-        self.grpc_client = grpc_client
-        self.prefetch_queue: List[Dict[str, Any]] = []
-        self.max_prefetch = max_prefetch
-        self.current_pool_id: Optional[int] = None
-        self.claimed_tasks: Dict[int, Dict[str, Any]] = {}  # chunk_id -> task info
+        # Setup logger
+        log_level_map = {
+            "DEBUG": 10,
+            "INFO": 20,
+            "WARNING": 30,
+            "ERROR": 40,
+        }
+        self.logger = setup_logger(
+            "r3mes.task_pool",
+            level=log_level_map.get(log_level.upper(), logging.INFO),
+            use_json=use_json_logs,
+        )
         
-        # Blind delivery support (FAZ 5)
-        self._trap_mapping: Dict[int, str] = {}  # chunk_id -> vault_entry_id
-        self._blind_delivery_enabled = os.getenv("R3MES_BLIND_DELIVERY", "true").lower() == "true"
+        self.blockchain_client = blockchain_client
+        self.ipfs_client = ipfs_client or IPFSClient()
+        self.miner_address = miner_address
+        
+        # Task management
+        self.claimed_tasks = {}  # task_id -> task_info
+        self.completed_tasks = set()  # Set of completed task IDs
+        
+        self.logger.info("Task pool client initialized")
     
-    def get_active_pool(self) -> Optional[int]:
+    def get_active_pool_id(self) -> Optional[int]:
         """
-        Get the active task pool ID from blockchain.
+        Get the currently active task pool ID.
         
         Returns:
-            Pool ID if available, None otherwise
+            Active pool ID, or None if no active pool
         """
         try:
-            if self.grpc_client and hasattr(self.grpc_client, 'get_active_pool'):
-                # Query blockchain for active pool using gRPC query
-                active_pool_id = self.grpc_client.get_active_pool()
-                if active_pool_id:
-                    # Update current pool ID cache
-                    self.current_pool_id = active_pool_id
-                    return active_pool_id
-            
-            # Fallback: use current pool ID if set
-            if self.current_pool_id:
-                return self.current_pool_id
-            
-            # No active pool found
-            return None
+            pool_id = self.blockchain_client.get_active_pool()
+            if pool_id is not None:
+                self.logger.info(f"Active pool ID: {pool_id}")
+            else:
+                self.logger.warning("No active pool found")
+            return pool_id
         except Exception as e:
-            logger.error(f"Failed to get active pool: {e}", exc_info=True)
-            # Return cached pool ID as fallback
-            return self.current_pool_id
+            self.logger.error(f"Error getting active pool ID: {e}", exc_info=True)
+            return None
     
-    def claim_and_prefetch_tasks(self, pool_id: int, count: int = 1) -> List[Dict[str, Any]]:
+    def get_available_chunks(self, pool_id: int, limit: int = 50) -> List[Dict[str, Any]]:
         """
-        Claim current task(s) and prefetch next tasks.
+        Get available chunks from a task pool.
         
         Args:
             pool_id: Task pool ID
-            count: Number of tasks to claim (1 for slow GPUs, 20 for fast GPUs)
+            limit: Maximum number of chunks to return
             
         Returns:
-            List of claimed tasks
-        """
-        claimed_tasks = []
-        
-        # Claim tasks
-        for _ in range(count):
-            task = self._claim_task(pool_id)
-            if task:
-                claimed_tasks.append(task)
-                self.claimed_tasks[task["chunk_id"]] = task
-        
-        # Prefetch additional tasks
-        for _ in range(self.max_prefetch):
-            task = self._claim_task(pool_id)
-            if task:
-                self.prefetch_queue.append(task)
-        
-        return claimed_tasks
-    
-    def _claim_task(self, pool_id: int) -> Optional[Dict[str, Any]]:
-        """
-        Claim a single task from the pool.
-        
-        Args:
-            pool_id: Task pool ID
-            
-        Returns:
-            Task info if available, None otherwise
+            List of available chunks with chunk_id, data_hash, shard_id
         """
         try:
-            if self.grpc_client and hasattr(self.grpc_client, 'send_claim_task'):
-                # Use gRPC transaction to claim task
-                # Get available chunks first
-                claim_limit = int(os.getenv("R3MES_TASK_POOL_CLAIM_LIMIT", "1"))
-                available_chunks = self.grpc_client.get_available_chunks(pool_id, limit=claim_limit)
-                if not available_chunks:
+            self.logger.debug(f"Querying available chunks from pool {pool_id} (limit: {limit})")
+            
+            chunks = self.blockchain_client.get_available_chunks(pool_id, limit)
+            
+            if chunks:
+                self.logger.info(f"Found {len(chunks)} available chunks in pool {pool_id}")
+            else:
+                self.logger.debug(f"No available chunks in pool {pool_id}")
+            
+            return chunks
+        except Exception as e:
+            self.logger.error(f"Error getting available chunks: {e}", exc_info=True)
+            return []
+    
+    def claim_task(self, pool_id: int, chunk_id: int) -> bool:
+        """
+        Claim a task for processing.
+        
+        Args:
+            pool_id: Task pool ID
+            chunk_id: Chunk ID to claim
+            
+        Returns:
+            True if task claimed successfully
+        """
+        try:
+            if not self.miner_address:
+                self.logger.error("Miner address not set, cannot claim task")
+                return False
+            
+            self.logger.info(f"Claiming task: pool={pool_id}, chunk={chunk_id}")
+            
+            # Send claim transaction to blockchain
+            result = self.blockchain_client.send_claim_task(
+                miner=self.miner_address,
+                pool_id=pool_id,
+                chunk_id=chunk_id,
+            )
+            
+            if result.get("success", False):
+                # Track claimed task
+                task_key = f"{pool_id}_{chunk_id}"
+                self.claimed_tasks[task_key] = {
+                    "pool_id": pool_id,
+                    "chunk_id": chunk_id,
+                    "claimed_at": time.time(),
+                    "tx_hash": result.get("tx_hash", ""),
+                }
+                
+                self.logger.info(f"Task claimed successfully: {task_key}, TX: {result.get('tx_hash', 'pending')}")
+                return True
+            else:
+                self.logger.error(f"Failed to claim task: {result.get('error', 'Unknown error')}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error claiming task: {e}", exc_info=True)
+            return False
+    
+    def download_chunk_data(self, data_hash: str, output_dir: str = "task_data") -> Optional[str]:
+        """
+        Download chunk data from IPFS.
+        
+        Args:
+            data_hash: IPFS hash of chunk data
+            output_dir: Output directory for downloaded data
+            
+        Returns:
+            Path to downloaded file, or None if failed
+        """
+        try:
+            self.logger.debug(f"Downloading chunk data from IPFS: {data_hash}")
+            
+            # Download from IPFS
+            file_path = self.ipfs_client.get(data_hash, output_dir=output_dir)
+            
+            if file_path:
+                self.logger.debug(f"Chunk data downloaded: {file_path}")
+                return file_path
+            else:
+                self.logger.error(f"Failed to download chunk data: {data_hash}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error downloading chunk data: {e}", exc_info=True)
+            return None
+    
+    def load_chunk_data(self, file_path: str) -> Optional[Any]:
+        """
+        Load chunk data from file.
+        
+        Args:
+            file_path: Path to chunk data file
+            
+        Returns:
+            Loaded data, or None if failed
+        """
+        try:
+            self.logger.debug(f"Loading chunk data from: {file_path}")
+            
+            # Determine file format and load accordingly
+            file_path = Path(file_path)
+            
+            if file_path.suffix.lower() == '.json':
+                # JSON format
+                import json
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    
+            elif file_path.suffix.lower() in ['.pkl', '.pickle']:
+                # Pickle format
+                import pickle
+                with open(file_path, 'rb') as f:
+                    data = pickle.load(f)
+                    
+            elif file_path.suffix.lower() in ['.txt', '.text']:
+                # Text format
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = f.read()
+                    
+            elif file_path.suffix.lower() in ['.pt', '.pth']:
+                # PyTorch tensor format
+                import torch
+                data = torch.load(file_path, map_location='cpu')
+                
+            else:
+                # Binary format (fallback)
+                with open(file_path, 'rb') as f:
+                    data = f.read()
+            
+            self.logger.debug(f"Chunk data loaded: {type(data)}")
+            return data
+            
+        except Exception as e:
+            self.logger.error(f"Error loading chunk data: {e}", exc_info=True)
+            return None
+    
+    def complete_task(
+        self,
+        pool_id: int,
+        chunk_id: int,
+        gradient_hash: str,
+        gradient_ipfs_hash: str = "",
+        miner_gpu: str = "",
+    ) -> bool:
+        """
+        Mark task as completed and submit to blockchain.
+        
+        Args:
+            pool_id: Task pool ID
+            chunk_id: Chunk ID
+            gradient_hash: Deterministic hash of gradient result
+            gradient_ipfs_hash: IPFS hash of gradient data (optional)
+            miner_gpu: GPU architecture used (optional)
+            
+        Returns:
+            True if task completed successfully
+        """
+        try:
+            if not self.miner_address:
+                self.logger.error("Miner address not set, cannot complete task")
+                return False
+            
+            task_key = f"{pool_id}_{chunk_id}"
+            
+            # Check if task was claimed by this miner
+            if task_key not in self.claimed_tasks:
+                self.logger.warning(f"Task not claimed by this miner: {task_key}")
+                # Continue anyway - task might have been claimed in previous session
+            
+            self.logger.info(f"Completing task: {task_key}")
+            
+            # Send complete transaction to blockchain
+            result = self.blockchain_client.send_complete_task(
+                miner=self.miner_address,
+                pool_id=pool_id,
+                chunk_id=chunk_id,
+                gradient_hash=gradient_hash,
+                gradient_ipfs_hash=gradient_ipfs_hash,
+                miner_gpu=miner_gpu,
+            )
+            
+            if result.get("success", False):
+                # Track completed task
+                self.completed_tasks.add(task_key)
+                
+                # Remove from claimed tasks
+                if task_key in self.claimed_tasks:
+                    del self.claimed_tasks[task_key]
+                
+                self.logger.info(f"Task completed successfully: {task_key}, TX: {result.get('tx_hash', 'pending')}")
+                return True
+            else:
+                self.logger.error(f"Failed to complete task: {result.get('error', 'Unknown error')}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error completing task: {e}", exc_info=True)
+            return False
+    
+    def get_claimed_tasks(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get currently claimed tasks.
+        
+        Returns:
+            Dictionary of claimed tasks (task_key -> task_info)
+        """
+        return self.claimed_tasks.copy()
+    
+    def get_completed_tasks(self) -> set:
+        """
+        Get completed task IDs.
+        
+        Returns:
+            Set of completed task keys
+        """
+        return self.completed_tasks.copy()
+    
+    def cleanup_expired_claims(self, max_age_seconds: int = 3600):
+        """
+        Clean up expired task claims.
+        
+        Args:
+            max_age_seconds: Maximum age for task claims (default: 1 hour)
+        """
+        try:
+            current_time = time.time()
+            expired_tasks = []
+            
+            for task_key, task_info in self.claimed_tasks.items():
+                claimed_at = task_info.get("claimed_at", 0)
+                age = current_time - claimed_at
+                
+                if age > max_age_seconds:
+                    expired_tasks.append(task_key)
+            
+            if expired_tasks:
+                self.logger.info(f"Cleaning up {len(expired_tasks)} expired task claims")
+                for task_key in expired_tasks:
+                    del self.claimed_tasks[task_key]
+            
+        except Exception as e:
+            self.logger.error(f"Error cleaning up expired claims: {e}", exc_info=True)
+    
+    def find_and_claim_task(self, pool_id: Optional[int] = None, limit: int = 50) -> Optional[Dict[str, Any]]:
+        """
+        Find and claim an available task.
+        
+        Args:
+            pool_id: Specific pool ID to search (optional, will use active pool if not provided)
+            limit: Maximum number of chunks to query
+            
+        Returns:
+            Claimed task info, or None if no tasks available
+        """
+        try:
+            # Get pool ID
+            if pool_id is None:
+                pool_id = self.get_active_pool_id()
+                if pool_id is None:
+                    self.logger.warning("No active pool found")
                     return None
-                
-                chunk = available_chunks[0]
-                
-                # Handle both dict and list return types from get_available_chunks
-                if isinstance(chunk, dict):
-                    chunk_id = chunk.get("chunk_id")
-                    data_hash = chunk.get("data_hash")
-                    shard_id = chunk.get("shard_id")
-                else:
-                    # If it's a proto object, use attributes
-                    chunk_id = getattr(chunk, 'chunk_id', None)
-                    data_hash = getattr(chunk, 'data_hash', '')
-                    shard_id = getattr(chunk, 'shard_id', 0)
+            
+            # Get available chunks
+            chunks = self.get_available_chunks(pool_id, limit)
+            if not chunks:
+                self.logger.debug(f"No available chunks in pool {pool_id}")
+                return None
+            
+            # Try to claim first available chunk
+            for chunk in chunks:
+                chunk_id = chunk.get("chunk_id")
+                data_hash = chunk.get("data_hash", "")
+                shard_id = chunk.get("shard_id", 0)
                 
                 if chunk_id is None:
-                    logger.warning("Invalid chunk data: missing chunk_id")
-                    return None
+                    continue
                 
-                # Send ClaimTask transaction
-                miner_address = self.grpc_client.get_miner_address()
-                result = self.grpc_client.send_claim_task(
-                    miner=miner_address,
-                    pool_id=pool_id,
-                    chunk_id=chunk_id
-                )
-                
-                # Handle both bool (old) and dict (new) return types
-                if isinstance(result, dict):
-                    success = result.get("success", False)
-                else:
-                    success = bool(result)
-                
-                if success:
+                # Attempt to claim task
+                if self.claim_task(pool_id, chunk_id):
                     return {
+                        "pool_id": pool_id,
                         "chunk_id": chunk_id,
                         "data_hash": data_hash,
                         "shard_id": shard_id,
-                        "pool_id": pool_id,
                     }
-                else:
-                    error_msg = result.get("error", "Unknown error") if isinstance(result, dict) else "Failed to claim task"
-                    logger.warning(f"Failed to claim task chunk {chunk_id}: {error_msg}")
-                    return None
-            else:
-                # gRPC client not available, return None
-                logger.warning("gRPC client not available for task claiming")
-                return None
+            
+            self.logger.debug(f"Failed to claim any tasks from pool {pool_id}")
+            return None
+            
         except Exception as e:
-            logger.error(f"Failed to claim task: {e}")
+            self.logger.error(f"Error finding and claiming task: {e}", exc_info=True)
             return None
     
-    def get_next_task(self) -> Optional[Dict[str, Any]]:
-        """
-        Get next task from prefetch queue or claim new one.
-        
-        Returns:
-            Task info if available, None otherwise
-        """
-        if self.prefetch_queue:
-            return self.prefetch_queue.pop(0)
-        
-        if self.current_pool_id:
-            tasks = self.claim_and_prefetch_tasks(self.current_pool_id, count=1)
-            if tasks:
-                return tasks[0]
-        
-        return None
-    
-    def complete_task(self, chunk_id: int, gradient_hash: str) -> bool:
-        """
-        Mark a task as completed.
-        
-        Args:
-            chunk_id: Chunk ID of completed task
-            gradient_hash: IPFS hash of gradient result
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        if chunk_id not in self.claimed_tasks:
-            logger.warning(f"Task {chunk_id} not found in claimed tasks")
-            return False
-        
-        task = self.claimed_tasks[chunk_id]
-        pool_id = task["pool_id"]
-        
-        try:
-            if self.grpc_client and hasattr(self.grpc_client, 'send_complete_task'):
-                # Use gRPC transaction to complete task
-                miner_address = self.grpc_client.get_miner_address()
-                result = self.grpc_client.send_complete_task(
-                    miner=miner_address,
-                    pool_id=pool_id,
-                    chunk_id=chunk_id,
-                    gradient_hash=gradient_hash
-                )
-                
-                # Handle both bool (old) and dict (new) return types
-                if isinstance(result, dict):
-                    success = result.get("success", False)
-                else:
-                    success = bool(result)
-                
-                if success:
-                    del self.claimed_tasks[chunk_id]
-                    tx_hash = result.get("tx_hash", "unknown") if isinstance(result, dict) else None
-                    logger.info(f"Task {chunk_id} completed (gradient: {gradient_hash[:16]}..., tx: {tx_hash})")
-                    return True
-                else:
-                    error_msg = result.get("error", "Unknown error") if isinstance(result, dict) else "Failed to complete task"
-                    logger.error(f"Failed to complete task {chunk_id}: {error_msg}")
-                    return False
-            else:
-                # gRPC client not available, just remove from local cache
-                logger.warning("gRPC client not available, removing task from local cache only")
-                del self.claimed_tasks[chunk_id]
-                return True
-        except Exception as e:
-            logger.error(f"Failed to complete task {chunk_id}: {e}")
-            return False
-    
-    def get_available_tasks_count(self, pool_id: int) -> int:
-        """
-        Get count of available tasks in pool.
-        
-        Args:
-            pool_id: Task pool ID
-            
-        Returns:
-            Number of available tasks
-        """
-        try:
-            if self.grpc_client and hasattr(self.grpc_client, 'get_available_chunks'):
-                # Query blockchain for available chunks
-                query_limit = int(os.getenv("R3MES_TASK_POOL_QUERY_LIMIT", "1000"))
-                available_chunks = self.grpc_client.get_available_chunks(pool_id, limit=query_limit)
-                return len(available_chunks) if available_chunks else 0
-            else:
-                # gRPC client not available
-                logger.warning("gRPC client not available for available tasks count")
-                return 0
-        except Exception as e:
-            logger.error(f"Failed to get available tasks count: {e}")
-            return 0
-    
-    def set_pool_id(self, pool_id: int):
-        """Set the current active pool ID."""
-        self.current_pool_id = pool_id
-    
-    def download_chunk_data(self, data_hash: str, ipfs_client) -> Optional[Dict[str, Any]]:
-        """
-        Download chunk data from IPFS using data_hash.
-        
-        Args:
-            data_hash: IPFS hash of chunk data (or data hash that maps to IPFS)
-            ipfs_client: IPFSClient instance for downloading
-            
-        Returns:
-            Chunk data dictionary with 'input_ids' and 'labels', or None if failed
-        """
-        if not ipfs_client:
-            logger.error("IPFS client not provided for chunk data download")
-            return None
-        
-        if not ipfs_client.is_connected():
-            logger.error("IPFS client not connected - cannot download chunk data")
-            return None
-        
-        try:
-            logger.info(f"Downloading chunk data from IPFS: {data_hash}")
-            
-            # Retrieve content from IPFS
-            # data_hash is the IPFS CID
-            content = ipfs_client.retrieve_content(data_hash)
-            
-            if content is None:
-                logger.error(f"Failed to retrieve chunk data from IPFS: {data_hash}")
-                return None
-            
-            # Try to parse as JSON first (structured data)
-            try:
-                chunk_data = json.loads(content)
-                logger.info("Chunk data parsed as JSON")
-                
-                # Convert to torch tensors if needed
-                if "input_ids" in chunk_data:
-                    if isinstance(chunk_data["input_ids"], list):
-                        chunk_data["input_ids"] = torch.tensor(chunk_data["input_ids"], dtype=torch.long)
-                    elif not isinstance(chunk_data["input_ids"], torch.Tensor):
-                        # Try to convert numpy array
-                        import numpy as np
-                        if isinstance(chunk_data["input_ids"], np.ndarray):
-                            chunk_data["input_ids"] = torch.from_numpy(chunk_data["input_ids"]).long()
-                
-                if "labels" in chunk_data:
-                    if isinstance(chunk_data["labels"], list):
-                        chunk_data["labels"] = torch.tensor(chunk_data["labels"], dtype=torch.long)
-                    elif not isinstance(chunk_data["labels"], torch.Tensor):
-                        import numpy as np
-                        if isinstance(chunk_data["labels"], np.ndarray):
-                            chunk_data["labels"] = torch.from_numpy(chunk_data["labels"]).long()
-                else:
-                    # Default labels to input_ids if not provided
-                    chunk_data["labels"] = chunk_data.get("input_ids", chunk_data["input_ids"])
-                
-                logger.info(f"Successfully downloaded and parsed chunk data from IPFS")
-                return chunk_data
-                
-            except json.JSONDecodeError:
-                # Try pickle deserialization (for binary data)
-                try:
-                    chunk_data = pickle.loads(content)
-                    logger.info("Chunk data parsed as pickle")
-                    
-                    # Ensure tensors are torch tensors
-                    if isinstance(chunk_data, dict):
-                        if "input_ids" in chunk_data and not isinstance(chunk_data["input_ids"], torch.Tensor):
-                            chunk_data["input_ids"] = torch.tensor(chunk_data["input_ids"], dtype=torch.long)
-                        if "labels" in chunk_data and not isinstance(chunk_data["labels"], torch.Tensor):
-                            chunk_data["labels"] = torch.tensor(chunk_data["labels"], dtype=torch.long)
-                        elif "labels" not in chunk_data:
-                            chunk_data["labels"] = chunk_data.get("input_ids")
-                    
-                    logger.info(f"Successfully downloaded and parsed chunk data from IPFS (pickle)")
-                    return chunk_data
-                except Exception as e:
-                    logger.error(f"Failed to parse chunk data (neither JSON nor pickle): {e}")
-                    return None
-                    
-        except Exception as e:
-            logger.error(f"Error downloading chunk data from IPFS: {e}", exc_info=True)
-            return None
-    
-    # =========================================================================
-    # BLIND DELIVERY SUPPORT (FAZ 5)
-    # =========================================================================
-    
-    def get_tasks_with_blind_delivery(
+    def process_task_workflow(
         self,
-        pool_id: int,
-        count: int = 1,
-    ) -> List[Dict[str, Any]]:
+        task_info: Dict[str, Any],
+        process_function: callable,
+        upload_result: bool = True,
+    ) -> bool:
         """
-        Get tasks with blind trap injection.
-        
-        Tasks are returned with trap jobs mixed in. The miner cannot
-        distinguish trap jobs from real tasks.
+        Complete task processing workflow.
         
         Args:
-            pool_id: Task pool ID
-            count: Number of tasks to claim
-        
+            task_info: Task information from find_and_claim_task
+            process_function: Function to process chunk data (should return gradient_hash, gradient_data)
+            upload_result: Whether to upload result to IPFS
+            
         Returns:
-            List of tasks (may include hidden traps)
+            True if workflow completed successfully
         """
-        if not self._blind_delivery_enabled:
-            return self.claim_and_prefetch_tasks(pool_id, count)
-        
         try:
-            from core.trap_jobs import BlindDeliveryMixer, GenesisVaultManager
-            from core.types import TaskChunk, TaskStatus
+            pool_id = task_info["pool_id"]
+            chunk_id = task_info["chunk_id"]
+            data_hash = task_info["data_hash"]
             
-            # Load Genesis Vault
-            vault_path = os.getenv("R3MES_GENESIS_VAULT_PATH", "genesis_vault_entries.json")
-            if not os.path.exists(vault_path):
-                logger.debug("Genesis Vault not found, using standard task claiming")
-                return self.claim_and_prefetch_tasks(pool_id, count)
+            self.logger.info(f"Processing task workflow: pool={pool_id}, chunk={chunk_id}")
             
-            vault_manager = GenesisVaultManager(vault_path)
-            mixer = BlindDeliveryMixer(vault_manager)
+            # 1. Download chunk data
+            chunk_file = self.download_chunk_data(data_hash)
+            if not chunk_file:
+                self.logger.error(f"Failed to download chunk data: {data_hash}")
+                return False
             
-            # Get real tasks
-            real_tasks = self.claim_and_prefetch_tasks(pool_id, count)
-            if not real_tasks:
-                return []
+            # 2. Load chunk data
+            chunk_data = self.load_chunk_data(chunk_file)
+            if chunk_data is None:
+                self.logger.error(f"Failed to load chunk data: {chunk_file}")
+                return False
             
-            # Convert to TaskChunk objects
-            real_chunks = []
-            for task in real_tasks:
-                chunk = TaskChunk(
-                    chunk_id=task['chunk_id'],
-                    pool_id=task['pool_id'],
-                    data_hash=task['data_hash'],
-                    shard_id=task.get('shard_id', 0),
-                    status=TaskStatus.CLAIMED,
-                )
-                real_chunks.append(chunk)
+            # 3. Process chunk data
+            try:
+                result = process_function(chunk_data)
+                if isinstance(result, tuple) and len(result) == 2:
+                    gradient_hash, gradient_data = result
+                else:
+                    self.logger.error("Process function must return (gradient_hash, gradient_data)")
+                    return False
+            except Exception as e:
+                self.logger.error(f"Error in process function: {e}", exc_info=True)
+                return False
             
-            # Mix with traps
-            batch = mixer.mix_chunks(real_chunks, pool_id)
+            # 4. Upload result to IPFS (optional)
+            gradient_ipfs_hash = ""
+            if upload_result and gradient_data is not None:
+                if isinstance(gradient_data, bytes):
+                    gradient_ipfs_hash = self.ipfs_client.add_bytes(gradient_data)
+                else:
+                    # Serialize gradient data
+                    import pickle
+                    gradient_bytes = pickle.dumps(gradient_data)
+                    gradient_ipfs_hash = self.ipfs_client.add_bytes(gradient_bytes)
+                
+                if not gradient_ipfs_hash:
+                    self.logger.warning("Failed to upload gradient to IPFS")
             
-            # Store trap mapping for later verification
-            for trap_chunk in batch.trap_chunks:
-                self._trap_mapping[trap_chunk.chunk_id] = f"trap_{abs(trap_chunk.chunk_id)}"
+            # 5. Complete task
+            success = self.complete_task(
+                pool_id=pool_id,
+                chunk_id=chunk_id,
+                gradient_hash=gradient_hash,
+                gradient_ipfs_hash=gradient_ipfs_hash,
+                miner_gpu="",  # TODO: Get from GPU detection
+            )
             
-            # Convert back to task dicts (sanitized - no is_trap flag)
-            mixed_tasks = []
-            for chunk in batch.mixed_chunks:
-                task = {
-                    'chunk_id': chunk.chunk_id,
-                    'pool_id': chunk.pool_id,
-                    'data_hash': chunk.data_hash,
-                    'shard_id': chunk.shard_id,
-                }
-                # Add trap entry ID if this is a trap (for internal use only)
-                if chunk.chunk_id in self._trap_mapping:
-                    task['trap_entry_id'] = self._trap_mapping[chunk.chunk_id]
-                mixed_tasks.append(task)
-            
-            logger.debug(f"Blind delivery: {len(real_tasks)} real + {len(batch.trap_chunks)} traps")
-            return mixed_tasks
-            
-        except ImportError:
-            logger.debug("Trap job modules not available, using standard task claiming")
-            return self.claim_and_prefetch_tasks(pool_id, count)
+            if success:
+                self.logger.info(f"Task workflow completed successfully: pool={pool_id}, chunk={chunk_id}")
+                return True
+            else:
+                self.logger.error(f"Failed to complete task: pool={pool_id}, chunk={chunk_id}")
+                return False
+                
         except Exception as e:
-            logger.warning(f"Blind delivery failed, using standard claiming: {e}")
-            return self.claim_and_prefetch_tasks(pool_id, count)
-    
-    def is_trap_task(self, chunk_id: int) -> bool:
-        """
-        Check if a task is a trap job.
-        
-        Note: This should only be used internally for verification,
-        not exposed to the miner logic.
-        
-        Args:
-            chunk_id: Chunk ID to check
-        
-        Returns:
-            True if this is a trap task
-        """
-        return chunk_id < 0 or chunk_id in self._trap_mapping
-    
-    def get_trap_entry_id(self, chunk_id: int) -> Optional[str]:
-        """
-        Get the vault entry ID for a trap task.
-        
-        Args:
-            chunk_id: Chunk ID
-        
-        Returns:
-            Vault entry ID if trap, None otherwise
-        """
-        return self._trap_mapping.get(chunk_id)
-
+            self.logger.error(f"Error in task workflow: {e}", exc_info=True)
+            return False

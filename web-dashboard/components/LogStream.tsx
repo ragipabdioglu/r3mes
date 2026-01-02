@@ -49,7 +49,7 @@ export default function LogStream() {
     };
     
     ws.onclose = () => {
-      logger.log("WebSocket log stream closed");
+      logger.info("WebSocket log stream closed");
     };
     
     return () => {

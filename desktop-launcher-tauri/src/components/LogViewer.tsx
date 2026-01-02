@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
-import { FileText, Search, Filter, Download, RefreshCw, X } from "lucide-react";
+import { FileText, Search, Download, RefreshCw, X } from "lucide-react";
 
 interface LogEntry {
   timestamp: string;

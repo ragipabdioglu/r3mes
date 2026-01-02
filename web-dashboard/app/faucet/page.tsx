@@ -7,9 +7,13 @@ import { logger } from "@/lib/logger";
 import { toast } from "@/lib/toast";
 import { Copy, ExternalLink, CheckCircle, XCircle, Clock, AlertCircle, Droplet } from "lucide-react";
 import WalletGuard from "@/components/WalletGuard";
+import { useCSRFToken } from "@/hooks/useCSRF";
+import { useAnnouncer } from "@/hooks/useAccessibility";
 
 function FaucetPageContent() {
   const { walletAddress } = useWallet();
+  const { token: csrfToken } = useCSRFToken();
+  const { announceSuccess, announceError } = useAnnouncer();
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [isClaiming, setIsClaiming] = useState(false);
@@ -59,32 +63,42 @@ function FaucetPageContent() {
       if (response.success) {
         setSuccess({
           txHash: response.tx_hash || "",
-          amount: response.amount,
+          amount: response.amount || "100",
           nextClaim: response.next_claim_available_at || "",
         });
         setAmount(""); // Reset amount for next claim
+        announceSuccess(`Successfully claimed ${response.amount || "100"} tokens`);
       } else {
         setError(response.message || "Failed to claim tokens");
+        announceError(response.message || "Failed to claim tokens");
       }
-    } catch (err: any) {
-      if (err.response?.status === 429) {
-        const errorDetail = err.response.data?.detail;
+    } catch (err: unknown) {
+      const error = err as { response?: { status?: number; data?: { detail?: string | { next_claim_available_at?: string } } }; message?: string };
+      if (error.response?.status === 429) {
+        const errorDetail = error.response.data?.detail;
         if (typeof errorDetail === "object" && errorDetail.next_claim_available_at) {
           const nextClaim = new Date(errorDetail.next_claim_available_at);
           const now = new Date();
           const hoursUntil = Math.ceil((nextClaim.getTime() - now.getTime()) / (1000 * 60 * 60));
-          setError(
-            `Rate limit exceeded. You can only claim once per day. Next claim available in ${hoursUntil} hour(s).`
-          );
+          const errorMsg = `Rate limit exceeded. You can only claim once per day. Next claim available in ${hoursUntil} hour(s).`;
+          setError(errorMsg);
+          announceError(errorMsg);
         } else {
-          setError("Rate limit exceeded. You can only claim once per day.");
+          const errorMsg = "Rate limit exceeded. You can only claim once per day.";
+          setError(errorMsg);
+          announceError(errorMsg);
         }
-      } else if (err.response?.status === 503) {
-        setError("Faucet is currently disabled. Please try again later.");
-      } else if (err.response?.data?.detail) {
-        setError(err.response.data.detail);
+      } else if (error.response?.status === 503) {
+        const errorMsg = "Faucet is currently disabled. Please try again later.";
+        setError(errorMsg);
+        announceError(errorMsg);
+      } else if (typeof error.response?.data?.detail === 'string') {
+        setError(error.response.data.detail);
+        announceError(error.response.data.detail);
       } else {
-        setError(err.message || "Failed to claim tokens. Please try again later.");
+        const errorMsg = error.message || "Failed to claim tokens. Please try again later.";
+        setError(errorMsg);
+        announceError(errorMsg);
       }
     } finally {
       setIsClaiming(false);

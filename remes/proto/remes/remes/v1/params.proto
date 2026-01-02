@@ -3,6 +3,7 @@ package remes.remes.v1;
 
 import "amino/amino.proto";
 import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
 
 option go_package = "remes/x/remes/types";
 
@@ -11,12 +12,44 @@ message Params {
   option (amino.name) = "remes/x/remes/Params";
   option (gogoproto.equal) = true;
 
+  // Nonce window size for mining validation
+  // Default: 10000
+  uint64 nonce_window_size = 1;
+
+  // Minimum stake required for validators
+  // Default: 1000 tokens
+  string min_stake = 2 [
+    (cosmos_proto.scalar) = "cosmos.Int",
+    (gogoproto.customtype) = "cosmossdk.io/math.Int",
+    (gogoproto.nullable) = false
+  ];
+
+  // Denomination for staking
+  // Default: "remes"
+  string stake_denom = 3;
+
+  // Mining difficulty as string for decimal precision
+  // Default: "1234.0"
+  string mining_difficulty = 4;
+
+  // Reward per gradient as string for decimal precision
+  // Default: "0.1"
+  string reward_per_gradient = 5;
+
+  // Maximum number of validators
+  // Default: 100
+  uint64 max_validators = 6;
+
+  // Slashing penalty as string for decimal precision (0.0-1.0)
+  // Default: "0.05" (5%)
+  string slashing_penalty = 7;
+
   // Challenge period blocks - number of blocks before aggregation can be finalized
   // Default: 100 blocks (~8 minutes at 5s/block)
-  int64 challenge_period_blocks = 1;
+  int64 challenge_period_blocks = 8;
 
   // Scalability parameters for adaptive scaling mechanisms
-  ScalabilityParams scalability_params = 2 [(gogoproto.nullable) = false];
+  ScalabilityParams scalability_params = 9 [(gogoproto.nullable) = false];
 }
 
 // ScalabilityParams holds configuration for adaptive scaling mechanisms

@@ -8,7 +8,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <ErrorBoundary>
+    <ErrorBoundary level="root" name="Application">
       <QueryClientProvider>
         <ThemeProvider>
           <WalletProvider>

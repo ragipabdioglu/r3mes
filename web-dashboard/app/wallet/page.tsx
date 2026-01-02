@@ -1,14 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Wallet, History, Copy, ExternalLink, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { Wallet, History, Copy, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
 import { useWallet } from "@/contexts/WalletContext";
 import { useTransactionHistory } from "@/hooks/useTransactionHistory";
+import { Transaction } from "@/lib/api";
 import WalletGuard from "@/components/WalletGuard";
 import StatCard from "@/components/StatCard";
 import { SkeletonStatCard, SkeletonTable } from "@/components/SkeletonLoader";
-import { formatCredits, formatCurrency } from "@/utils/numberFormat";
+import { formatCredits } from "@/utils/numberFormat";
 import { getUserFriendlyError, getErrorTitle } from "@/utils/errorMessages";
+import { toast } from "@/lib/toast";
+import { useVirtualization } from "@/hooks/useVirtualization";
+import { useAnnouncer } from "@/hooks/useAccessibility";
+import { formatAddress, formatTimeAgo, formatHash } from "@/utils/formatters";
 
 function WalletPageContent() {
   const { walletAddress, userInfo } = useWallet();
@@ -17,8 +22,10 @@ function WalletPageContent() {
     50,
     !!walletAddress
   );
+  const { announceSuccess } = useAnnouncer();
   
   const [mounted, setMounted] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     setMounted(true);
@@ -26,31 +33,40 @@ function WalletPageContent() {
 
   const isLoading = !mounted || txLoading;
   const transactions = txHistory?.transactions || [];
+  
+  // Filter transactions based on search query
+  const filteredTransactions = useMemo(() => {
+    if (!searchQuery.trim()) return transactions;
+    const query = searchQuery.toLowerCase();
+    return transactions.filter((tx: Transaction) => 
+      tx.hash?.toLowerCase().includes(query) ||
+      tx.type?.toLowerCase().includes(query) ||
+      tx.to?.toLowerCase().includes(query) ||
+      tx.from?.toLowerCase().includes(query)
+    );
+  }, [transactions, searchQuery]);
+
+  // Use virtualization for large lists (>50 items)
+  const shouldVirtualize = filteredTransactions.length > 50;
+  const { virtualItems, totalHeight, handleScroll } = useVirtualization(
+    filteredTransactions,
+    {
+      itemHeight: 72, // Approximate row height
+      containerHeight: 500,
+      overscan: 5,
+    }
+  );
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard");
+    toast.success('Copied to clipboard');
+    announceSuccess('Copied to clipboard');
   };
 
-  const formatAddress = (address: string) => {
-    if (!address) return "N/A";
-    return `${address.slice(0, 10)}...${address.slice(-8)}`;
-  };
-
-  const formatTimestamp = (timestamp: string) => {
-    if (!timestamp) return "N/A";
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
-  };
+  // Use formatters from utils
+  const displayAddress = (address: string) => formatAddress(address);
+  const displayTimestamp = (timestamp: string | number) => formatTimeAgo(timestamp);
+  const displayHash = (hash: string) => formatHash(hash);
 
   if (!mounted || isLoading) {
     return (
@@ -99,7 +115,7 @@ function WalletPageContent() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6 mb-6 sm:mb-8">
           <StatCard
             label="Wallet Address"
-            value={walletAddress ? formatAddress(walletAddress) : "Not Connected"}
+            value={walletAddress ? displayAddress(walletAddress) : "Not Connected"}
             icon={<Wallet className="w-5 h-5" />}
             subtext={
               walletAddress ? (
@@ -137,6 +153,9 @@ function WalletPageContent() {
               <input
                 type="text"
                 placeholder="Search transactions..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Search transactions"
                 className="w-full sm:w-auto px-3 sm:px-4 py-1.5 sm:py-2 bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] text-xs sm:text-sm"
               />
             </div>
@@ -146,11 +165,15 @@ function WalletPageContent() {
             <div className="text-center py-8 sm:py-12">
               <div className="text-sm sm:text-base text-[var(--text-secondary)]">Loading transactions...</div>
             </div>
-          ) : transactions.length === 0 ? (
+          ) : filteredTransactions.length === 0 ? (
             <div className="text-center py-8 sm:py-12">
-              <div className="text-sm sm:text-base text-[var(--text-secondary)]">No transactions found</div>
+              <div className="text-sm sm:text-base text-[var(--text-secondary)]">
+                {searchQuery ? "No transactions match your search" : "No transactions found"}
+              </div>
               <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-2">
-                Your transaction history will appear here once you start using R3MES
+                {searchQuery 
+                  ? "Try a different search term" 
+                  : "Your transaction history will appear here once you start using R3MES"}
               </p>
             </div>
           ) : (
@@ -182,14 +205,14 @@ function WalletPageContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.map((tx, i) => (
+                  {(shouldVirtualize ? virtualItems.map(v => filteredTransactions[v.index]) : filteredTransactions).map((tx: Transaction, i: number) => (
                     <tr
                       key={i}
                       className="border-b border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] transition-colors"
                     >
                       <td className="py-4 px-4">
                         <span className="text-sm text-[var(--text-secondary)] font-mono">
-                          {formatAddress(tx.hash)}
+                          {displayHash(tx.hash || "")}
                         </span>
                       </td>
                       <td className="py-4 px-4">
@@ -201,12 +224,12 @@ function WalletPageContent() {
                         <div className="flex flex-col gap-1">
                           {tx.from && (
                             <span className="text-xs text-[var(--text-secondary)] font-mono">
-                              From: {formatAddress(tx.from)}
+                              From: {displayAddress(tx.from)}
                             </span>
                           )}
                           {tx.to && (
                             <span className="text-xs text-[var(--text-secondary)] font-mono">
-                              To: {formatAddress(tx.to)}
+                              To: {displayAddress(tx.to)}
                             </span>
                           )}
                         </div>
@@ -217,10 +240,10 @@ function WalletPageContent() {
                         </span>
                       </td>
                       <td className="py-4 px-4">
-                        {tx.status === 'success' ? (
+                        {tx.status === 'confirmed' ? (
                           <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
                             <CheckCircle className="w-4 h-4" />
-                            Success
+                            Confirmed
                           </span>
                         ) : tx.status === 'failed' ? (
                           <span className="inline-flex items-center gap-1 text-xs text-red-400">
@@ -236,12 +259,12 @@ function WalletPageContent() {
                       </td>
                       <td className="py-4 px-4">
                         <span className="text-sm text-[var(--text-secondary)]">
-                          {formatTimestamp(tx.timestamp)}
+                          {displayTimestamp(tx.timestamp)}
                         </span>
                       </td>
                       <td className="py-4 px-4">
                         <button
-                          onClick={() => copyToClipboard(tx.hash)}
+                          onClick={() => copyToClipboard(tx.hash || "")}
                           className="text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors"
                           title="Copy transaction hash"
                         >

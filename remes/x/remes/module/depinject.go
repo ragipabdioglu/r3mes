@@ -1,6 +1,7 @@
 package remes
 
 import (
+	"fmt"
 	"os"
 
 	"cosmossdk.io/core/address"
@@ -46,7 +47,7 @@ type ModuleOutputs struct {
 	Module      appmodule.AppModule
 }
 
-func ProvideModule(in ModuleInputs) ModuleOutputs {
+func ProvideModule(in ModuleInputs) (ModuleOutputs, error) {
 	// default to governance authority if not provided
 	authority := authtypes.NewModuleAddress(types.GovModuleName)
 	if in.Config.Authority != "" {
@@ -66,7 +67,7 @@ func ProvideModule(in ModuleInputs) ModuleOutputs {
 		}
 	}
 
-	k := keeper.NewKeeper(
+	k, err := keeper.NewKeeper(
 		in.StoreService,
 		in.Cdc,
 		in.AddressCodec,
@@ -75,7 +76,11 @@ func ProvideModule(in ModuleInputs) ModuleOutputs {
 		in.AuthKeeper,
 		ipfsAPIURL,
 	)
+	if err != nil {
+		return ModuleOutputs{}, fmt.Errorf("failed to create remes keeper: %w", err)
+	}
+
 	m := NewAppModule(in.Cdc, k, in.AuthKeeper, in.BankKeeper)
 
-	return ModuleOutputs{RemesKeeper: k, Module: m}
+	return ModuleOutputs{RemesKeeper: k, Module: m}, nil
 }

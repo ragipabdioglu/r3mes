@@ -1,34 +1,18 @@
 /** @type {import('next').NextConfig} */
-const withBundleAnalyzer = require('@next/bundle-analyzer')({
-  enabled: process.env.ANALYZE === 'true',
-});
-
 const nextConfig = {
-  reactStrictMode: true,
-  output: 'standalone', // Enable standalone output for Docker
-
-  // TypeScript: Ignore build errors from third-party libraries (react-globe.gl compatibility)
-  typescript: {
-    ignoreBuildErrors: true,
+  // Enable experimental features
+  experimental: {
+    // optimizeCss requires 'critters' package - disabled for now
+    // optimizeCss: true,
+    optimizePackageImports: ['lucide-react', '@tanstack/react-query'],
   },
 
-  // CDN integration (production only)
-  assetPrefix: process.env.NODE_ENV === 'production' && process.env.CDN_URL
-    ? process.env.CDN_URL
-    : undefined,
+  // Transpile packages that use browser APIs
+  transpilePackages: ['three', '@react-three/fiber', '@react-three/drei', 'react-globe.gl'],
 
-  // Security: Remove X-Powered-By header
-  poweredByHeader: false,
-
-  // Compression (Next.js handles this automatically, but we can verify)
-  compress: true,
-
-  // Performance optimizations
-  swcMinify: true, // Use SWC for minification (faster than Terser)
+  // Compiler optimizations
   compiler: {
-    removeConsole: process.env.NODE_ENV === 'production' ? {
-      exclude: ['error', 'warn'], // Keep error and warn logs
-    } : false,
+    removeConsole: process.env.NODE_ENV === 'production',
   },
 
   // Image optimization
@@ -36,24 +20,18 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-    minimumCacheTTL: 60,
+    minimumCacheTTL: 60 * 60 * 24 * 30, // 30 days
+    dangerouslyAllowSVG: true,
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
 
-  // Experimental features for better performance
-  experimental: {
-    // optimizeCss: true, // Disabled - requires 'critters' package
-    optimizePackageImports: [
-      'lucide-react', // Tree-shake lucide icons
-      'recharts', // Tree-shake recharts components
-      '@cosmos-kit/react', // Tree-shake cosmos kit
-    ],
-  },
-  // Security headers
+  // Headers for security and performance
   async headers() {
     return [
       {
-        source: '/:path*',
+        source: '/(.*)',
         headers: [
+          // Security headers
           {
             key: 'X-DNS-Prefetch-Control',
             value: 'on'
@@ -63,159 +41,196 @@ const nextConfig = {
             value: 'max-age=63072000; includeSubDomains; preload'
           },
           {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block'
+          },
+          {
             key: 'X-Frame-Options',
-            value: 'SAMEORIGIN'
+            value: 'DENY'
           },
           {
             key: 'X-Content-Type-Options',
             value: 'nosniff'
           },
           {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block'
-          },
-          {
             key: 'Referrer-Policy',
             value: 'origin-when-cross-origin'
           },
+          // Performance headers
           {
-            key: 'Content-Security-Policy',
-            value: (() => {
-              const isProduction = process.env.NODE_ENV === 'production';
-
-              if (isProduction) {
-                // Production: Strict CSP without unsafe directives
-                // Google Analytics is loaded via Next.js Script component which handles CSP correctly
-                return [
-                  "default-src 'self'",
-                  "script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com",
-                  "style-src 'self' https://fonts.googleapis.com",
-                  "img-src 'self' data: https: https://www.google-analytics.com https://www.googletagmanager.com",
-                  "font-src 'self' data: https://fonts.gstatic.com",
-                  "connect-src 'self' https: wss: https://www.google-analytics.com https://www.googletagmanager.com",
-                  "frame-ancestors 'self'",
-                  "object-src 'none'",
-                  "base-uri 'self'",
-                  "form-action 'self'",
-                ].join('; ');
-              } else {
-                // Development: More permissive (webpack HMR, Next.js dev server require unsafe-eval)
-                return [
-                  "default-src 'self'",
-                  "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com",
-                  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-                  "img-src 'self' data: https: https://www.google-analytics.com https://www.googletagmanager.com",
-                  "font-src 'self' data: https://fonts.gstatic.com",
-                  // In production, remove localhost from CSP. In development, allow localhost
-                  `connect-src 'self' https: wss: ${!isProduction ? 'http://localhost:* ws://localhost:*' : ''} https://www.google-analytics.com https://www.googletagmanager.com`,
-                  "frame-ancestors 'self'",
-                ].join('; ');
-              }
-            })()
+            key: 'X-DNS-Prefetch-Control',
+            value: 'on'
           },
+        ],
+      },
+      // Static assets caching
+      {
+        source: '/static/(.*)',
+        headers: [
           {
-            key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()'
-          }
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      // API routes caching
+      {
+        source: '/api/sitemap',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=3600, s-maxage=3600',
+          },
+        ],
+      },
+      {
+        source: '/api/robots',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, s-maxage=86400',
+          },
         ],
       },
     ];
   },
-  // CORS configuration for API calls
-  async rewrites() {
-    // Environment-based URL configuration
-    const envMode = process.env.R3MES_ENV || 'development';
-    const isProduction = envMode === 'production';
 
-    // In production, environment variables are REQUIRED (no localhost fallback)
-    if (isProduction) {
-      if (!process.env.NEXT_PUBLIC_BACKEND_URL) {
-        throw new Error(
-          'NEXT_PUBLIC_BACKEND_URL environment variable must be set in production. ' +
-          'Do not use localhost in production.'
-        );
-      }
-      if (!process.env.NEXT_PUBLIC_API_URL) {
-        throw new Error(
-          'NEXT_PUBLIC_API_URL environment variable must be set in production. ' +
-          'Do not use localhost in production.'
-        );
-      }
-      // Validate no localhost in production URLs
-      if (process.env.NEXT_PUBLIC_BACKEND_URL.includes('localhost') || 
-          process.env.NEXT_PUBLIC_BACKEND_URL.includes('127.0.0.1')) {
-        throw new Error(
-          `NEXT_PUBLIC_BACKEND_URL cannot use localhost in production: ${process.env.NEXT_PUBLIC_BACKEND_URL}`
-        );
-      }
-      if (process.env.NEXT_PUBLIC_API_URL.includes('localhost') || 
-          process.env.NEXT_PUBLIC_API_URL.includes('127.0.0.1')) {
-        throw new Error(
-          `NEXT_PUBLIC_API_URL cannot use localhost in production: ${process.env.NEXT_PUBLIC_API_URL}`
-        );
-      }
-    }
-
-    // Development: allow localhost fallback
-    const backendUrl = isProduction
-      ? process.env.NEXT_PUBLIC_BACKEND_URL
-      : (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000');
-
-    const apiUrl = isProduction
-      ? process.env.NEXT_PUBLIC_API_URL
-      : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:1317');
-
-    // List of backend API paths that should be proxied
-    // Note: /api/docs/* is handled by Next.js API route (app/api/docs/[file]/route.ts)
-    // and should NOT be included here
-    const backendApiPaths = [
-      'chat',
-      'user',
-      'network',
-      'miner',
-      'serving',
-      'proposer',
-      'roles',
-      'faucet',
-      'staking',
-    ];
-
-    const rewritesList = [
+  // Redirects for SEO
+  async redirects() {
+    return [
       {
-        source: '/api/blockchain/:path*',
-        destination: `${apiUrl}/:path*`,
+        source: '/home',
+        destination: '/',
+        permanent: true,
+      },
+      {
+        source: '/dashboard/mining',
+        destination: '/mine',
+        permanent: true,
       },
     ];
-
-    // Add rewrites for each backend API path (excluding /api/docs)
-    // Note: We don't include a catch-all /api/:path* rewrite because
-    // Next.js rewrites can interfere with API routes. By being explicit,
-    // we ensure /api/docs/* is handled by the Next.js API route.
-    backendApiPaths.forEach(path => {
-      rewritesList.push({
-        source: `/api/${path}/:path*`,
-        destination: `${backendUrl}/api/${path}/:path*`,
-      });
-    });
-
-    return rewritesList;
   },
-  // Webpack configuration for react-globe.gl (only for Network Explorer)
-  webpack: (config, { isServer }) => {
+
+  // Rewrites for clean URLs
+  async rewrites() {
+    return [
+      {
+        source: '/sitemap.xml',
+        destination: '/api/sitemap',
+      },
+      {
+        source: '/robots.txt',
+        destination: '/api/robots',
+      },
+      {
+        source: '/rss.xml',
+        destination: '/api/rss',
+      },
+    ];
+  },
+
+  // Bundle analyzer (enable with ANALYZE=true)
+  ...(process.env.ANALYZE === 'true' && {
+    webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+      if (!dev && !isServer) {
+        const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
+        config.plugins.push(
+          new BundleAnalyzerPlugin({
+            analyzerMode: 'static',
+            openAnalyzer: false,
+            reportFilename: '../bundle-analyzer-report.html',
+          })
+        );
+      }
+      return config;
+    },
+  }),
+
+  // Webpack optimizations
+  webpack: (config, { dev, isServer }) => {
+    // Production optimizations - only for client-side
+    if (!dev && !isServer) {
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          chunks: 'all',
+          cacheGroups: {
+            // Separate three.js and related packages into their own chunk
+            three: {
+              test: /[\\/]node_modules[\\/](three|@react-three)[\\/]/,
+              name: 'three-vendor',
+              chunks: 'async', // Only load async to prevent SSR issues
+              priority: 20,
+            },
+            vendor: {
+              test: /[\\/]node_modules[\\/](?!(three|@react-three|react-globe))/,
+              name: 'vendors',
+              chunks: 'all',
+              priority: 10,
+            },
+            common: {
+              name: 'common',
+              minChunks: 2,
+              chunks: 'all',
+              enforce: true,
+              priority: 5,
+            },
+          },
+        },
+      };
+    }
+
+    // Resolve fallbacks for client-side
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
-        path: false,
+        net: false,
+        tls: false,
         crypto: false,
+        stream: false,
+        url: false,
+        zlib: false,
+        http: false,
+        https: false,
+        assert: false,
+        os: false,
+        path: false,
       };
     }
+
     return config;
   },
-  // Generate sitemap and robots.txt
-  generateBuildId: async () => {
-    return process.env.BUILD_ID || `build-${Date.now()}`;
+
+  // Output configuration
+  output: 'standalone',
+  
+  // Enable SWC minification
+  swcMinify: true,
+
+  // Disable x-powered-by header
+  poweredByHeader: false,
+
+  // Enable gzip compression
+  compress: true,
+
+  // Trailing slash configuration
+  trailingSlash: false,
+
+  // Environment variables
+  env: {
+    CUSTOM_KEY: process.env.CUSTOM_KEY,
+  },
+
+  // TypeScript configuration
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+
+  // ESLint configuration
+  eslint: {
+    ignoreDuringBuilds: false,
   },
 };
 
-module.exports = withBundleAnalyzer(nextConfig);
+module.exports = nextConfig;

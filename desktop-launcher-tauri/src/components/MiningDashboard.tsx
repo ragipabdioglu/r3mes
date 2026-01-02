@@ -19,7 +19,7 @@ interface MiningStats {
 
 export default function MiningDashboard() {
   const [stats, setStats] = useState<MiningStats | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(async () => {

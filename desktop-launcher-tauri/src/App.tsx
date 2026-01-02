@@ -63,7 +63,7 @@ function App() {
     try {
       await invoke("start_node");
     } catch (error) {
-      addLog(`[Node] Error: ${error}`);
+      console.error("[Node] Error:", error);
     }
   };
 

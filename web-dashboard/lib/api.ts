@@ -1,187 +1,365 @@
 /**
- * Backend API Client
+ * R3MES Web Dashboard API Client
  * 
- * Handles all API requests to the R3MES Backend Inference Service
+ * This module provides type-safe API functions for communicating with the
+ * R3MES backend services. All functions are connected to real backend endpoints
+ * through the Next.js API proxy.
+ * 
+ * @module lib/api
+ * @see {@link https://docs.r3mes.io/api} API Documentation
  */
 
-import axios from 'axios';
+import { logger } from './logger';
 
-// Get API base URL from environment variable
-// In production, NEXT_PUBLIC_BACKEND_URL must be set
-// In development, fallback to localhost only if explicitly allowed
-const getApiBaseUrl = (): string => {
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-  if (backendUrl) {
-    return backendUrl;
-  }
+/** Backend API base URL - uses environment variable or defaults to relative path */
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
+
+/**
+ * Generic API request helper with error handling and logging
+ * 
+ * @template T - Expected response type
+ * @param endpoint - API endpoint path (e.g., '/analytics')
+ * @param options - Fetch options (method, body, headers, etc.)
+ * @returns Promise resolving to the typed response data
+ * @throws Error if the request fails or returns non-OK status
+ * 
+ * @example
+ * const data = await apiRequest<UserInfo>('/user/remes123...');
+ */
+async function apiRequest<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`;
   
-  // Only allow localhost fallback in development
-  if (process.env.NODE_ENV === 'development') {
-    return 'http://localhost:8000';
-  }
-  
-  // Production: fail if not configured
-  throw new Error('NEXT_PUBLIC_BACKEND_URL environment variable must be set in production');
-};
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
 
-const API_BASE_URL = getApiBaseUrl();
-
-// Create axios instance with error handling
-const apiClient = axios.create({
-  timeout: 10000, // 10 second timeout
-});
-
-// Track connection errors to avoid spam
-let connectionErrorLogged = false;
-
-// Response interceptor to handle connection errors gracefully
-apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // Handle ECONNREFUSED and network errors silently in development
-    if (
-      error.code === 'ECONNREFUSED' ||
-      error.code === 'ENOTFOUND' ||
-      error.message?.includes('ECONNREFUSED') ||
-      error.message?.includes('Network Error')
-    ) {
-      // Only log once per session to avoid spam
-      if (!connectionErrorLogged && typeof window !== 'undefined') {
-        connectionErrorLogged = true;
-        // Use logger instead of console.warn (logger handles production/development automatically)
-        if (process.env.NODE_ENV === 'development') {
-          console.warn(
-            'Backend API is not available. Some features may not work. ' +
-            'To start the backend, run: cd backend && python -m uvicorn app.main:app --reload'
-          );
-        }
-      }
-      
-      // Return a rejected promise with a user-friendly error
-      return Promise.reject(
-        new Error('Backend service is not available. Please ensure the backend is running.')
-      );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || errorData.message || `API error: ${response.status}`);
     }
-    
-    // For other errors, pass them through
-    return Promise.reject(error);
+
+    return response.json();
+  } catch (error) {
+    logger.error(`API request failed: ${endpoint}`, error);
+    throw error;
   }
-);
-
-// Use the configured axios instance for all requests
-// Override default axios to use our configured instance
-const originalGet = axios.get;
-const originalPost = axios.post;
-const originalPut = axios.put;
-const originalDelete = axios.delete;
-
-// Create wrapper functions that use our configured instance
-const apiGet = <T = any>(url: string, config?: any) => {
-  if (url.startsWith('/api/')) {
-    return apiClient.get<T>(url, config);
-  }
-  return originalGet<T>(url, config);
-};
-
-const apiPost = <T = any>(url: string, data?: any, config?: any) => {
-  if (url.startsWith('/api/')) {
-    return apiClient.post<T>(url, data, config);
-  }
-  return originalPost<T>(url, data, config);
-};
-
-const apiPut = <T = any>(url: string, data?: any, config?: any) => {
-  if (url.startsWith('/api/')) {
-    return apiClient.put<T>(url, data, config);
-  }
-  return originalPut<T>(url, data, config);
-};
-
-const apiDelete = <T = any>(url: string, config?: any) => {
-  if (url.startsWith('/api/')) {
-    return apiClient.delete<T>(url, config);
-  }
-  return originalDelete<T>(url, config);
-};
-
-// Types
-export interface ChatRequest {
-  message: string;
-  wallet_address: string;
 }
 
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
+/** User account information */
 export interface UserInfo {
+  /** Wallet address (bech32 format) */
   wallet_address: string;
+  /** Available credits/balance */
   credits: number;
+  /** Whether user is registered as a miner */
   is_miner: boolean;
 }
 
-export interface NetworkStats {
-  active_miners: number;
-  total_users: number;
-  total_credits: number;
-  block_height?: number;
-}
-
-export interface Block {
-  height: number;
-  miner?: string;
-  timestamp?: string;
-  hash?: string;
-}
-
+/** Miner statistics and performance metrics */
 export interface MinerStats {
+  /** Miner's wallet address */
   wallet_address: string;
+  /** Total earnings in REMES */
   total_earnings: number;
+  /** Current hashrate in GH/s */
   hashrate: number;
+  /** GPU temperature in Celsius */
   gpu_temperature: number;
+  /** Total blocks found */
   blocks_found: number;
+  /** Uptime percentage (0-100) */
   uptime_percentage: number;
+  /** Current network difficulty */
   network_difficulty: number;
 }
 
-export interface EarningsDataPoint {
+/** Historical earnings data point */
+export interface EarningsData {
+  /** Date string (YYYY-MM-DD) */
   date: string;
+  /** Earnings amount for that date */
   earnings: number;
 }
 
-export interface HashrateDataPoint {
+/** Historical hashrate data point */
+export interface HashrateData {
+  /** Date string (YYYY-MM-DD) */
   date: string;
+  /** Hashrate value in GH/s */
   hashrate: number;
 }
 
-export interface Transaction {
-  hash: string;
+/** Network-wide statistics */
+export interface NetworkStats {
+  /** Number of currently active miners */
+  active_miners: number;
+  /** Total registered users */
+  total_users: number;
+  /** Total credits in circulation */
+  total_credits: number;
+  /** Current blockchain height */
+  block_height: number;
+}
+
+/** Block information */
+export interface Block {
+  /** Block height */
   height: number;
-  type: string;
-  from?: string;
-  to?: string;
-  amount?: string;
-  fee?: string;
+  /** Miner address who found the block */
+  miner: string;
+  /** Block timestamp (ISO 8601) */
   timestamp: string;
-  status: 'success' | 'failed' | 'pending';
-  memo?: string;
-}
-
-export interface TransactionHistory {
-  transactions: Transaction[];
-  total: number;
-}
-
-export interface BlockDetail {
-  height: number;
+  /** Block hash */
   hash: string;
+}
+
+/** Faucet status and configuration */
+export interface FaucetStatus {
+  /** Whether faucet has tokens available */
+  available: boolean;
+  /** Whether faucet is enabled */
+  enabled: boolean;
+  /** Amount per claim (numeric) */
+  amount: number;
+  /** Amount per claim (with denomination) */
+  amount_per_claim: string;
+  /** Daily limit (with denomination) */
+  daily_limit: string;
+  /** Cooldown period in milliseconds */
+  cooldown: number;
+  /** Last claim timestamp (null if never claimed) */
+  lastClaim: number | null;
+}
+
+// Proposer-related interfaces
+
+/** Proposer node information */
+export interface ProposerNode {
+  /** Node's wallet address */
+  node_address: string;
+  /** Current status (active, inactive, etc.) */
+  status: string;
+  /** Total aggregations performed */
+  total_aggregations: number;
+  /** Total rewards earned */
+  total_rewards: string;
+}
+
+/** Aggregation record */
+export interface AggregationRecord {
+  /** Unique aggregation ID */
+  aggregation_id: number;
+  /** Proposer address */
   proposer: string;
-  timestamp: string;
-  transactions: Transaction[];
-  tx_count: number;
-  gas_used?: number;
-  gas_wanted?: number;
+  /** Number of participants */
+  participant_count: number;
+  /** Training round ID */
+  training_round_id: number;
+  /** IPFS hash of aggregated gradient */
+  aggregated_gradient_ipfs_hash: string;
 }
 
-/**
- * Send a chat message and get streaming response
- */
+export interface GradientPool {
+  total_count: number;
+  pending_gradients: Array<{
+    id: number;
+    miner: string;
+    training_round_id: number;
+    ipfs_hash: string;
+    status: string;
+  }>;
+}
+
+// Serving-related interfaces
+export interface ServingNode {
+  node_address: string;
+  status: string;
+  is_available: boolean;
+  total_requests: number;
+  successful_requests: number;
+  average_latency_ms: number;
+  uptime: number;
+  earnings: number;
+  model_version?: string;
+}
+
+export interface ServingNodeStats {
+  total_requests: number;
+  success_rate: number;
+  average_latency_ms: number;
+  successful_requests: number;
+  failed_requests: number;
+  is_available: boolean;
+  earnings: number;
+}
+
+// Role-related interfaces
+export interface NodeRole {
+  id: number;
+  name: string;
+  description: string;
+  stake: number;
+  requirements?: string[];
+  rewards?: number;
+}
+
+export interface NodeRoles {
+  roles: number[];
+  status: string;
+  totalStake: number;
+  lastUpdate: number;
+}
+
+export interface RoleStats {
+  role_id: number;
+  role_name: string;
+  total_nodes: number;
+  active_nodes: number;
+  total_stake: number;
+  avg_uptime: number;
+  icon?: string;
+}
+
+// Analytics interfaces
+export interface AnalyticsData {
+  totalUsers: number;
+  activeNodes: number;
+  totalTransactions: number;
+  networkHashrate: string;
+  dailyRewards: number;
+  stakingRatio: number;
+  user_engagement: {
+    active_users: number;
+    daily_active: number;
+    retention_rate: number;
+  };
+  api_usage: {
+    total_requests: number;
+    success_rate: number;
+    avg_response_time: number;
+    endpoints_data: Array<{
+      endpoint: string;
+      requests: number;
+      avg_time: number;
+    }>;
+  };
+  model_performance: {
+    average_latency: number;
+    throughput: number;
+    accuracy: number;
+    success_rate: number;
+    uptime: number;
+    trend: Array<{
+      date: string;
+      latency: number;
+      accuracy: number;
+    }>;
+  };
+  network_performance: {
+    avg_block_time: number;
+    tps: number;
+    uptime: number;
+    total_nodes: number;
+  };
+  mining_stats: {
+    total_miners: number;
+    hashrate_distribution: Array<{
+      name: string;
+      value: number;
+    }>;
+  };
+  revenue_data: Array<{
+    date: string;
+    revenue: number;
+  }>;
+}
+
+// Leaderboard interfaces
+export interface LeaderboardEntry {
+  rank: number;
+  address: string;
+  score: number;
+  rewards: number;
+  username?: string;
+  avatar?: string;
+}
+
+// Transaction interfaces
+export interface Transaction {
+  id: number;
+  type: "send" | "receive" | "stake" | "reward";
+  amount: number;
+  to?: string;
+  from?: string;
+  timestamp: number;
+  status: "pending" | "confirmed" | "failed";
+  hash?: string;
+}
+
+// User API functions
+export async function getUserInfo(walletAddress: string): Promise<UserInfo> {
+  const response = await fetch(`/api/user/${walletAddress}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch user info');
+  }
+  return response.json();
+}
+
+// Miner API functions
+export async function getMinerStats(walletAddress: string): Promise<MinerStats> {
+  const response = await fetch(`/api/miner/${walletAddress}/stats`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch miner stats');
+  }
+  return response.json();
+}
+
+export async function getEarningsHistory(walletAddress: string): Promise<EarningsData[]> {
+  const response = await fetch(`/api/miner/${walletAddress}/earnings`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch earnings history');
+  }
+  return response.json();
+}
+
+export async function getHashrateHistory(walletAddress: string): Promise<HashrateData[]> {
+  const response = await fetch(`/api/miner/${walletAddress}/hashrate`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch hashrate history');
+  }
+  return response.json();
+}
+
+// Network API functions
+export async function getNetworkStats(): Promise<NetworkStats> {
+  const response = await fetch('/api/network/stats');
+  if (!response.ok) {
+    throw new Error('Failed to fetch network stats');
+  }
+  return response.json();
+}
+
+export async function getRecentBlocks(limit: number = 10): Promise<Block[]> {
+  const response = await fetch(`/api/network/blocks?limit=${limit}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch recent blocks');
+  }
+  return response.json();
+}
+
+// Chat API function
 export async function sendChatMessage(
   message: string,
   walletAddress: string,
@@ -199,393 +377,645 @@ export async function sendChatMessage(
   });
 
   if (!response.ok) {
-    if (response.status === 402) {
-      throw new Error('Insufficient credits. Please mine blocks to earn credits.');
-    }
-    throw new Error(`Chat request failed: ${response.statusText}`);
+    throw new Error('Failed to send chat message');
   }
 
-  // Stream the response
   const reader = response.body?.getReader();
-  const decoder = new TextDecoder();
-
   if (!reader) {
-    throw new Error('Response body is not readable');
+    throw new Error('No response body');
   }
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const chunk = decoder.decode(value, { stream: true });
-    onChunk(chunk);
-  }
-}
-
-/**
- * Get user information
- */
-export async function getUserInfo(walletAddress: string): Promise<UserInfo> {
-  const response = await apiGet<UserInfo>(`/api/user/info/${walletAddress}`);
-  return response.data;
-}
-
-/**
- * Get network statistics
- * @throws {Error} If the request fails
- */
-export async function getNetworkStats(): Promise<NetworkStats> {
-  const response = await apiGet<NetworkStats>('/api/network/stats');
-  return response.data;
-}
-
-/**
- * Get recent blocks
- * @throws {Error} If the request fails
- */
-export async function getRecentBlocks(limit: number = 10): Promise<Block[]> {
-  const response = await apiGet<{ blocks: Block[]; limit: number; total: number }>(`/api/blocks?limit=${limit}`);
-  if (!response.data.blocks) {
-    throw new Error('Invalid response format from server');
-  }
-  return response.data.blocks;
-}
-
-/**
- * Get miner statistics
- * @throws {Error} If the request fails
- */
-export async function getMinerStats(walletAddress: string): Promise<MinerStats> {
-  const response = await apiGet<MinerStats>(`/api/miner/stats/${walletAddress}`);
-  return response.data;
-}
-
-/**
- * Get earnings history (7 days)
- * @throws {Error} If the request fails
- */
-export async function getEarningsHistory(walletAddress: string): Promise<EarningsDataPoint[]> {
-  const response = await apiGet<{ earnings: EarningsDataPoint[] }>(`/api/miner/earnings/${walletAddress}?days=7`);
-  if (!response.data.earnings) {
-    throw new Error('Invalid response format from server');
-  }
-  return response.data.earnings;
-}
-
-/**
- * Get hashrate history (7 days)
- * @throws {Error} If the request fails
- */
-export async function getHashrateHistory(walletAddress: string): Promise<HashrateDataPoint[]> {
-  const response = await apiGet<{ hashrate: HashrateDataPoint[] }>(`/api/miner/hashrate/${walletAddress}?days=7`);
-  if (!response.data.hashrate) {
-    throw new Error('Invalid response format from server');
-  }
-  return response.data.hashrate;
-}
-
-/**
- * Get transaction history for a wallet address
- */
-/**
- * Get transaction history
- * @throws {Error} If the request fails
- */
-export async function getTransactionHistory(walletAddress: string, limit: number = 50): Promise<TransactionHistory> {
-  const response = await apiGet<TransactionHistory>(
-    `/api/blockchain/cosmos/tx/v1beta1/txs?events=transfer.recipient='${walletAddress}'&events=transfer.sender='${walletAddress}'&pagination.limit=${limit}`
-  );
+  const decoder = new TextDecoder();
   
-  if (!response.data) {
-    throw new Error('Invalid response format from server');
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      const chunk = decoder.decode(value);
+      onChunk(chunk);
+    }
+  } finally {
+    reader.releaseLock();
   }
-  
-  return response.data;
 }
 
+// Real API functions connected to backend endpoints
+
 /**
- * Get transaction details by hash
- * @throws {Error} If the request fails
+ * Get analytics data from backend
+ * Backend endpoint: GET /analytics?days=7
  */
-export async function getTransactionByHash(txHash: string): Promise<Transaction> {
-  const response = await apiGet(`/api/blockchain/cosmos/tx/v1beta1/txs/${txHash}`);
-  
-  if (!response.data?.tx_response) {
-    throw new Error('Invalid transaction response format');
+export async function getAnalytics(days: number = 7): Promise<AnalyticsData> {
+  try {
+    const data = await apiRequest<{
+      api_usage: {
+        total_requests: number;
+        success_rate: number;
+        avg_response_time: number;
+        endpoints_data: Array<{ endpoint: string; count: number }>;
+      };
+      user_engagement: {
+        active_users: number;
+        daily_active: number;
+        retention_rate: number;
+      };
+      model_performance: {
+        average_latency: number;
+        throughput: number;
+        accuracy: number;
+        success_rate: number;
+        uptime: number;
+        trend?: Array<{ date: string; latency: number; accuracy: number }>;
+      };
+      network_health: {
+        avg_block_time: number;
+        tps: number;
+        uptime: number;
+        total_nodes: number;
+      };
+    }>(`/analytics?days=${days}`);
+
+    // Transform backend response to frontend format
+    return {
+      totalUsers: data.user_engagement?.active_users || 0,
+      activeNodes: data.network_health?.total_nodes || 0,
+      totalTransactions: data.api_usage?.total_requests || 0,
+      networkHashrate: "N/A",
+      dailyRewards: 0,
+      stakingRatio: 0,
+      user_engagement: {
+        active_users: data.user_engagement?.active_users || 0,
+        daily_active: data.user_engagement?.daily_active || 0,
+        retention_rate: data.user_engagement?.retention_rate || 0,
+      },
+      api_usage: {
+        total_requests: data.api_usage?.total_requests || 0,
+        success_rate: data.api_usage?.success_rate || 0,
+        avg_response_time: data.api_usage?.avg_response_time || 0,
+        endpoints_data: (data.api_usage?.endpoints_data || []).map(e => ({
+          endpoint: e.endpoint,
+          requests: e.count,
+          avg_time: 0,
+        })),
+      },
+      model_performance: {
+        average_latency: data.model_performance?.average_latency || 0,
+        throughput: data.model_performance?.throughput || 0,
+        accuracy: data.model_performance?.accuracy || 0,
+        success_rate: data.model_performance?.success_rate || 0,
+        uptime: data.model_performance?.uptime || 0,
+        trend: data.model_performance?.trend || [],
+      },
+      network_performance: {
+        avg_block_time: data.network_health?.avg_block_time || 0,
+        tps: data.network_health?.tps || 0,
+        uptime: data.network_health?.uptime || 0,
+        total_nodes: data.network_health?.total_nodes || 0,
+      },
+      mining_stats: {
+        total_miners: 0,
+        hashrate_distribution: [],
+      },
+      revenue_data: [],
+    };
+  } catch (error) {
+    logger.error('Failed to fetch analytics:', error);
+    throw error;
   }
-  
-  const tx = response.data.tx_response;
-  
-  return {
-    hash: tx.txhash,
-    height: parseInt(tx.height),
-    type: tx.tx.body.messages[0]?.type || 'unknown',
-    timestamp: tx.timestamp,
-    status: tx.code === 0 ? 'success' : 'failed',
-    fee: tx.tx.auth_info.fee?.amount?.[0]?.amount || '0',
-    memo: tx.tx.body.memo || '',
-  };
 }
 
 /**
- * Get block details by height
- * @throws {Error} If the request fails
- */
-export async function getBlockByHeight(height: number): Promise<BlockDetail> {
-  const response = await apiGet(`${API_BASE_URL}/blocks/${height}`);
-  return response.data;
-}
-
-export interface LeaderboardEntry {
-  address: string;
-  tier: string;
-  total_submissions?: number;
-  reputation?: number;
-  trust_score?: number;
-  uptime?: number;
-  voting_power?: number;
-  trend?: number;
-}
-
-export interface LeaderboardData {
-  miners?: LeaderboardEntry[];
-  validators?: LeaderboardEntry[];
-}
-
-/**
- * Get leaderboard data
- */
-export async function getLeaderboard(type: "miners" | "validators"): Promise<LeaderboardData> {
-  const response = await apiGet(`${API_BASE_URL}/leaderboard/${type}`);
-  return response.data;
-}
-
-export interface AnalyticsData {
-  api_usage?: {
-    total_requests: number;
-    endpoints: Record<string, number>;
-    endpoints_data?: Array<{ endpoint: string; count: number }>;
-  };
-  user_engagement?: {
-    active_users: number;
-    total_actions: number;
-    average_actions_per_user: number;
-  };
-  model_performance?: {
-    average_latency: number;
-    average_tokens_per_second: number;
-    success_rate: number;
-    trend?: Array<{ date: string; latency: number }>;
-  };
-  network_health?: {
-    active_miners_trend: Array<{ date: string; count: number }>;
-    total_flops_trend: Array<{ date: string; flops: number }>;
-  };
-}
-
-/**
- * Get analytics data
- */
-export async function getAnalytics(): Promise<AnalyticsData> {
-  const response = await apiGet(`${API_BASE_URL}/analytics`);
-  return response.data;
-}
-
-export interface FaucetRequest {
-  address: string;
-  amount?: string;
-}
-
-export interface FaucetResponse {
-  success: boolean;
-  message: string;
-  tx_hash?: string;
-  amount: string;
-  next_claim_available_at?: string;
-}
-
-export interface FaucetStatus {
-  enabled: boolean;
-  amount_per_claim: string;
-  daily_limit: string;
-  rate_limit: string;
-}
-
-/**
- * Claim tokens from the faucet
- */
-export async function claimFaucet(request: FaucetRequest): Promise<FaucetResponse> {
-  const response = await apiPost<FaucetResponse>(`${API_BASE_URL}/faucet/claim`, request);
-  return response.data;
-}
-
-/**
- * Get faucet status and configuration
+ * Get faucet status from backend
+ * Backend endpoint: GET /faucet/status
  */
 export async function getFaucetStatus(): Promise<FaucetStatus> {
-  const response = await apiGet<FaucetStatus>("/api/faucet/status");
-  return response.data;
+  try {
+    const data = await apiRequest<{
+      enabled: boolean;
+      amount_per_claim: string;
+      daily_limit: string;
+      rate_limit: string;
+    }>('/faucet/status');
+
+    return {
+      available: data.enabled,
+      enabled: data.enabled,
+      amount: parseInt(data.amount_per_claim?.replace(/\D/g, '') || '0'),
+      amount_per_claim: data.amount_per_claim || "1000000uremes",
+      daily_limit: data.daily_limit || "5000000uremes",
+      cooldown: 24 * 60 * 60 * 1000, // 24 hours
+      lastClaim: null,
+    };
+  } catch (error) {
+    logger.error('Failed to fetch faucet status:', error);
+    throw error;
+  }
 }
 
-// Serving Node API Functions
-export interface ServingNode {
-  node_address: string;
-  model_version: string;
-  model_ipfs_hash: string;
-  is_available: boolean;
-  total_requests: number;
-  successful_requests: number;
-  average_latency_ms: number;
-  last_heartbeat: string;
-  status: string;
+/**
+ * Claim tokens from faucet
+ * Backend endpoint: POST /faucet/claim
+ */
+export async function claimFaucet(params: { address: string; amount?: string }): Promise<{
+  success: boolean;
+  tx_hash?: string;
+  txHash?: string;
+  amount?: string;
+  next_claim_available_at?: string;
+  message?: string;
+}> {
+  try {
+    const data = await apiRequest<{
+      success: boolean;
+      tx_hash?: string;
+      amount: string;
+      next_claim_available_at?: string;
+      message?: string;
+    }>('/faucet/claim', {
+      method: 'POST',
+      body: JSON.stringify({
+        address: params.address,
+        amount: params.amount,
+      }),
+    });
+
+    return {
+      success: data.success,
+      tx_hash: data.tx_hash,
+      txHash: data.tx_hash,
+      amount: data.amount,
+      next_claim_available_at: data.next_claim_available_at,
+      message: data.message,
+    };
+  } catch (error: unknown) {
+    // Handle rate limit errors specially
+    if (error instanceof Error && error.message.includes('429')) {
+      return {
+        success: false,
+        message: "Rate limit exceeded. You can only claim once per day.",
+      };
+    }
+    logger.error('Failed to claim faucet:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to claim tokens",
+    };
+  }
 }
 
-export interface ServingNodeDetail extends ServingNode {
-  failed_requests: number;
-  success_rate: number;
-  resources?: any;
-  stake?: string;
+/**
+ * Get leaderboard data from backend
+ * Backend endpoint: GET /leaderboard/miners or /leaderboard/validators
+ */
+export async function getLeaderboard(type?: "miners" | "validators"): Promise<{
+  miners?: Array<{
+    address: string;
+    tier: string;
+    total_submissions: number;
+    reputation: number;
+    trend?: number;
+  }>;
+  validators?: Array<{
+    address: string;
+    tier: string;
+    trust_score: number;
+    uptime: number;
+    voting_power: number;
+  }>;
+}> {
+  try {
+    if (type === "miners") {
+      const data = await apiRequest<{
+        miners: Array<{
+          address: string;
+          tier: string;
+          total_submissions?: number;
+          successful_submissions?: number;
+          reputation?: number;
+          reputation_score?: number;
+          trend?: number;
+        }>;
+      }>('/leaderboard/miners?limit=100');
+
+      return {
+        miners: data.miners?.map(m => ({
+          address: m.address,
+          tier: m.tier || 'bronze',
+          total_submissions: m.total_submissions || m.successful_submissions || 0,
+          reputation: m.reputation || m.reputation_score || 0,
+          trend: m.trend || 0,
+        })) || [],
+      };
+    } else if (type === "validators") {
+      const data = await apiRequest<{
+        validators: Array<{
+          address: string;
+          tier: string;
+          trust_score: number;
+          uptime: number;
+          voting_power: number;
+        }>;
+      }>('/leaderboard/validators?limit=100');
+
+      return {
+        validators: data.validators || [],
+      };
+    }
+
+    // Return both if no type specified
+    const [minersData, validatorsData] = await Promise.all([
+      apiRequest<{ miners: Array<{ address: string; tier: string; total_submissions?: number; successful_submissions?: number; reputation?: number; reputation_score?: number; trend?: number }> }>('/leaderboard/miners?limit=10'),
+      apiRequest<{ validators: Array<{ address: string; tier: string; trust_score: number; uptime: number; voting_power: number }> }>('/leaderboard/validators?limit=10'),
+    ]);
+
+    return {
+      miners: minersData.miners?.map(m => ({
+        address: m.address,
+        tier: m.tier || 'bronze',
+        total_submissions: m.total_submissions || m.successful_submissions || 0,
+        reputation: m.reputation || m.reputation_score || 0,
+        trend: m.trend || 0,
+      })) || [],
+      validators: validatorsData.validators || [],
+    };
+  } catch (error) {
+    logger.error('Failed to fetch leaderboard:', error);
+    throw error;
+  }
 }
 
-export interface InferenceRequest {
-  request_id: string;
-  requester: string;
-  serving_node: string;
-  model_version: string;
-  input_data_ipfs_hash: string;
-  fee: string;
-  status: string;
-  request_time?: string;
-  result_ipfs_hash?: string;
-  latency_ms?: number;
+/**
+ * Get role statistics from backend
+ * Backend endpoint: GET /roles/stats/summary
+ */
+export async function getRoleStatistics(): Promise<{ stats: RoleStats[] }> {
+  try {
+    const data = await apiRequest<{
+      stats: Array<{
+        role_id: number;
+        role_name: string;
+        total_nodes: number;
+        active_nodes: number;
+        total_stake?: number;
+        avg_uptime?: number;
+      }>;
+    }>('/roles/stats/summary');
+
+    return {
+      stats: data.stats?.map(s => ({
+        role_id: s.role_id,
+        role_name: s.role_name,
+        total_nodes: s.total_nodes,
+        active_nodes: s.active_nodes,
+        total_stake: s.total_stake || 0,
+        avg_uptime: s.avg_uptime || 0,
+        icon: getRoleIcon(s.role_name),
+      })) || [],
+    };
+  } catch (error) {
+    logger.error('Failed to fetch role statistics:', error);
+    throw error;
+  }
 }
 
-export interface ServingNodeStats {
-  node_address: string;
-  total_requests: number;
-  successful_requests: number;
-  failed_requests: number;
-  success_rate: number;
-  average_latency_ms: number;
-  model_version: string;
-  is_available: boolean;
+// Helper function to get role icon
+function getRoleIcon(roleName: string): string {
+  const icons: Record<string, string> = {
+    'Miner': 'cpu',
+    'Serving': 'server',
+    'Validator': 'shield',
+    'Proposer': 'layers',
+  };
+  return icons[roleName] || 'circle';
 }
 
-export async function getServingNodes(limit: number = 100, offset: number = 0): Promise<{ nodes: ServingNode[]; total: number }> {
-  const response = await apiGet<{ nodes: ServingNode[]; total: number }>(`/api/serving/nodes?limit=${limit}&offset=${offset}`);
-  return response.data;
+/**
+ * Get available roles from backend
+ * Backend endpoint: GET /roles
+ */
+export async function getRoles(): Promise<{ roles: NodeRole[] }> {
+  try {
+    const data = await apiRequest<{
+      roles: Array<{
+        role_id: number;
+        role_name: string;
+        description: string;
+        access_control?: {
+          min_stake?: string;
+          requires_approval?: boolean;
+        };
+      }>;
+    }>('/roles');
+
+    return {
+      roles: data.roles?.map(r => ({
+        id: r.role_id,
+        name: r.role_name,
+        description: r.description,
+        stake: parseInt(r.access_control?.min_stake?.replace(/\D/g, '') || '0'),
+        requirements: r.access_control?.requires_approval ? ['Requires approval'] : [],
+        rewards: 0,
+      })) || [],
+    };
+  } catch (error) {
+    logger.error('Failed to fetch roles:', error);
+    throw error;
+  }
 }
 
-export async function getServingNode(address: string): Promise<ServingNodeDetail> {
-  const response = await apiGet<ServingNodeDetail>(`/api/serving/nodes/${address}`);
-  return response.data;
+/**
+ * Get node roles for a specific address
+ * Backend endpoint: GET /roles/{address}
+ */
+export async function getNodeRoles(address: string): Promise<NodeRoles> {
+  try {
+    const data = await apiRequest<{
+      node_address: string;
+      roles: number[];
+      role_names: string[];
+      status: string;
+      stake?: string;
+    }>(`/roles/${address}`);
+
+    return {
+      roles: data.roles || [],
+      status: data.status || 'unknown',
+      totalStake: parseInt(data.stake?.replace(/\D/g, '') || '0'),
+      lastUpdate: Date.now(),
+    };
+  } catch (error) {
+    logger.error(`Failed to fetch node roles for ${address}:`, error);
+    throw error;
+  }
 }
 
-export async function getServingNodeStats(address: string): Promise<ServingNodeStats> {
-  const response = await apiGet<ServingNodeStats>(`/api/serving/nodes/${address}/stats`);
-  return response.data;
+/**
+ * Get proposer nodes from backend
+ * Backend endpoint: GET /proposer/nodes
+ */
+export async function getProposerNodes(limit: number = 100, offset: number = 0): Promise<{
+  nodes: Array<{
+    node_address: string;
+    status: string;
+    total_aggregations: number;
+    total_rewards: string;
+  }>;
+  total: number;
+}> {
+  try {
+    const data = await apiRequest<{
+      nodes: Array<{
+        node_address: string;
+        status: string;
+        total_aggregations: number;
+        total_rewards: string;
+      }>;
+      total: number;
+    }>(`/proposer/nodes?limit=${limit}&offset=${offset}`);
+
+    return {
+      nodes: data.nodes || [],
+      total: data.total || 0,
+    };
+  } catch (error) {
+    logger.error('Failed to fetch proposer nodes:', error);
+    throw error;
+  }
 }
 
-export async function getInferenceRequest(requestId: string): Promise<InferenceRequest> {
-  const response = await apiGet<InferenceRequest>(`/api/serving/requests/${requestId}`);
-  return response.data;
+/**
+ * Get aggregations from backend
+ * Backend endpoint: GET /proposer/aggregations
+ */
+export async function getAggregations(limit: number = 50, offset: number = 0): Promise<{
+  aggregations: Array<{
+    aggregation_id: number;
+    proposer: string;
+    participant_count: number;
+    training_round_id: number;
+    aggregated_gradient_ipfs_hash: string;
+  }>;
+  total: number;
+}> {
+  try {
+    const data = await apiRequest<{
+      aggregations: Array<{
+        aggregation_id: number;
+        proposer: string;
+        participant_count: number;
+        training_round_id: number;
+        aggregated_gradient_ipfs_hash: string;
+        merkle_root?: string;
+      }>;
+      total: number;
+    }>(`/proposer/aggregations?limit=${limit}&offset=${offset}`);
+
+    return {
+      aggregations: data.aggregations || [],
+      total: data.total || 0,
+    };
+  } catch (error) {
+    logger.error('Failed to fetch aggregations:', error);
+    throw error;
+  }
 }
 
-// Proposer API Functions
-export interface ProposerNode {
-  node_address: string;
-  status: string;
-  total_aggregations: number;
-  total_rewards: string;
-  last_aggregation_height?: number;
-  resources?: any;
-  stake?: string;
-}
-
-export interface AggregationRecord {
-  aggregation_id: number;
-  proposer: string;
-  aggregated_gradient_ipfs_hash: string;
-  merkle_root: string;
-  participant_count: number;
-  training_round_id: number;
-  block_height?: number;
-  timestamp?: string;
-}
-
-export interface GradientPool {
+/**
+ * Get gradient pool from backend
+ * Backend endpoint: GET /proposer/pool
+ */
+export async function getGradientPool(limit: number = 100, offset: number = 0): Promise<{
+  total_count: number;
   pending_gradients: Array<{
     id: number;
-    status: string;
-    ipfs_hash: string;
     miner: string;
     training_round_id: number;
+    ipfs_hash: string;
+    status: string;
   }>;
-  total_count: number;
+}> {
+  try {
+    const data = await apiRequest<{
+      pending_gradients: Array<{
+        id?: number;
+        gradient_id?: number;
+        miner?: string;
+        submitter?: string;
+        training_round_id: number;
+        ipfs_hash?: string;
+        gradient_ipfs_hash?: string;
+        status: string;
+      }>;
+      total_count: number;
+    }>(`/proposer/pool?limit=${limit}&offset=${offset}&status=pending`);
+
+    return {
+      total_count: data.total_count || 0,
+      pending_gradients: (data.pending_gradients || []).map((g, idx) => ({
+        id: g.id || g.gradient_id || idx + 1,
+        miner: g.miner || g.submitter || '',
+        training_round_id: g.training_round_id,
+        ipfs_hash: g.ipfs_hash || g.gradient_ipfs_hash || '',
+        status: g.status,
+      })),
+    };
+  } catch (error) {
+    logger.error('Failed to fetch gradient pool:', error);
+    throw error;
+  }
 }
 
-export async function getProposerNodes(limit: number = 100, offset: number = 0): Promise<{ nodes: ProposerNode[]; total: number }> {
-  const response = await apiGet<{ nodes: ProposerNode[]; total: number }>(`/api/proposer/nodes?limit=${limit}&offset=${offset}`);
-  return response.data;
+/**
+ * Get serving nodes from backend
+ * Backend endpoint: GET /serving/nodes
+ */
+export async function getServingNodes(limit: number = 100, offset: number = 0): Promise<{
+  nodes: Array<{
+    node_address: string;
+    status: string;
+    is_available: boolean;
+    total_requests: number;
+    successful_requests: number;
+    average_latency_ms: number;
+    uptime: number;
+    earnings: number;
+    model_version?: string;
+  }>;
+  total: number;
+}> {
+  try {
+    const data = await apiRequest<{
+      nodes: Array<{
+        node_address: string;
+        status: string;
+        is_available: boolean;
+        total_requests: number;
+        successful_requests: number;
+        average_latency_ms: number;
+        last_heartbeat?: string;
+        model_version?: string;
+      }>;
+      total: number;
+    }>(`/serving/nodes?limit=${limit}&offset=${offset}`);
+
+    return {
+      nodes: (data.nodes || []).map(n => ({
+        node_address: n.node_address,
+        status: n.status,
+        is_available: n.is_available,
+        total_requests: n.total_requests,
+        successful_requests: n.successful_requests,
+        average_latency_ms: n.average_latency_ms,
+        uptime: n.total_requests > 0 ? n.successful_requests / n.total_requests : 0,
+        earnings: 0, // Not provided by backend
+        model_version: n.model_version,
+      })),
+      total: data.total || 0,
+    };
+  } catch (error) {
+    logger.error('Failed to fetch serving nodes:', error);
+    throw error;
+  }
 }
 
-export async function getProposerNode(address: string): Promise<ProposerNode> {
-  const response = await apiGet<ProposerNode>(`/api/proposer/nodes/${address}`);
-  return response.data;
+/**
+ * Get serving node stats from backend
+ * Backend endpoint: GET /serving/nodes/{address}/stats
+ */
+export async function getServingNodeStats(address: string): Promise<{
+  total_requests: number;
+  success_rate: number;
+  average_latency_ms: number;
+  successful_requests: number;
+  failed_requests: number;
+  is_available: boolean;
+  earnings: number;
+}> {
+  try {
+    const data = await apiRequest<{
+      node_address: string;
+      total_requests: number;
+      successful_requests: number;
+      failed_requests: number;
+      success_rate: number;
+      average_latency_ms: number;
+      is_available: boolean;
+      model_version?: string;
+    }>(`/serving/nodes/${address}/stats`);
+
+    return {
+      total_requests: data.total_requests || 0,
+      success_rate: data.success_rate || 0,
+      average_latency_ms: data.average_latency_ms || 0,
+      successful_requests: data.successful_requests || 0,
+      failed_requests: data.failed_requests || 0,
+      is_available: data.is_available || false,
+      earnings: 0, // Not provided by backend
+    };
+  } catch (error) {
+    logger.error(`Failed to fetch serving node stats for ${address}:`, error);
+    throw error;
+  }
 }
 
-export async function getAggregations(limit: number = 50, offset: number = 0, proposer?: string): Promise<{ aggregations: AggregationRecord[]; total: number }> {
-  const params = new URLSearchParams({ limit: limit.toString(), offset: offset.toString() });
-  if (proposer) params.append('proposer', proposer);
-  const response = await apiGet<{ aggregations: AggregationRecord[]; total: number }>(`/api/proposer/aggregations?${params}`);
-  return response.data;
+/**
+ * Get transaction history from backend
+ * Backend endpoint: GET /user/{address}/transactions (or blockchain query)
+ */
+export async function getTransactionHistory(address: string, limit: number = 50): Promise<{ transactions: Transaction[]; total: number }> {
+  try {
+    // Try to fetch from backend API
+    const data = await apiRequest<{
+      transactions: Array<{
+        id?: number;
+        hash?: string;
+        txhash?: string;
+        type: string;
+        amount?: number | string;
+        to?: string;
+        from?: string;
+        timestamp?: number | string;
+        status?: string;
+      }>;
+      total: number;
+    }>(`/user/${address}/transactions?limit=${limit}`);
+
+    return {
+      transactions: (data.transactions || []).map((tx, idx) => ({
+        id: tx.id || idx + 1,
+        type: normalizeTransactionType(tx.type),
+        amount: typeof tx.amount === 'string' ? parseFloat(tx.amount) || 0 : tx.amount || 0,
+        to: tx.to,
+        from: tx.from,
+        timestamp: typeof tx.timestamp === 'string' ? new Date(tx.timestamp).getTime() : tx.timestamp || Date.now(),
+        status: normalizeTransactionStatus(tx.status),
+        hash: tx.hash || tx.txhash,
+      })),
+      total: data.total || 0,
+    };
+  } catch (error) {
+    logger.error(`Failed to fetch transaction history for ${address}:`, error);
+    // Return empty array on error instead of throwing
+    return { transactions: [], total: 0 };
+  }
 }
 
-export async function getAggregation(aggregationId: number): Promise<AggregationRecord> {
-  const response = await apiGet<AggregationRecord>(`/api/proposer/aggregations/${aggregationId}`);
-  return response.data;
+// Helper function to normalize transaction type
+function normalizeTransactionType(type: string): "send" | "receive" | "stake" | "reward" {
+  const lowerType = type.toLowerCase();
+  if (lowerType.includes('send') || lowerType.includes('transfer')) return 'send';
+  if (lowerType.includes('receive')) return 'receive';
+  if (lowerType.includes('stake') || lowerType.includes('delegate')) return 'stake';
+  if (lowerType.includes('reward') || lowerType.includes('withdraw')) return 'reward';
+  return 'send';
 }
 
-export async function getGradientPool(limit: number = 100, offset: number = 0, status: string = "pending"): Promise<GradientPool> {
-  const response = await apiGet<GradientPool>(`/api/proposer/pool?limit=${limit}&offset=${offset}&status=${status}`);
-  return response.data;
+// Helper function to normalize transaction status
+function normalizeTransactionStatus(status?: string): "pending" | "confirmed" | "failed" {
+  if (!status) return 'confirmed';
+  const lowerStatus = status.toLowerCase();
+  if (lowerStatus.includes('pending')) return 'pending';
+  if (lowerStatus.includes('fail') || lowerStatus.includes('error')) return 'failed';
+  return 'confirmed';
 }
-
-// Role Management API Functions
-export interface NodeRole {
-  role_id: number;
-  role_name: string;
-  description: string;
-}
-
-export interface NodeRoles {
-  node_address: string;
-  roles: number[];
-  role_names: string[];
-  status: string;
-  resources?: any;
-  stake?: string;
-}
-
-export interface RoleStats {
-  role_id: number;
-  role_name: string;
-  total_nodes: number;
-  active_nodes: number;
-}
-
-export async function getRoles(): Promise<{ roles: NodeRole[]; total: number }> {
-  const response = await apiGet<{ roles: NodeRole[]; total: number }>("/api/roles");
-  return response.data;
-}
-
-export async function getNodeRoles(address: string): Promise<NodeRoles> {
-  const response = await apiGet<NodeRoles>(`/api/roles/${address}`);
-  return response.data;
-}
-
-export async function getRoleStatistics(): Promise<{ stats: RoleStats[] }> {
-  const response = await apiGet<{ stats: RoleStats[] }>("/api/roles/stats/summary");
-  return response.data;
-}
-

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
 import { Download, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -70,7 +70,7 @@ export default function EngineDownloadScreen({
     try {
       // Note: In a real implementation, we would use Tauri events to track progress
       // For now, we call the download function which logs progress to console
-      const result = await invoke<string>('download_engine');
+      await invoke<string>('download_engine');
       
       // Download complete, verify status
       await checkEngineStatus();

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Server, Activity, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { useServingNodes, useServingNodeStats } from "@/hooks/useServingData";
+import { useAnnouncer } from "@/hooks/useAccessibility";
+import { formatAddress, formatLatency, formatNumber, formatPercentage } from "@/utils/formatters";
 import { logger } from "@/lib/logger";
 import StatCard from "@/components/StatCard";
 import WalletGuard from "@/components/WalletGuard";
@@ -12,6 +14,9 @@ function ServingPageContent() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+
+  // Accessibility announcer
+  const { announce, announceError, announceSuccess, announceLoading } = useAnnouncer();
 
   // Use React Query hooks instead of setInterval polling
   const { data: servingNodesData, isLoading: nodesLoading, error: nodesError } = useServingNodes(100, 0);
@@ -26,17 +31,29 @@ function ServingPageContent() {
     setWalletAddress(address);
   }, []);
 
+  // Announce loading state changes
+  useEffect(() => {
+    if (nodesLoading) {
+      announceLoading("serving nodes", true);
+    } else if (servingNodes.length > 0) {
+      announce(`Loaded ${servingNodes.length} serving nodes`);
+    }
+  }, [nodesLoading, servingNodes.length, announce, announceLoading]);
+
   useEffect(() => {
     if (nodesError) {
       logger.error("Failed to fetch serving nodes:", nodesError);
+      announceError("Failed to load serving nodes");
     }
     if (statsError) {
       logger.error("Failed to fetch node stats:", statsError);
+      announceError("Failed to load node statistics");
     }
-  }, [nodesError, statsError]);
+  }, [nodesError, statsError, announceError]);
 
   const handleNodeSelect = (address: string) => {
     setSelectedNode(address);
+    announce(`Selected node ${formatAddress(address)}`);
   };
 
   const activeNodes = servingNodes.filter((n) => n.is_available);
@@ -73,17 +90,17 @@ function ServingPageContent() {
               />
               <StatCard
                 label="Total Requests"
-                value={totalRequests.toLocaleString()}
+                value={formatNumber(totalRequests)}
                 icon={<Activity className="w-5 h-5" />}
               />
               <StatCard
                 label="Success Rate"
-                value={totalRequests > 0 ? `${((totalSuccessful / totalRequests) * 100).toFixed(1)}%` : "0%"}
+                value={formatPercentage(totalRequests > 0 ? (totalSuccessful / totalRequests) * 100 : 0)}
                 icon={<CheckCircle className="w-5 h-5" />}
               />
               <StatCard
                 label="Avg Latency"
-                value={`${avgLatency.toFixed(0)}ms`}
+                value={formatLatency(avgLatency)}
                 icon={<Clock className="w-5 h-5" />}
               />
             </div>
@@ -123,21 +140,19 @@ function ServingPageContent() {
                         }`} />
                         <div>
                           <div className="font-semibold text-[var(--text-primary)] text-sm sm:text-base">
-                            {node.node_address.slice(0, 20)}...{node.node_address.slice(-8)}
+                            {formatAddress(node.node_address, 20, 8)}
                           </div>
                           <div className="text-xs text-[var(--text-secondary)] mt-1">
-                            Model: {node.model_version || "N/A"} | Requests: {node.total_requests}
+                            Model: {node.model_version || "N/A"} | Requests: {formatNumber(node.total_requests)}
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-medium text-[var(--accent-primary)]">
-                          {node.successful_requests > 0
-                            ? `${((node.successful_requests / node.total_requests) * 100).toFixed(1)}%`
-                            : "0%"}
+                          {formatPercentage(node.total_requests > 0 ? (node.successful_requests / node.total_requests) * 100 : 0)}
                         </div>
                         <div className="text-xs text-[var(--text-muted)]">
-                          {node.average_latency_ms}ms avg
+                          {formatLatency(node.average_latency_ms)} avg
                         </div>
                       </div>
                     </div>
@@ -157,31 +172,31 @@ function ServingPageContent() {
                 <div className="p-4 rounded-xl bg-[var(--bg-secondary)]">
                   <div className="text-sm text-[var(--text-secondary)] mb-1">Total Requests</div>
                   <div className="text-2xl font-bold text-[var(--text-primary)]">
-                    {nodeStats.total_requests.toLocaleString()}
+                    {formatNumber(nodeStats.total_requests)}
                   </div>
                 </div>
                 <div className="p-4 rounded-xl bg-[var(--bg-secondary)]">
                   <div className="text-sm text-[var(--text-secondary)] mb-1">Success Rate</div>
                   <div className="text-2xl font-bold text-[var(--success)]">
-                    {nodeStats.success_rate.toFixed(1)}%
+                    {formatPercentage(nodeStats.success_rate)}
                   </div>
                 </div>
                 <div className="p-4 rounded-xl bg-[var(--bg-secondary)]">
                   <div className="text-sm text-[var(--text-secondary)] mb-1">Average Latency</div>
                   <div className="text-2xl font-bold text-[var(--text-primary)]">
-                    {nodeStats.average_latency_ms.toFixed(0)}ms
+                    {formatLatency(nodeStats.average_latency_ms)}
                   </div>
                 </div>
                 <div className="p-4 rounded-xl bg-[var(--bg-secondary)]">
                   <div className="text-sm text-[var(--text-secondary)] mb-1">Successful</div>
                   <div className="text-2xl font-bold text-[var(--success)]">
-                    {nodeStats.successful_requests.toLocaleString()}
+                    {formatNumber(nodeStats.successful_requests)}
                   </div>
                 </div>
                 <div className="p-4 rounded-xl bg-[var(--bg-secondary)]">
                   <div className="text-sm text-[var(--text-secondary)] mb-1">Failed</div>
                   <div className="text-2xl font-bold text-[var(--error)]">
-                    {nodeStats.failed_requests.toLocaleString()}
+                    {formatNumber(nodeStats.failed_requests)}
                   </div>
                 </div>
                 <div className="p-4 rounded-xl bg-[var(--bg-secondary)]">

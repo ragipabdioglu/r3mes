@@ -6,6 +6,7 @@ use crate::status_monitor;
 use crate::log_reader;
 use crate::wallet;
 use crate::installer;
+use crate::debug;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
@@ -1258,4 +1259,41 @@ pub async fn save_config(config: FullConfig) -> Result<(), String> {
 pub async fn reset_config_to_defaults() -> Result<(), String> {
     let default_config = FullConfig::default();
     default_config.save()
+}
+// Setup Checker Commands (from setup_checker module)
+#[tauri::command]
+pub async fn check_setup_status() -> Result<setup_checker::SetupStatus, String> {
+    setup_checker::SetupChecker::check_complete_setup().await
+}
+
+#[tauri::command]
+pub async fn get_setup_steps() -> Result<Vec<setup_checker::SetupStep>, String> {
+    setup_checker::SetupChecker::get_setup_steps().await
+}
+
+#[tauri::command]
+pub async fn validate_component(component: String) -> Result<bool, String> {
+    setup_checker::SetupChecker::validate_component(&component).await
+}
+
+#[tauri::command]
+pub async fn get_setup_progress() -> Result<f32, String> {
+    setup_checker::SetupChecker::get_setup_progress().await
+}
+
+// Debug Commands
+#[tauri::command]
+pub async fn collect_debug_info() -> Result<debug::DebugInfo, String> {
+    debug::collect_debug_info().await
+}
+
+#[tauri::command]
+pub async fn export_debug_info() -> Result<String, String> {
+    debug::export_debug_info().await
+}
+
+#[tauri::command]
+pub async fn get_troubleshooting_recommendations() -> Result<Vec<String>, String> {
+    let debug_info = debug::collect_debug_info().await?;
+    Ok(debug::get_troubleshooting_recommendations(&debug_info))
 }

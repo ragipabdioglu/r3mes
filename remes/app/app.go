@@ -41,25 +41,28 @@ import (
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	slashingkeeper "github.com/cosmos/cosmos-sdk/x/slashing/keeper"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
-	// IBC imports temporarily disabled
-	// icacontrollerkeeper "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/keeper"
-	// icahostkeeper "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/keeper"
-	// ibctransferkeeper "github.com/cosmos/ibc-go/v8/modules/apps/transfer/keeper"
-	// ibckeeper "github.com/cosmos/ibc-go/v8/modules/core/keeper"
 
+	// IBC imports
+	capabilitykeeper "github.com/cosmos/ibc-go/modules/capability/keeper"
+	icacontrollerkeeper "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/keeper"
+	icahostkeeper "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/keeper"
+	ibctransferkeeper "github.com/cosmos/ibc-go/v8/modules/apps/transfer/keeper"
+	ibckeeper "github.com/cosmos/ibc-go/v8/modules/core/keeper"
+
+	"net/http"
 	"remes/docs"
 	remesmodulekeeper "remes/x/remes/keeper"
+
 	"github.com/gorilla/mux"
-	"net/http"
 )
 
 const (
 	// Name is the name of the application.
 	Name = "remes"
 	// AccountAddressPrefix is the prefix for accounts addresses.
-	AccountAddressPrefix = "cosmos"
-	// ChainCoinType is the coin type of the chain.
-	ChainCoinType = 118
+	AccountAddressPrefix = "remes"
+	// ChainCoinType is the coin type of the chain - using unique coin type for remes
+	ChainCoinType = 9999
 )
 
 // DefaultNodeHome default home directories for the application daemon
@@ -79,6 +82,7 @@ type App struct {
 	appCodec          codec.Codec
 	txConfig          client.TxConfig
 	interfaceRegistry codectypes.InterfaceRegistry
+	config            *Config
 
 	// keepers
 	// only keepers required by the app are exposed
@@ -96,11 +100,18 @@ type App struct {
 	CircuitBreakerKeeper  circuitkeeper.Keeper
 	ParamsKeeper          paramskeeper.Keeper
 
-	// ibc keepers (temporarily disabled for IBC-go v8 compatibility)
-	// IBCKeeper           *ibckeeper.Keeper
-	// ICAControllerKeeper icacontrollerkeeper.Keeper
-	// ICAHostKeeper       icahostkeeper.Keeper
-	// TransferKeeper      ibctransferkeeper.Keeper
+	// ibc keepers
+	IBCKeeper           *ibckeeper.Keeper
+	ICAControllerKeeper icacontrollerkeeper.Keeper
+	ICAHostKeeper       icahostkeeper.Keeper
+	TransferKeeper      ibctransferkeeper.Keeper
+
+	// Capability keepers for IBC
+	CapabilityKeeper          *capabilitykeeper.Keeper
+	ScopedIBCKeeper           capabilitykeeper.ScopedKeeper
+	ScopedTransferKeeper      capabilitykeeper.ScopedKeeper
+	ScopedICAControllerKeeper capabilitykeeper.ScopedKeeper
+	ScopedICAHostKeeper       capabilitykeeper.ScopedKeeper
 
 	// simulation manager
 	sm          *module.SimulationManager
@@ -138,8 +149,11 @@ func New(
 	appOpts servertypes.AppOptions,
 	baseAppOptions ...func(*baseapp.BaseApp),
 ) *App {
+	// Load configuration
+	config := LoadConfig()
+
 	var (
-		app        = &App{}
+		app        = &App{config: config}
 		appBuilder *runtime.AppBuilder
 
 		// merge the AppConfig and other configuration in one config
@@ -186,7 +200,8 @@ func New(
 		&app.ParamsKeeper,
 		&app.RemesKeeper,
 	); err != nil {
-		panic(err)
+		logger.Error("Failed to inject dependencies", "error", err)
+		panic(fmt.Errorf("dependency injection failed: %w", err))
 	}
 
 	// add to default baseapp options
@@ -198,7 +213,8 @@ func New(
 
 	// register legacy modules
 	if err := app.registerIBCModules(appOpts); err != nil {
-		panic(err)
+		logger.Error("Failed to register IBC modules", "error", err)
+		panic(fmt.Errorf("IBC module registration failed: %w", err))
 	}
 
 	/****  Module Options ****/
@@ -223,7 +239,8 @@ func New(
 	})
 
 	if err := app.Load(loadLatest); err != nil {
-		panic(err)
+		logger.Error("Failed to load app", "error", err)
+		panic(fmt.Errorf("app loading failed: %w", err))
 	}
 
 	return app
@@ -264,6 +281,20 @@ func (app *App) GetKey(storeKey string) *storetypes.KVStoreKey {
 	return kvStoreKey
 }
 
+// GetStoreKeys returns all store keys as a map.
+func (app *App) GetStoreKeys() map[string]*storetypes.KVStoreKey {
+	keys := make(map[string]*storetypes.KVStoreKey)
+
+	// Add IBC store keys
+	for _, keyName := range GetIBCStoreKeys() {
+		if key := app.GetKey(keyName); key != nil {
+			keys[keyName] = key
+		}
+	}
+
+	return keys
+}
+
 // GetRemesKeeper returns the Remes keeper
 func (app *App) GetRemesKeeper() *remesmodulekeeper.Keeper {
 	return &app.RemesKeeper
@@ -280,7 +311,11 @@ func (app *App) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.APIConfig
 	app.App.RegisterAPIRoutes(apiSvr, apiConfig)
 	// register swagger API in app.go so that other applications can override easily
 	if err := server.RegisterSwaggerAPI(apiSvr.ClientCtx, apiSvr.Router, apiConfig.Swagger); err != nil {
-		panic(err)
+		fmt.Printf("⚠️  Failed to register Swagger API: %v\n", err)
+		// Don't panic in production, just log the error
+		if !app.config.IsProduction() {
+			panic(fmt.Errorf("swagger API registration failed: %w", err))
+		}
 	}
 
 	// register app's OpenAPI routes.
@@ -298,6 +333,12 @@ func (app *App) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.APIConfig
 
 // registerDashboardRoutesOnMux registers dashboard API routes directly on mux.Router
 func (app *App) registerDashboardRoutesOnMux(muxRouter *mux.Router) {
+	// Check if dashboard is enabled in configuration
+	if !app.config.EnableDashboard {
+		fmt.Println("📊 Dashboard disabled by configuration")
+		return
+	}
+
 	// Get remes keeper from app
 	remesKeeper := app.GetRemesKeeper()
 	if remesKeeper == nil {
@@ -315,18 +356,21 @@ func (app *App) registerDashboardRoutesOnMux(muxRouter *mux.Router) {
 
 	// Mount API routes
 	muxRouter.PathPrefix("/api/dashboard/").Handler(http.StripPrefix("/api/dashboard", apiMux))
-	
-	// WebSocket endpoint
-	muxRouter.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		remesKeeper.HandleWebSocket(w, r)
-	})
-	
+
+	// WebSocket endpoint - only if enabled
+	if app.config.EnableWebSocket {
+		muxRouter.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+			remesKeeper.HandleWebSocket(w, r)
+		})
+		fmt.Println("🔌 WebSocket endpoint registered: /ws")
+	}
+
 	// Log success (in production, use proper logger)
 	fmt.Println("✅ Dashboard API routes registered: /api/dashboard/*")
 }
 
 // registerDashboardRoutes registers dashboard API routes and WebSocket handlers (fallback)
-func (app *App) registerDashboardRoutes(router interface{}) {
+func (app *App) registerDashboardRoutes(router any) {
 	// Get remes keeper from app
 	remesKeeper := app.GetRemesKeeper()
 	if remesKeeper == nil {
@@ -338,7 +382,7 @@ func (app *App) registerDashboardRoutes(router interface{}) {
 
 	// Try multiple router types (Cosmos SDK v0.50 may use different router types)
 	var muxRouter *mux.Router
-	
+
 	// Try direct cast first
 	if r, ok := router.(*mux.Router); ok {
 		muxRouter = r
@@ -353,7 +397,7 @@ func (app *App) registerDashboardRoutes(router interface{}) {
 			// Use interface methods directly
 			apiMux := http.NewServeMux()
 			dashboardAPI.RegisterRoutes(apiMux)
-			
+
 			// Register via interface
 			r.PathPrefix("/api/dashboard/").Handler(http.StripPrefix("/api/dashboard", apiMux))
 			r.HandleFunc("/ws", func(w http.ResponseWriter, req *http.Request) {
@@ -361,7 +405,7 @@ func (app *App) registerDashboardRoutes(router interface{}) {
 			})
 			return
 		}
-		
+
 		// If all else fails, try to use http.ServeMux directly
 		if httpMux, ok := router.(*http.ServeMux); ok {
 			// Register directly on http.ServeMux
@@ -371,7 +415,7 @@ func (app *App) registerDashboardRoutes(router interface{}) {
 			})
 			return
 		}
-		
+
 		// Log error if router type is unknown
 		// Note: In production, you might want to use a logger here
 		return

@@ -267,6 +267,8 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
               >
                 Continue
               </button>
+            </div>
+          </div>
         )}
 
         {step === 2 && (
@@ -351,8 +353,6 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
               >
                 Continue
               </button>
-            </div>
-          </div>
             </div>
           </div>
         )}

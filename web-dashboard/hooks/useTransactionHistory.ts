@@ -3,7 +3,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { getTransactionHistory, TransactionHistory } from "@/lib/api";
+import { getTransactionHistory, Transaction } from "@/lib/api";
 
 /**
  * Hook to fetch transaction history
@@ -14,7 +14,7 @@ export function useTransactionHistory(
   limit: number = 50,
   enabled: boolean = true
 ) {
-  return useQuery<TransactionHistory, Error>({
+  return useQuery<{ transactions: Transaction[]; total: number }, Error>({
     queryKey: ["transactionHistory", walletAddress, limit],
     queryFn: () => getTransactionHistory(walletAddress!, limit),
     enabled: enabled && !!walletAddress,

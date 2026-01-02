@@ -1,30 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { csrfMiddleware, generateCSRFToken, setCSRFTokenCookie } from '@/lib/csrf';
 
 /**
- * Rate Limiting Middleware for Web Dashboard
+ * Enhanced Security Middleware for Web Dashboard
  * 
- * IMPORTANT: In production with multiple instances, this in-memory rate limiting
- * will NOT work correctly. Each instance will have its own rate limit counter.
+ * Features:
+ * - Rate limiting with IP-based tracking
+ * - CSRF protection for state-changing requests
+ * - HTTPS enforcement in production
+ * - Security headers
+ * - Path-based rate limiting
  * 
- * For production deployments:
- * 1. Use Redis-based rate limiting via API routes
- * 2. Or use a CDN/reverse proxy with built-in rate limiting (e.g., Cloudflare, AWS WAF)
- * 3. Or implement rate limiting at the load balancer level
- * 
- * This middleware is suitable for:
- * - Development environments
- * - Single-instance deployments
- * - As a first line of defense (with proper backend rate limiting)
+ * IMPORTANT: In production with multiple instances, consider:
+ * 1. Redis-based rate limiting
+ * 2. CDN/reverse proxy rate limiting (Cloudflare, AWS WAF)
+ * 3. Load balancer rate limiting
  */
 
 // Rate limiting map: IP -> { count, resetTime }
-// WARNING: This is in-memory and will not work correctly in multi-instance deployments
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
-// Track if we've warned about in-memory rate limiting in production
+// Rate limiting configuration
+const RATE_LIMIT = {
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  maxRequests: 100, // requests per window
+  apiMaxRequests: 50, // stricter limit for API routes
+  authMaxRequests: 10, // very strict for auth routes
+};
+
+// Track warnings
 let hasWarnedAboutInMemory = false;
 
-// Clean up old entries periodically (every 5 minutes)
+// Clean up old entries periodically
 if (typeof setInterval !== 'undefined') {
   setInterval(() => {
     const now = Date.now();
@@ -33,11 +40,10 @@ if (typeof setInterval !== 'undefined') {
         rateLimitMap.delete(ip);
       }
     }
-  }, 5 * 60 * 1000); // 5 minutes
+  }, 5 * 60 * 1000);
 }
 
 function getClientIP(req: NextRequest): string {
-  // Try to get IP from various headers (for proxies/load balancers)
   const forwarded = req.headers.get('x-forwarded-for');
   if (forwarded) {
     return forwarded.split(',')[0].trim();
@@ -48,37 +54,54 @@ function getClientIP(req: NextRequest): string {
     return realIP;
   }
   
-  // Fallback to connection remote address (if available)
   return req.ip || 'unknown';
 }
 
-function rateLimit(req: NextRequest): NextResponse | null {
-  // Get rate limit config from environment or use defaults
-  const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10); // 1 minute default
-  const maxRequests = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10); // 100 requests per minute default
+function getRateLimitKey(request: NextRequest): string {
+  const ip = getClientIP(request);
+  const path = request.nextUrl.pathname;
   
-  // Warn about in-memory rate limiting in production (once)
+  // Different limits for different endpoints
+  if (path.startsWith('/api/auth') || path.startsWith('/api/faucet')) {
+    return `auth:${ip}`;
+  }
+  if (path.startsWith('/api/')) {
+    return `api:${ip}`;
+  }
+  return `general:${ip}`;
+}
+
+function getMaxRequests(key: string): number {
+  if (key.startsWith('auth:')) {
+    return RATE_LIMIT.authMaxRequests;
+  }
+  if (key.startsWith('api:')) {
+    return RATE_LIMIT.apiMaxRequests;
+  }
+  return RATE_LIMIT.maxRequests;
+}
+
+function rateLimit(req: NextRequest): NextResponse | null {
+  // Warn about in-memory rate limiting in production
   if (process.env.NODE_ENV === 'production' && !hasWarnedAboutInMemory) {
     console.warn(
       '[SECURITY WARNING] Using in-memory rate limiting in production. ' +
-      'This will NOT work correctly with multiple instances. ' +
-      'Consider using Redis-based rate limiting or a CDN/WAF solution.'
+      'Consider using Redis-based rate limiting for multi-instance deployments.'
     );
     hasWarnedAboutInMemory = true;
   }
   
-  const ip = getClientIP(req);
+  const key = getRateLimitKey(req);
+  const maxRequests = getMaxRequests(key);
   const now = Date.now();
   
-  const record = rateLimitMap.get(ip);
+  const record = rateLimitMap.get(key);
   
-  // If no record or window expired, create new record
   if (!record || now > record.resetTime) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
-    return null; // Allow request
+    rateLimitMap.set(key, { count: 1, resetTime: now + RATE_LIMIT.windowMs });
+    return null;
   }
   
-  // Check if limit exceeded
   if (record.count >= maxRequests) {
     return NextResponse.json(
       { 
@@ -91,23 +114,20 @@ function rateLimit(req: NextRequest): NextResponse | null {
         headers: {
           'Retry-After': String(Math.ceil((record.resetTime - now) / 1000)),
           'X-RateLimit-Limit': String(maxRequests),
-          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Remaining': String(Math.max(0, maxRequests - record.count)),
           'X-RateLimit-Reset': String(Math.ceil(record.resetTime / 1000)),
         },
       }
     );
   }
   
-  // Increment count
   record.count++;
-  return null; // Allow request
+  return null;
 }
 
 function enforceHTTPS(req: NextRequest): NextResponse | null {
-  // Only enforce HTTPS in production, but NOT on localhost
   if (process.env.NODE_ENV === 'production') {
     const hostname = req.headers.get('host') || req.nextUrl.hostname;
-    // Skip HTTPS enforcement for localhost
     if (hostname && (hostname.includes('localhost') || hostname.includes('127.0.0.1'))) {
       return null;
     }
@@ -124,29 +144,79 @@ function enforceHTTPS(req: NextRequest): NextResponse | null {
   return null;
 }
 
+function addSecurityHeaders(response: NextResponse): NextResponse {
+  // Enhanced security headers
+  response.headers.set('X-DNS-Prefetch-Control', 'on');
+  response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('Referrer-Policy', 'origin-when-cross-origin');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+  
+  // Permissions Policy
+  response.headers.set(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
+  );
+
+  // HSTS in production
+  if (process.env.NODE_ENV === 'production') {
+    response.headers.set(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains; preload'
+    );
+  }
+
+  return response;
+}
+
 export function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
   // Enforce HTTPS in production
   const httpsResponse = enforceHTTPS(req);
   if (httpsResponse) {
-    return httpsResponse;
+    return addSecurityHeaders(httpsResponse);
   }
-  
-  // Only apply rate limiting to API routes
-  if (req.nextUrl.pathname.startsWith('/api/')) {
-    const rateLimitResponse = rateLimit(req);
-    if (rateLimitResponse) {
-      return rateLimitResponse;
+
+  // Apply rate limiting
+  const rateLimitResponse = rateLimit(req);
+  if (rateLimitResponse) {
+    return addSecurityHeaders(rateLimitResponse);
+  }
+
+  // Apply CSRF protection to API routes (except GET requests and docs)
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/docs') && !pathname.startsWith('/api/csrf-token')) {
+    const csrfResponse = csrfMiddleware(req);
+    if (csrfResponse) {
+      return addSecurityHeaders(csrfResponse);
     }
   }
+
+  // Generate CSRF token for first-time visitors
+  const response = NextResponse.next();
   
-  // Continue with request
-  return NextResponse.next();
+  // Add CSRF token to response if it's a page request and no token exists
+  if (!pathname.startsWith('/api/') && !pathname.startsWith('/_next/')) {
+    const hasCsrfCookie = req.cookies.get('csrf-token');
+    if (!hasCsrfCookie) {
+      const csrfToken = generateCSRFToken();
+      setCSRFTokenCookie(response, csrfToken);
+    }
+  }
+
+  return addSecurityHeaders(response);
 }
 
-// Configure which routes to apply middleware to
 export const config = {
   matcher: [
-    '/api/:path*',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder files
+     */
+    '/((?!_next/static|_next/image|favicon.ico|public/).*)',
   ],
 };
 

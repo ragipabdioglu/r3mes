@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Settings, Server, Layers, Shield, Cpu, CheckCircle, XCircle } from "lucide-react";
 import { getRoles, getNodeRoles, getRoleStatistics, NodeRole, NodeRoles, RoleStats } from "@/lib/api";
+import { useAnnouncer } from "@/hooks/useAccessibility";
+import { formatNumber, formatTokenAmount } from "@/utils/formatters";
 import { logger } from "@/lib/logger";
 import WalletGuard from "@/components/WalletGuard";
 import { SkeletonStatCard } from "@/components/SkeletonLoader";
@@ -59,6 +61,9 @@ function RolesPageContent() {
   const [mounted, setMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Accessibility announcer
+  const { announce, announceError, announceSuccess, announceLoading } = useAnnouncer();
+
   useEffect(() => {
     setMounted(true);
     const address = localStorage.getItem("keplr_address");
@@ -69,6 +74,7 @@ function RolesPageContent() {
   const loadData = async () => {
     try {
       setIsLoading(true);
+      announceLoading("role data", true);
       const [rolesData, statsData] = await Promise.all([
         getRoles().catch(() => ({ roles: [], total: 0 })),
         getRoleStatistics().catch(() => ({ stats: [] })),
@@ -84,17 +90,22 @@ function RolesPageContent() {
         }
       }
       setIsLoading(false);
+      announce(`Loaded ${rolesData.roles.length} roles`);
     } catch (error) {
       logger.error("Failed to fetch role data:", error);
+      announceError("Failed to load role data");
       setIsLoading(false);
     }
   };
 
   const handleRoleToggle = (roleId: number) => {
+    const roleName = ROLE_NAMES[roleId];
     if (selectedRoles.includes(roleId)) {
       setSelectedRoles(selectedRoles.filter((id) => id !== roleId));
+      announce(`Deselected ${roleName} role`);
     } else {
       setSelectedRoles([...selectedRoles, roleId]);
+      announce(`Selected ${roleName} role`);
     }
   };
 
@@ -147,6 +158,7 @@ function RolesPageContent() {
       );
 
       toast.success(`Registration successful! Transaction: ${txHash.slice(0, 12)}...`);
+      announceSuccess("Node registration successful");
       
       // Reload data after successful registration
       await loadData();
@@ -154,6 +166,7 @@ function RolesPageContent() {
       logger.error("Failed to register node:", error);
       const errorMessage = error?.message || String(error) || "Unknown error";
       toast.error(`Registration failed: ${errorMessage}`);
+      announceError(`Registration failed: ${errorMessage}`);
     } finally {
       setIsRegistering(false);
     }
@@ -188,10 +201,10 @@ function RolesPageContent() {
                     </div>
                   </div>
                   <div className="text-2xl font-bold text-[var(--accent-primary)] mb-1">
-                    {stat.total_nodes}
+                    {formatNumber(stat.total_nodes)}
                   </div>
                   <div className="text-xs text-[var(--text-secondary)]">
-                    {stat.active_nodes} active
+                    {formatNumber(stat.active_nodes)} active
                   </div>
                 </div>
               ))}
@@ -235,13 +248,13 @@ function RolesPageContent() {
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {roles.map((role) => {
-                  const accessInfo = ROLE_ACCESS_INFO[role.role_id];
-                  const isSelected = selectedRoles.includes(role.role_id);
+                  const accessInfo = ROLE_ACCESS_INFO[role.id];
+                  const isSelected = selectedRoles.includes(role.id);
                   const isPublic = accessInfo?.public ?? true;
                   
                   return (
                     <div
-                      key={role.role_id}
+                      key={role.id}
                       className={`p-4 rounded-xl border transition-all ${
                         isSelected
                           ? "border-[var(--accent-primary)] bg-[var(--accent-primary)]/10"
@@ -249,15 +262,15 @@ function RolesPageContent() {
                       } ${!isPublic ? "bg-[var(--bg-secondary)]" : ""}`}
                     >
                       <button
-                        onClick={() => handleRoleToggle(role.role_id)}
+                        onClick={() => handleRoleToggle(role.id)}
                         className="w-full text-left"
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-3">
-                            {ROLE_ICONS[role.role_id]}
+                            {ROLE_ICONS[role.id]}
                             <div className="flex-1">
                               <div className="font-semibold text-[var(--text-primary)] text-sm sm:text-base">
-                                {role.role_name}
+                                {role.name}
                               </div>
                               <div className="text-xs text-[var(--text-secondary)] mt-1">
                                 {role.description}

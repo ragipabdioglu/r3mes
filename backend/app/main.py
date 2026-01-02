@@ -143,6 +143,19 @@ database = AsyncDatabase(db_path=config.database_path, chain_json_path=config.ch
 cache_manager = get_cache_manager()
 serving_node_registry = ServingNodeRegistry(database)
 
+# Initialize authentication with database
+from .auth import init_auth
+init_auth(database)
+
+# Initialize services
+from .services import UserService, APIKeyService, ChatService
+from .cache_invalidation_strategy import get_cache_invalidation_manager
+
+user_service = UserService(database, cache_manager)
+api_key_service = APIKeyService(database, cache_manager)
+chat_service = ChatService(database, cache_manager)
+cache_invalidation_manager = get_cache_invalidation_manager(cache_manager)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
@@ -1124,8 +1137,88 @@ class RevokeAPIKeyRequest(BaseModel):
             raise ValueError("Invalid address length (must be 20-60 characters)")
         return v
 
+# ========== Authentication Endpoints ==========
+
+class LoginRequest(BaseModel):
+    wallet_address: str = Field(..., description="Wallet address for login")
+    
+    @field_validator("wallet_address")
+    @classmethod
+    def validate_wallet_address(cls, v: str) -> str:
+        """Validate Cosmos wallet address format."""
+        v = v.strip()
+        if not v:
+            raise ValueError("Wallet address cannot be empty")
+        if not v.startswith("remes"):
+            raise ValueError("Invalid address format: must start with 'remes'")
+        if len(v) < 20 or len(v) > 60:
+            raise ValueError("Invalid address length (must be 20-60 characters)")
+        return v
+
+@app.post("/auth/login")
+@limiter.limit("10/minute")  # Rate limit for login attempts
+async def login(request: Request, login_request: LoginRequest):
+    """
+    Login endpoint - creates JWT token for wallet address.
+    
+    Args:
+        login_request: Login request with wallet address
+        
+    Returns:
+        JWT token and user info
+    """
+    from .auth import create_jwt_token
+    
+    wallet_address = login_request.wallet_address
+    
+    # Check if user exists in database
+    user_info = await database.get_user_info(wallet_address)
+    if not user_info:
+        # Create user if doesn't exist
+        await database.create_user(wallet_address)
+        user_info = await database.get_user_info(wallet_address)
+    
+    # Create JWT token
+    token = create_jwt_token(wallet_address)
+    
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": 86400,  # 24 hours in seconds
+        "user": {
+            "wallet_address": user_info['wallet_address'],
+            "credits": user_info['credits'],
+            "is_miner": user_info['is_miner']
+        }
+    }
+
+@app.get("/auth/me")
+@limiter.limit("30/minute")
+async def get_current_user(request: Request):
+    """
+    Get current user info from JWT token.
+    
+    Returns:
+        Current user information
+    """
+    from .auth import require_auth
+    
+    wallet_address = await require_auth(request)
+    user_info = await database.get_user_info(wallet_address)
+    
+    if not user_info:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "wallet_address": user_info['wallet_address'],
+        "credits": user_info['credits'],
+        "is_miner": user_info['is_miner']
+    }
+
+# ========== API Key Management Endpoints ==========
+
 @app.post("/api-keys/create")
-@limiter.limit(config.rate_limit_get)
+@limiter.limit("5/minute")  # Specific rate limit for API key creation
 async def create_api_key(request: Request, key_request: CreateAPIKeyRequest):
     """
     Yeni bir API key oluşturur.
@@ -1174,7 +1267,7 @@ async def list_api_keys(request: Request, wallet_address: str):
     return {"wallet_address": wallet_address, "api_keys": keys}
 
 @app.post("/api-keys/revoke")
-@limiter.limit(config.rate_limit_get)
+@limiter.limit("10/minute")  # Specific rate limit for API key revocation
 async def revoke_api_key(request: Request, revoke_request: RevokeAPIKeyRequest):
     """
     Bir API key'i iptal eder.

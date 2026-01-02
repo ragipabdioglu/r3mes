@@ -1,119 +1,48 @@
-/**
- * React Query hooks for miner data fetching
- * Replaces setInterval polling with proper React Query caching and refetching
- */
+// React Query hooks for miner data
 
-import { useQuery } from "@tanstack/react-query";
-import { getUserInfo, getMinerStats, getEarningsHistory, getHashrateHistory, UserInfo, MinerStats } from "@/lib/api";
+import { useQuery } from '@tanstack/react-query';
+import { getUserInfo, getMinerStats, getEarningsHistory, getHashrateHistory } from '@/lib/api';
 
-/**
- * Hook to fetch user info for a wallet address
- * Automatically refetches every 5 seconds
- */
+// User info hook
 export function useUserInfo(walletAddress: string | null) {
-  return useQuery<UserInfo | null, Error>({
-    queryKey: ["userInfo", walletAddress],
-    queryFn: () => walletAddress ? getUserInfo(walletAddress) : Promise.resolve(null),
+  return useQuery({
+    queryKey: ['userInfo', walletAddress],
+    queryFn: () => getUserInfo(walletAddress!),
     enabled: !!walletAddress,
-    refetchInterval: (query) => {
-      if (!walletAddress || query.state.error?.message?.includes('not available')) {
-        return false;
-      }
-      return 5000; // 5 seconds
-    },
-    staleTime: 2000, // Consider data stale after 2 seconds
-    retry: (failureCount, error) => {
-      if (error?.message?.includes('not available')) {
-        return false;
-      }
-      return failureCount < 2;
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchInterval: 30000, // Refetch every 30 seconds
+    staleTime: 15000, // Consider data stale after 15 seconds
   });
 }
 
-/**
- * Hook to fetch miner stats for a wallet address
- * Automatically refetches every 10 seconds
- */
+// Miner stats hook
 export function useMinerStats(walletAddress: string | null) {
-  return useQuery<MinerStats | null, Error>({
-    queryKey: ["minerStats", walletAddress],
-    queryFn: () => walletAddress ? getMinerStats(walletAddress) : Promise.resolve(null),
+  return useQuery({
+    queryKey: ['minerStats', walletAddress],
+    queryFn: () => getMinerStats(walletAddress!),
     enabled: !!walletAddress,
-    refetchInterval: (query) => {
-      if (!walletAddress || query.state.error?.message?.includes('not available')) {
-        return false;
-      }
-      return 10000; // 10 seconds
-    },
+    refetchInterval: 10000, // Refetch every 10 seconds for real-time data
     staleTime: 5000, // Consider data stale after 5 seconds
-    retry: (failureCount, error) => {
-      if (error?.message?.includes('not available')) {
-        return false;
-      }
-      return failureCount < 2;
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
   });
 }
 
-/**
- * Hook to fetch earnings history for a wallet address
- * Refetches every 30 seconds
- */
+// Earnings history hook
 export function useEarningsHistory(walletAddress: string | null) {
-  return useQuery<Array<{ date: string; earnings: number }>, Error>({
-    queryKey: ["earningsHistory", walletAddress],
-    queryFn: () => walletAddress ? getEarningsHistory(walletAddress) : Promise.resolve([]),
+  return useQuery({
+    queryKey: ['earningsHistory', walletAddress],
+    queryFn: () => getEarningsHistory(walletAddress!),
     enabled: !!walletAddress,
-    refetchInterval: (query) => {
-      if (!walletAddress || query.state.error?.message?.includes('not available')) {
-        return false;
-      }
-      return 30000; // 30 seconds
-    },
-    staleTime: 15000, // Consider data stale after 15 seconds
-    retry: (failureCount, error) => {
-      if (error?.message?.includes('not available')) {
-        return false;
-      }
-      return failureCount < 2;
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchInterval: 60000, // Refetch every minute
+    staleTime: 30000, // Consider data stale after 30 seconds
   });
 }
 
-/**
- * Hook to fetch hashrate history for a wallet address
- * Refetches every 30 seconds
- */
+// Hashrate history hook
 export function useHashrateHistory(walletAddress: string | null) {
-  return useQuery<Array<{ date: string; hashrate: number }>, Error>({
-    queryKey: ["hashrateHistory", walletAddress],
-    queryFn: () => walletAddress ? getHashrateHistory(walletAddress) : Promise.resolve([]),
+  return useQuery({
+    queryKey: ['hashrateHistory', walletAddress],
+    queryFn: () => getHashrateHistory(walletAddress!),
     enabled: !!walletAddress,
-    refetchInterval: (query) => {
-      if (!walletAddress || query.state.error?.message?.includes('not available')) {
-        return false;
-      }
-      return 30000; // 30 seconds
-    },
-    staleTime: 15000, // Consider data stale after 15 seconds
-    retry: (failureCount, error) => {
-      if (error?.message?.includes('not available')) {
-        return false;
-      }
-      return failureCount < 2;
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchInterval: 60000, // Refetch every minute
+    staleTime: 30000, // Consider data stale after 30 seconds
   });
 }

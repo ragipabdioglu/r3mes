@@ -395,7 +395,16 @@ class MinerEngine:
         local_batch_size = int(os.getenv("R3MES_LOCAL_BATCH_SIZE", "1"))
         self.chunk_processor = ChunkProcessor(local_batch_size=local_batch_size)
         
-        # Blockchain client already initialized above for global seed retrieval
+        # Atomic Transaction Coordinator for mining submissions
+        from core.atomic_coordinator import AtomicMiningCoordinator
+        self.atomic_coordinator = AtomicMiningCoordinator(
+            trainer=self.trainer,
+            ipfs_client=self.ipfs_client,
+            blockchain_client=self.blockchain_client,
+            task_pool_client=self.task_pool_client,
+            timeout_seconds=int(os.getenv("R3MES_TRANSACTION_TIMEOUT", "300")),
+            max_retries=int(os.getenv("R3MES_MAX_RETRIES", "3")),
+        )
         
         # Arrow Flight client (optional - for zero-copy tensor transfer)
         # Falls back to gRPC if Arrow Flight unavailable
@@ -521,51 +530,51 @@ class MinerEngine:
                     f"Miner must stop execution."
                 ) from e
     
-    def train_and_submit(self, num_iterations: int = 1):
+    async def train_and_submit_atomic(self, num_iterations: int = 1):
         """
-        Train model and submit gradients to blockchain.
+        Train model and submit gradients using atomic transactions.
         
         Args:
             num_iterations: Number of training iterations
         """
         logger.info(f"\n{'='*60}")
-        logger.info(f"Starting mining loop ({num_iterations} iterations)")
+        logger.info(f"Starting atomic mining loop ({num_iterations} iterations)")
         logger.info(f"{'='*60}\n")
         
         # Get global seed for current training round
-        # In production, this MUST succeed (fail-fast)
         global_seed = self._get_global_seed_for_round(self.training_round_id)
         if global_seed is not None:
             logger.info(f"🔒 Using global seed from blockchain: {global_seed} (training round {self.training_round_id})")
             # Reconfigure deterministic execution with new seed
+            from core.deterministic import configure_deterministic_execution
             configure_deterministic_execution(global_seed=global_seed)
         else:
-            # This should only happen in TEST MODE
             import os
             is_test_mode = os.getenv("R3MES_TEST_MODE", "false").lower() == "true"
             if is_test_mode:
                 logger.warning("⚠️  Using previously configured seed (could not retrieve from blockchain - TEST MODE)")
             else:
-                # PRODUCTION MODE: This should never happen (fail-fast already raised)
                 raise RuntimeError(
                     "CRITICAL: Global seed is None in production mode. "
                     "This should have been caught by fail-fast mechanism."
                 )
         
+        successful_transactions = 0
+        failed_transactions = 0
+        
         for iteration in range(num_iterations):
             logger.info(f"Iteration {iteration + 1}/{num_iterations}")
             logger.debug("-" * 60)
             
-            # Initialize task and chunk_data for this iteration
-            task = None
-            chunk_data = None
-            
             try:
                 # 1. Get task from task pool (claim chunk)
                 active_pool_id = self.task_pool_client.get_active_pool()
+                task = None
+                inputs = None
+                targets = None
+                
                 if not active_pool_id:
                     logger.warning("No active task pool found, using random data for testing")
-                    # Fallback to random data if no task pool available
                     inputs = torch.randn(32, 768)
                     targets = torch.randn(32, 768)
                 else:
@@ -578,7 +587,7 @@ class MinerEngine:
                     else:
                         logger.info(f"Claimed task: chunk_id={task['chunk_id']}, data_hash={task['data_hash'][:16]}...")
                         
-                        # 2. Download chunk data from IPFS
+                        # Download chunk data from IPFS
                         chunk_data = self.task_pool_client.download_chunk_data(
                             data_hash=task['data_hash'],
                             ipfs_client=self.ipfs_client
@@ -597,7 +606,6 @@ class MinerEngine:
                             
                             # Ensure tensors are properly shaped
                             if isinstance(inputs, torch.Tensor):
-                                # Add batch dimension if missing
                                 if inputs.dim() == 1:
                                     inputs = inputs.unsqueeze(0)
                             if isinstance(targets, torch.Tensor):
@@ -606,318 +614,92 @@ class MinerEngine:
                             
                             logger.info(f"Using real chunk data: shape={inputs.shape if isinstance(inputs, torch.Tensor) else 'unknown'}")
                 
-                # 3. Training step with real or fallback data
-                loss, gradients_dict = self.trainer.train_step(inputs, targets)
-                logger.info(f"Training loss: {loss:.6f}")
+                # 2. Create atomic transaction
+                transaction = self.atomic_coordinator.create_transaction(task=task)
                 
-                # Calculate gradient norm from gradients dict
-                def calculate_gradient_norm(gradients_dict: Dict[str, torch.Tensor]) -> float:
-                    """Calculate L2 norm of all gradients."""
-                    total_norm = 0.0
-                    for grad in gradients_dict.values():
-                        if grad is not None and isinstance(grad, torch.Tensor):
-                            param_norm = grad.data.norm(2)
-                            total_norm += param_norm.item() ** 2
-                    return total_norm ** (1. / 2)
-                
-                gradient_norm = calculate_gradient_norm(gradients_dict)
-                
-                # Get accuracy from trainer if available
-                accuracy = 0.0
-                if hasattr(self.trainer, 'get_validation_accuracy'):
-                    try:
-                        accuracy = self.trainer.get_validation_accuracy()
-                    except (AttributeError, RuntimeError) as e:
-                        logger.debug(f"Could not get validation accuracy: {e}")
-                elif hasattr(self.trainer, 'last_accuracy'):
-                    accuracy = self.trainer.last_accuracy
-                elif hasattr(self.trainer, 'metrics') and 'accuracy' in self.trainer.metrics:
-                    accuracy = self.trainer.metrics['accuracy']
-                
-                # Update training metrics for stats collector
-                try:
-                    from r3mes.miner.stats_server import get_stats_collector
-                    stats_collector = get_stats_collector()
-                    if stats_collector:
-                        epoch = self.training_round_id
-                        stats_collector.update_training_metrics(epoch, float(loss), accuracy, gradient_norm)
-                except (ImportError, AttributeError):
-                    # Stats collector not available
-                    pass
-                
-                # Store gradient names for later reconstruction
-                gradient_names = list(gradients_dict.keys())
-                
-                # Convert gradients dict to list (gradient_accumulator expects List[Tensor])
-                gradients_list = list(gradients_dict.values())
-                
-                # 1.5. Accumulate gradients (bandwidth optimization)
-                accumulated_gradients_list = self.gradient_accumulator.accumulate(gradients_list)
-                
-                # If accumulation not complete, skip submission
-                if accumulated_gradients_list is None:
-                    logger.debug(f"Accumulating... ({self.gradient_accumulator.step_count}/{self.gradient_accumulator.accumulation_steps})")
-                    continue
-                
-                logger.info(f"Accumulation complete ({self.gradient_accumulator.accumulation_steps} steps)")
-                
-                # Reconstruct gradients dictionary from accumulated list
-                accumulated_gradients_dict = dict(zip(gradient_names, accumulated_gradients_list))
-                
-                # 1.6. Compress gradients (top-k compression for bandwidth optimization)
-                if self.top_k_compression > 0 and self.top_k_compression < 1.0:
-                    compressed = compress_gradients(accumulated_gradients_list, k=self.top_k_compression)
-                    compression_ratio = compressed._calculate_compression_ratio()
-                    logger.info(f"Compression complete: {compression_ratio*100:.1f}% size reduction")
-                    # Use compressed gradients for hash computation
-                    # Note: In production, you might want to hash the compressed format
-                    gradients_for_hash = accumulated_gradients_dict
-                else:
-                    gradients_for_hash = accumulated_gradients_dict
-                
-                # 2. Compute gradient hash from accumulated gradients
-                gradient_hash = self.trainer.compute_gradient_hash(gradients_for_hash)
-                logger.debug(f"Gradient hash: {gradient_hash[:16]}...")
-                
-                # 2.5. Get or start training round
-                if self.training_round_id == 0:
-                    # Start new training round
-                    training_round = self.coordinator.start_training_round()
-                    self.training_round_id = training_round.round_id
-                else:
-                    # Get existing training round
-                    training_round = self.coordinator.get_training_round(self.training_round_id)
-                    if training_round is None:
-                        # Round not found, start new one
-                        training_round = self.coordinator.start_training_round()
-                        self.training_round_id = training_round.round_id
-                
-                # 2.6. Get global seed for this training round (seed locking)
-                global_seed = self._get_global_seed_for_round(self.training_round_id)
-                if global_seed is not None:
-                    # Reconfigure deterministic execution with locked seed
-                    configure_deterministic_execution(global_seed=global_seed)
-                    logger.debug(f"Seed locked: {global_seed} (training round {self.training_round_id})")
-                
-                # 3. Get miner address for metadata (needed for binary serialization)
+                # 3. Execute atomic mining transaction
                 miner_address = self.blockchain_client.get_miner_address()
-                
-                # 4. Serialize LoRA state (using accumulated gradients)
-                # Update trainer with accumulated gradients for serialization
-                lora_state = self.trainer.get_lora_state_dict()
-                # Note: In production, accumulated gradients would be used to update LoRA state
-                
-                # Try binary serialization first (Protocol Buffers - ~30% bandwidth reduction)
-                try:
-                    serialized = self.binary_serializer.serialize_gradients(
-                        accumulated_gradients_dict,  # Dictionary format
-                        metadata=self.trainer.get_training_metadata(),
-                        training_round_id=self.training_round_id,
-                        miner_address=miner_address,
-                        gradient_hash=gradient_hash,
-                    )
-                    logger.info("Using Protocol Buffers serialization (binary format)")
-                except Exception as e:
-                    # Fallback to pickle-based serialization
-                    logger.warning(f"Binary serialization failed, using pickle: {e}")
-                    serialized = self.serializer.serialize_lora_state(
-                        lora_state,
-                        metadata=self.trainer.get_training_metadata(),
-                    )
-                
-                serialized_size_mb = len(serialized) / (1024 * 1024)
-                logger.info(f"Serialized LoRA size: {serialized_size_mb:.4f} MB")
-                
-                # 4.5. Upload to IPFS (active role)
-                # Optionally use Arrow Flight for zero-copy transfer if available
-                if self.arrow_flight_client.is_connected():
-                    # Try Arrow Flight first (zero-copy) - expects List[Tensor]
-                    flight_path = self.arrow_flight_client.upload_gradients(
-                        accumulated_gradients_list,  # List format
-                        metadata={
-                            "miner": miner_address,
-                            "training_round_id": self.training_round_id,
-                            "gradient_hash": gradient_hash,
-                        }
-                    )
-                    if flight_path:
-                        logger.info(f"Uploaded via Arrow Flight (zero-copy): {flight_path}")
-                        # Still upload to IPFS for compatibility
-                        logger.info("Uploading to IPFS (backup)...")
-                        ipfs_hash = self.ipfs_client.upload_lora_state(serialized)
-                        logger.info(f"IPFS hash: {ipfs_hash}")
-                    else:
-                        # Fallback to IPFS
-                        logger.info("Uploading to IPFS...")
-                        ipfs_hash = self.ipfs_client.upload_lora_state(serialized)
-                        logger.info(f"IPFS hash: {ipfs_hash}")
-                else:
-                    # Standard IPFS upload
-                    logger.info("Uploading to IPFS...")
-                    ipfs_hash = self.ipfs_client.upload_lora_state(serialized)
-                    logger.info(f"IPFS hash: {ipfs_hash}")
-                
-                # 4.6. Complete task if we claimed one and successfully processed it
-                if task and chunk_data is not None:
-                    success = self.task_pool_client.complete_task(
-                        chunk_id=task['chunk_id'],
-                        gradient_hash=ipfs_hash
-                    )
-                    if success:
-                        logger.info(f"Task {task['chunk_id']} completed successfully")
-                    else:
-                        logger.warning(f"Failed to complete task {task['chunk_id']}")
-                
-                # 4.7. (Opsiyonel) Proof of Replication (PoRep) üret ve IPFS'e yükle
-                porep_proof_ipfs_hash = None
-                try:
-                    # PoRep, Go tarafındaki VerifyPoRep ile uyumlu olacak şekilde üretilir.
-                    # data_hash: SHA256(serialized gradient bytes) -> hex string
-                    data_hash_bytes = hashlib.sha256(serialized).digest()
-                    data_hash_hex = data_hash_bytes.hex()
-
-                    # replica_hash: SHA256(data || miner_address) -> hex string
-                    replica = serialized + miner_address.encode("utf-8")
-                    replica_hash_bytes = hashlib.sha256(replica).digest()
-                    replica_hash_hex = replica_hash_bytes.hex()
-
-                    # Basit Merkle ağacı (Go'daki createMerkleTree ile aynı mantık)
-                    porep_chunk_size = int(os.getenv("R3MES_POREP_CHUNK_SIZE", "1024"))
-                    chunk_size = porep_chunk_size
-                    if len(serialized) == 0:
-                        chunks = [b""]
-                    else:
-                        chunks = [
-                            serialized[i : i + chunk_size]
-                            for i in range(0, len(serialized), chunk_size)
-                        ]
-                    level = [hashlib.sha256(chunk).digest() for chunk in chunks]
-                    while len(level) > 1:
-                        next_level = []
-                        for i in range(0, len(level), 2):
-                            if i + 1 < len(level):
-                                combined = level[i] + level[i + 1]
-                            else:
-                                combined = level[i] + level[i]
-                            next_level.append(hashlib.sha256(combined).digest())
-                        level = next_level
-                    merkle_root = level[0]
-
-                    # replication_id: hash(miner_address + []byte(data_hash_hex) + ipfs_hash)
-                    replication_input = (
-                        miner_address.encode("utf-8")
-                        + data_hash_hex.encode("utf-8")
-                        + ipfs_hash.encode("utf-8")
-                    )
-                    replication_id = hashlib.sha256(replication_input).hexdigest()
-
-                    # storage_proof: hash(replica_hash_bytes + miner_address + ipfs_hash)
-                    storage_input = (
-                        replica_hash_bytes
-                        + miner_address.encode("utf-8")
-                        + ipfs_hash.encode("utf-8")
-                    )
-                    storage_proof_bytes = hashlib.sha256(storage_input).digest()
-
-                    porep_obj = {
-                        "data_hash": data_hash_hex,
-                        "replica_hash": replica_hash_hex,
-                        "merkle_proof": base64.b64encode(merkle_root).decode("ascii"),
-                        "storage_proof": base64.b64encode(storage_proof_bytes).decode(
-                            "ascii"
-                        ),
-                        "replication_id": replication_id,
-                        "miner_address": miner_address,
-                        "timestamp": int(time.time()),
-                    }
-                    porep_proof_ipfs_hash = self.ipfs_client.upload_json(porep_obj)
-                    logger.info(f"PoRep proof IPFS hash: {porep_proof_ipfs_hash}")
-                except Exception as e:
-                    self.logger.warning(f"⚠️  Failed to generate/upload PoRep proof: {e}")
-                    porep_proof_ipfs_hash = None
-                
-                # 4.7. Calculate deterministic shard assignment
-                block_hash = self.blockchain_client.get_block_hash()
-                total_shards = int(os.getenv("R3MES_TOTAL_SHARDS", "100"))
-                shard_id = calculate_shard_id(
-                    miner_address=miner_address,
-                    block_hash=block_hash,
-                    training_round_id=self.training_round_id,
-                    total_shards=total_shards,
-                )
-                
-                # 4.8. Calculate claimed loss (BitNet integer format)
-                # Get average loss from training history for this round
-                # Loss-Based Spot Checking: This will be verified by validators through forward pass
-                claimed_loss = None
-                if hasattr(self.trainer, 'loss_history') and len(self.trainer.loss_history) > 0:
-                    # Use the most recent loss value
-                    recent_loss = self.trainer.loss_history[-1]
-                    # Convert to BitNet integer format (multiply by scale factor for precision, then round)
-                    # BitNet uses integer representation, so we scale and round
-                    loss_scale_factor = int(os.getenv("R3MES_LOSS_SCALE_FACTOR", "1000"))
-                    claimed_loss_int = int(recent_loss * loss_scale_factor)  # Scale to integer
-                    claimed_loss = str(claimed_loss_int)
-                    logger.info(f"Claimed loss (BitNet integer): {claimed_loss}")
-                else:
-                    logger.warning("No loss history available, claimed_loss will be empty")
-                
-                # Register gradient with coordinator
-                gradient_metadata = self.coordinator.register_gradient(
-                    round_id=self.training_round_id,
-                    miner_address=miner_address,
-                    ipfs_hash=ipfs_hash,
-                    gradient_hash=gradient_hash,
-                    shard_id=shard_id,
-                    gpu_architecture=self.gpu_architecture,
-                    porep_proof_ipfs_hash=porep_proof_ipfs_hash,
-                )
-                logger.info(f"Registered gradient {gradient_metadata.gradient_id} in round {self.training_round_id} (shard {shard_id})")
-                
-                # 5. Submit to blockchain (only hash + metadata)
-                logger.info("Submitting to blockchain...")
-                
-                # Get model version from environment or use default
                 model_version = os.getenv("R3MES_MODEL_VERSION", "v1.0.0")
-                response = self.blockchain_client.submit_gradient(
+                
+                success, error_message = await self.atomic_coordinator.execute_atomic_mining(
+                    context=transaction,
+                    inputs=inputs,
+                    targets=targets,
                     miner_address=miner_address,
-                    ipfs_hash=ipfs_hash,
-                    model_version=model_version,
                     training_round_id=self.training_round_id,
-                    shard_id=shard_id,  # Deterministic shard assignment
-                    gradient_hash=gradient_hash,
-                    gpu_architecture=self.gpu_architecture,
-                    claimed_loss=claimed_loss,  # Loss-Based Spot Checking: miner's claimed loss
-                    porep_proof_ipfs_hash=porep_proof_ipfs_hash,
+                    model_version=model_version,
                 )
                 
-                if response.get("success"):
-                    self.successful_submissions += 1
-                    logger.info(f"Gradient submitted successfully! ID: {response.get('stored_gradient_id')}, TX: {response.get('tx_hash')}")
+                if success:
+                    successful_transactions += 1
+                    logger.info(f"✅ Atomic transaction successful: {transaction.transaction_id}")
+                    logger.info(f"   IPFS Hash: {transaction.ipfs_hash}")
+                    logger.info(f"   Blockchain TX: {transaction.blockchain_tx_hash}")
+                    if transaction.stored_gradient_id:
+                        logger.info(f"   Gradient ID: {transaction.stored_gradient_id}")
                 else:
-                    logger.error(f"Submission failed: {response.get('error')}")
+                    failed_transactions += 1
+                    logger.error(f"❌ Atomic transaction failed: {transaction.transaction_id}")
+                    logger.error(f"   Error: {error_message}")
+                    logger.error(f"   Failed at: {transaction.failed_step}")
                 
                 self.total_submissions += 1
+                if success:
+                    self.successful_submissions += 1
+                
                 self.training_round_id += 1
+                
+                # Trap job verification (if applicable)
+                if task and transaction.gradients_dict and transaction.gradient_hash:
+                    trap_valid = self._verify_trap_job(task, transaction.gradient_hash, transaction.gradients_dict)
+                    if not trap_valid:
+                        logger.warning(f"⚠️ Trap job verification failed for task {task['chunk_id']}")
                 
                 logger.debug("")
                 
             except Exception as e:
+                failed_transactions += 1
                 logger.error(f"Error in iteration {iteration + 1}: {e}", exc_info=True)
                 continue
         
         # Summary
         logger.info(f"\n{'='*60}")
-        logger.info("Mining Summary")
+        logger.info("Atomic Mining Summary")
         logger.info(f"{'='*60}")
-        logger.info(f"Total submissions: {self.total_submissions}")
-        logger.info(f"Successful: {self.successful_submissions}")
-        logger.info(f"Failed: {self.total_submissions - self.successful_submissions}")
+        logger.info(f"Total transactions: {successful_transactions + failed_transactions}")
+        logger.info(f"Successful: {successful_transactions}")
+        logger.info(f"Failed: {failed_transactions}")
+        
+        # Coordinator statistics
+        coord_stats = self.atomic_coordinator.get_statistics()
+        logger.info(f"Success rate: {coord_stats['success_rate']*100:.1f}%")
+        logger.info(f"Average commit time: {coord_stats['average_commit_time']:.2f}s")
         logger.info("")
+        
+        # Cleanup stale transactions
+        await self.atomic_coordinator.cleanup_stale_transactions()
+    
+    def train_and_submit(self, num_iterations: int = 1):
+        """
+        Legacy train_and_submit method - now uses atomic coordinator.
+        
+        Args:
+            num_iterations: Number of training iterations
+        """
+        # Run async method in sync context
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(self.train_and_submit_atomic(num_iterations))
+        """
     
     def get_statistics(self) -> Dict[str, Any]:
         """
-        Get mining statistics.
+        Get mining statistics including atomic coordinator stats.
         
         Returns:
             Dictionary with mining statistics including GPU stats and training metrics
@@ -931,7 +713,7 @@ class MinerEngine:
                 miner_stats = stats_collector.get_miner_stats()
                 training_metrics = stats_collector.get_training_metrics()
                 
-                return {
+                base_stats = {
                     "miner_stats": {
                         "gpu_temp": miner_stats.gpu_temp,
                         "fan_speed": miner_stats.fan_speed,
@@ -954,20 +736,34 @@ class MinerEngine:
                         "training_round_id": self.training_round_id,
                     },
                 }
+            else:
+                base_stats = {
+                    "mining_stats": {
+                        "total_submissions": self.total_submissions,
+                        "successful_submissions": self.successful_submissions,
+                        "training_round_id": self.training_round_id,
+                        "gpu_architecture": self.gpu_architecture,
+                        "lora_size_mb": self.trainer.estimate_lora_size_mb() if hasattr(self.trainer, 'estimate_lora_size_mb') else 0.0,
+                    },
+                }
         except ImportError:
             # Stats collector not available
-            pass
+            base_stats = {
+                "mining_stats": {
+                    "total_submissions": self.total_submissions,
+                    "successful_submissions": self.successful_submissions,
+                    "training_round_id": self.training_round_id,
+                    "gpu_architecture": self.gpu_architecture,
+                    "lora_size_mb": self.trainer.estimate_lora_size_mb() if hasattr(self.trainer, 'estimate_lora_size_mb') else 0.0,
+                },
+            }
         
-        # Fallback: return basic stats
-        return {
-            "mining_stats": {
-                "total_submissions": self.total_submissions,
-                "successful_submissions": self.successful_submissions,
-                "training_round_id": self.training_round_id,
-                "gpu_architecture": self.gpu_architecture,
-                "lora_size_mb": self.trainer.estimate_lora_size_mb(),
-            },
-        }
+        # Add atomic coordinator statistics
+        if hasattr(self, 'atomic_coordinator'):
+            coord_stats = self.atomic_coordinator.get_statistics()
+            base_stats["atomic_coordinator"] = coord_stats
+        
+        return base_stats
     
     # =========================================================================
     # TRAP JOB VERIFICATION (FAZ 5 Integration)

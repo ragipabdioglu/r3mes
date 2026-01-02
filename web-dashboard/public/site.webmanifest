@@ -1,0 +1,125 @@
+{
+  "name": "R3MES - Decentralized AI Mining Network",
+  "short_name": "R3MES",
+  "description": "Join the R3MES network to mine cryptocurrency using AI-powered algorithms. Earn REMES tokens while contributing to decentralized artificial intelligence.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#06b6d4",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["finance", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/dashboard-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "R3MES Mining Dashboard"
+    },
+    {
+      "src": "/screenshots/dashboard-narrow.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "R3MES Mobile Dashboard"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mining Dashboard",
+      "short_name": "Dashboard",
+      "description": "View your mining statistics and earnings",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "/icons/dashboard-96x96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Start Mining",
+      "short_name": "Mine",
+      "description": "Start mining REMES tokens",
+      "url": "/mine",
+      "icons": [
+        {
+          "src": "/icons/mining-96x96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Network Stats",
+      "short_name": "Network",
+      "description": "View network statistics and recent blocks",
+      "url": "/network",
+      "icons": [
+        {
+          "src": "/icons/network-96x96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "AI Chat",
+      "short_name": "Chat",
+      "description": "Chat with R3MES AI assistant",
+      "url": "/chat",
+      "icons": [
+        {
+          "src": "/icons/chat-96x96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://r3mes.com/site.webmanifest"
+    }
+  ],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  }
+}

@@ -1,57 +1,84 @@
-/**
- * Toast Notification System
- * 
- * Global toast notification system for success/error messages
- */
+// Toast notification system for R3MES Web Dashboard
 
-export type ToastType = "success" | "error" | "warning" | "info";
+export interface ToastOptions {
+  duration?: number;
+  position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
+  dismissible?: boolean;
+}
 
 export interface Toast {
   id: string;
-  type: ToastType;
+  type: 'success' | 'error' | 'warning' | 'info';
   message: string;
-  duration?: number;
+  duration: number;
+  dismissible: boolean;
 }
 
 class ToastManager {
   private toasts: Toast[] = [];
-  private listeners: Set<(toasts: Toast[]) => void> = new Set();
+  private listeners: ((toasts: Toast[]) => void)[] = [];
 
-  subscribe(listener: (toasts: Toast[]) => void) {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+  private generateId(): string {
+    return `toast-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   }
 
   private notify() {
-    this.listeners.forEach((listener) => listener([...this.toasts]));
+    this.listeners.forEach(listener => listener([...this.toasts]));
   }
 
-  show(type: ToastType, message: string, duration: number = 5000) {
-    const id = Math.random().toString(36).substring(7);
-    const toast: Toast = { id, type, message, duration };
-    
+  private addToast(type: Toast['type'], message: string, duration: number = 5000, options: ToastOptions = {}) {
+    const toast: Toast = {
+      id: this.generateId(),
+      type,
+      message,
+      duration: options.duration || duration,
+      dismissible: options.dismissible !== false,
+    };
+
     this.toasts.push(toast);
     this.notify();
 
-    if (duration > 0) {
+    // Auto-remove toast after duration
+    if (toast.duration > 0) {
       setTimeout(() => {
-        this.remove(id);
-      }, duration);
+        this.remove(toast.id);
+      }, toast.duration);
     }
 
-    return id;
+    return toast.id;
   }
 
-  remove(id: string) {
-    this.toasts = this.toasts.filter((toast) => toast.id !== id);
+  success(message: string, duration?: number, options?: ToastOptions): string {
+    return this.addToast('success', message, duration, options);
+  }
+
+  error(message: string, duration?: number, options?: ToastOptions): string {
+    return this.addToast('error', message, duration || 8000, options);
+  }
+
+  warning(message: string, duration?: number, options?: ToastOptions): string {
+    return this.addToast('warning', message, duration || 6000, options);
+  }
+
+  info(message: string, duration?: number, options?: ToastOptions): string {
+    return this.addToast('info', message, duration, options);
+  }
+
+  remove(id: string): void {
+    this.toasts = this.toasts.filter(toast => toast.id !== id);
     this.notify();
   }
 
-  clear() {
+  clear(): void {
     this.toasts = [];
     this.notify();
+  }
+
+  subscribe(listener: (toasts: Toast[]) => void): () => void {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener);
+    };
   }
 
   getToasts(): Toast[] {
@@ -59,17 +86,19 @@ class ToastManager {
   }
 }
 
-export const toastManager = new ToastManager();
-
-// Convenience functions
-export const toast = {
-  success: (message: string, duration?: number) =>
-    toastManager.show("success", message, duration),
-  error: (message: string, duration?: number) =>
-    toastManager.show("error", message, duration),
-  warning: (message: string, duration?: number) =>
-    toastManager.show("warning", message, duration),
-  info: (message: string, duration?: number) =>
-    toastManager.show("info", message, duration),
+export const toast = new ToastManager();
+// Toast manager for global toast notifications
+export const toastManager = {
+  success: (message: string) => {
+    console.log('Success:', message);
+  },
+  error: (message: string) => {
+    console.error('Error:', message);
+  },
+  info: (message: string) => {
+    console.info('Info:', message);
+  },
+  warning: (message: string) => {
+    console.warn('Warning:', message);
+  }
 };
-

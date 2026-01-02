@@ -108,112 +108,126 @@ var (
 
 // ErrInvalidGradientHashf returns an error for invalid gradient hash
 func ErrInvalidGradientHashf(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrInvalidRequest,
-		"invalid gradient hash: "+fmt.Sprintf(format, args...),
+		"invalid gradient hash: %s", msg,
 	)
 }
 
 // ErrGradientNotFoundf returns an error when gradient is not found
 func ErrGradientNotFoundf(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrNotFound,
-		fmt.Sprintf(format, args...),
+		"%s", msg,
 	)
 }
 
 // ErrInvalidMinerAddressf returns an error for invalid miner address
 func ErrInvalidMinerAddressf(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrInvalidAddress,
-		fmt.Sprintf(format, args...),
+		"%s", msg,
 	)
 }
 
 // ErrInsufficientStakef returns an error when stake is insufficient
 func ErrInsufficientStakef(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrInsufficientFunds,
-		fmt.Sprintf(format, args...),
+		"%s", msg,
 	)
 }
 
 // ErrInvalidIPFSHashf returns an error for invalid IPFS hash
 func ErrInvalidIPFSHashf(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrInvalidRequest,
-		fmt.Sprintf(format, args...),
+		"%s", msg,
 	)
 }
 
 // ErrIPFSConnectionFailedf returns an error when IPFS connection fails
 func ErrIPFSConnectionFailedf(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrUnknownRequest,
-		fmt.Sprintf(format, args...),
+		"%s", msg,
 	)
 }
 
 // ErrInvalidConfigurationf returns an error for invalid configuration
 func ErrInvalidConfigurationf(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrInvalidRequest,
-		fmt.Sprintf(format, args...),
+		"%s", msg,
 	)
 }
 
 // ErrProductionConfigErrorf returns an error for production configuration issues
 func ErrProductionConfigErrorf(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrInvalidRequest,
-		fmt.Sprintf(format, args...),
+		"%s", msg,
 	)
 }
 
 // ErrMissingEnvironmentVariablef returns an error when environment variable is missing
 func ErrMissingEnvironmentVariablef(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrInvalidRequest,
-		fmt.Sprintf(format, args...),
+		"%s", msg,
 	)
 }
 
 // ErrLocalhostNotAllowedf returns an error when localhost is used in production
 func ErrLocalhostNotAllowedf(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrInvalidRequest,
-		fmt.Sprintf(format, args...),
+		"%s", msg,
 	)
 }
 
 // ErrBlockchainConnectionFailedf returns an error when blockchain connection fails
 func ErrBlockchainConnectionFailedf(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrUnknownRequest,
-		fmt.Sprintf(format, args...),
+		"%s", msg,
 	)
 }
 
 // ErrBlockchainQueryFailedf returns an error when blockchain query fails
 func ErrBlockchainQueryFailedf(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrUnknownRequest,
-		fmt.Sprintf(format, args...),
+		"%s", msg,
 	)
 }
 
 // ErrInvalidInputf returns an error for invalid input
 func ErrInvalidInputf(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrInvalidRequest,
-		fmt.Sprintf(format, args...),
+		"%s", msg,
 	)
 }
 
 // ErrInvalidAddressf returns an error for invalid address
 func ErrInvalidAddressf(format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
 	return errorsmod.Wrapf(
 		sdkerrors.ErrInvalidAddress,
-		fmt.Sprintf(format, args...),
+		"%s", msg,
 	)
 }

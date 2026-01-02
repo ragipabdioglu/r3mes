@@ -5,16 +5,36 @@ import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from "recharts";
 import { TrendingUp, Users, Activity, Zap, Network, DollarSign, Gauge } from "lucide-react";
 import { getAnalytics } from "@/lib/api";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAnnouncer } from "@/hooks/useAccessibility";
+import { formatNumber, formatPercentage, formatLatency } from "@/utils/formatters";
 
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "network" | "mining" | "economics">("overview");
+  const { announce, announceLoading, announceError } = useAnnouncer();
   
-  const { data: analytics, isLoading } = useQuery({
+  const { data: analytics, isLoading, error } = useQuery({
     queryKey: ["analytics"],
     queryFn: () => getAnalytics(),
     refetchInterval: 30000,
   });
+
+  // Announce loading and error states
+  useEffect(() => {
+    if (isLoading) {
+      announceLoading("analytics data", true);
+    } else if (analytics) {
+      announce("Analytics data loaded");
+    }
+    if (error) {
+      announceError("Failed to load analytics data");
+    }
+  }, [isLoading, analytics, error, announce, announceLoading, announceError]);
+
+  const handleTabChange = (tab: "overview" | "network" | "mining" | "economics") => {
+    setActiveTab(tab);
+    announce(`Switched to ${tab} tab`);
+  };
 
   const { data: networkGrowth, isLoading: networkLoading } = useQuery({
     queryKey: ["analytics", "network-growth"],
@@ -70,27 +90,27 @@ export default function AnalyticsPage() {
           <StatCard
             icon={<Users className="w-6 h-6" />}
             label="Active Users"
-            value={analytics?.user_engagement?.active_users || 0}
+            value={formatNumber(analytics?.user_engagement?.active_users || 0)}
           />
           <StatCard
             icon={<Activity className="w-6 h-6" />}
             label="API Calls"
-            value={analytics?.api_usage?.total_requests || 0}
+            value={formatNumber(analytics?.api_usage?.total_requests || 0)}
           />
           <StatCard
             icon={<Zap className="w-6 h-6" />}
             label="Avg Latency"
-            value={`${analytics?.model_performance?.average_latency?.toFixed(2) || 0}ms`}
+            value={formatLatency(analytics?.model_performance?.average_latency || 0)}
           />
           <StatCard
             icon={<TrendingUp className="w-6 h-6" />}
             label="Success Rate"
-            value={`${((analytics?.model_performance?.success_rate || 0) * 100).toFixed(1)}%`}
+            value={formatPercentage((analytics?.model_performance?.success_rate || 0) * 100)}
           />
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-4 mb-8 border-b border-slate-800">
+        <div className="flex gap-4 mb-8 border-b border-slate-800" role="tablist" aria-label="Analytics categories">
           {[
             { id: "overview", label: "Overview" },
             { id: "network", label: "Network Growth" },
@@ -99,7 +119,10 @@ export default function AnalyticsPage() {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => handleTabChange(tab.id as any)}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`${tab.id}-panel`}
               className={`px-6 py-3 font-semibold border-b-2 transition-colors ${
                 activeTab === tab.id
                   ? "border-green-500 text-green-400"
@@ -113,7 +136,7 @@ export default function AnalyticsPage() {
 
         {/* Tab Content */}
         {activeTab === "overview" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div id="overview-panel" role="tabpanel" aria-labelledby="overview-tab" className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ChartCard title="API Usage by Endpoint">
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={analytics?.api_usage?.endpoints_data || []}>
@@ -141,7 +164,7 @@ export default function AnalyticsPage() {
         )}
 
         {activeTab === "network" && networkGrowth && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div id="network-panel" role="tabpanel" aria-labelledby="network-tab" className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ChartCard title="Network Growth Metrics">
               <div className="space-y-4">
                 <MetricRow label="Total Miners" value={networkGrowth.metrics?.total_miners?.current} growth={networkGrowth.metrics?.total_miners?.growth_rate} />
@@ -165,7 +188,7 @@ export default function AnalyticsPage() {
         )}
 
         {activeTab === "mining" && miningEfficiency && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div id="mining-panel" role="tabpanel" aria-labelledby="mining-tab" className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ChartCard title="Mining Efficiency">
               <div className="space-y-4">
                 <MetricRow label="Hashrate" value={`${miningEfficiency.hashrate?.toFixed(1)} H/s`} />
@@ -189,7 +212,7 @@ export default function AnalyticsPage() {
         )}
 
         {activeTab === "economics" && economicAnalysis && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div id="economics-panel" role="tabpanel" aria-labelledby="economics-tab" className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ChartCard title="Tokenomics">
               <div className="space-y-4">
                 <MetricRow label="Total Supply" value={economicAnalysis.tokenomics?.total_supply?.toLocaleString()} />

@@ -32,7 +32,7 @@ describe('Logger', () => {
       process.env.NODE_ENV = 'development';
       const { logger } = await import('@/lib/logger');
       
-      logger.log('test log');
+      logger.info('test log');
       expect(consoleLogSpy).toHaveBeenCalledWith('test log');
     });
 
@@ -74,7 +74,7 @@ describe('Logger', () => {
       process.env.NODE_ENV = 'production';
       const { logger } = await import('@/lib/logger');
       
-      logger.log('test log');
+      logger.info('test log');
       expect(consoleLogSpy).not.toHaveBeenCalled();
     });
 

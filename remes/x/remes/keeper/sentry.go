@@ -9,73 +9,61 @@ import (
 
 // InitSentry initializes Sentry for error tracking
 func InitSentry() error {
-	sentryDSN := os.Getenv("SENTRY_DSN")
-	if sentryDSN == "" {
-		// Sentry is optional - don't fail if DSN is not set
+	dsn := os.Getenv("SENTRY_DSN")
+	if dsn == "" {
+		// Sentry is optional, return nil if not configured
 		return nil
 	}
 
-	environment := os.Getenv("R3MES_ENV")
-	if environment == "" {
-		environment = "development"
-	}
-
-	tracesSampleRate := 0.1
-	if environment == "development" {
-		tracesSampleRate = 1.0
-	}
-
 	err := sentry.Init(sentry.ClientOptions{
-		Dsn:              sentryDSN,
-		Environment:      environment,
-		TracesSampleRate: tracesSampleRate,
-		Release:          os.Getenv("R3MES_VERSION"),
-		ServerName:       os.Getenv("HOSTNAME"),
-		BeforeSend: func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
-			// Filter out sensitive data
-			if event.Request != nil {
-				// Remove sensitive headers
-				if event.Request.Headers != nil {
-					delete(event.Request.Headers, "Authorization")
-					delete(event.Request.Headers, "Cookie")
-					delete(event.Request.Headers, "X-Api-Key")
-				}
-			}
-			return event
-		},
+		Dsn:              dsn,
+		Environment:      getEnvironment(),
+		Release:          "remes@1.0.0",
+		TracesSampleRate: 0.1,
+		Debug:            os.Getenv("SENTRY_DEBUG") == "true",
 	})
-
 	if err != nil {
 		return err
 	}
 
-	// Flush buffered events before the program terminates
-	defer sentry.Flush(2 * time.Second)
-
 	return nil
 }
 
-// CaptureException captures an exception to Sentry
-func CaptureException(err error, tags map[string]string) {
+// CaptureException captures an exception and sends it to Sentry
+func CaptureException(err error, tags ...map[string]string) {
 	if err == nil {
 		return
 	}
 
-	sentry.WithScope(func(scope *sentry.Scope) {
-		for k, v := range tags {
-			scope.SetTag(k, v)
-		}
-		sentry.CaptureException(err)
-	})
+	// Add tags if provided
+	if len(tags) > 0 {
+		sentry.WithScope(func(scope *sentry.Scope) {
+			for key, value := range tags[0] {
+				scope.SetTag(key, value)
+			}
+			sentry.CaptureException(err)
+		})
+		return
+	}
+
+	sentry.CaptureException(err)
 }
 
-// CaptureMessage captures a message to Sentry
-func CaptureMessage(message string, level sentry.Level, tags map[string]string) {
-	sentry.WithScope(func(scope *sentry.Scope) {
-		for k, v := range tags {
-			scope.SetTag(k, v)
-		}
-		sentry.CaptureMessage(message)
-	})
+// CaptureMessage captures a message and sends it to Sentry
+func CaptureMessage(message string) {
+	sentry.CaptureMessage(message)
 }
 
+// Flush flushes any buffered events to Sentry
+func FlushSentry() {
+	sentry.Flush(2 * time.Second)
+}
+
+// getEnvironment returns the current environment
+func getEnvironment() string {
+	env := os.Getenv("REMES_ENV")
+	if env == "" {
+		env = "development"
+	}
+	return env
+}

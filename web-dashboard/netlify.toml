@@ -1,41 +1,71 @@
+# R3MES Web Dashboard - Netlify Configuration
+# Domain: r3mes.network
+
 [build]
+  # Build command
   command = "npm run build"
+  
+  # Output directory
   publish = ".next"
+  
+  # Base directory (if in monorepo)
+  # base = "web-dashboard"
 
 [build.environment]
+  # Node version
   NODE_VERSION = "20"
-  NPM_FLAGS = "--legacy-peer-deps"
+  
+  # Environment variables for build
+  NEXT_PUBLIC_API_URL = "https://api.r3mes.network"
+  NEXT_PUBLIC_RPC_URL = "https://rpc.r3mes.network"
+  NEXT_PUBLIC_REST_URL = "https://rest.r3mes.network"
+  NEXT_PUBLIC_IPFS_GATEWAY = "https://ipfs.r3mes.network"
+  NEXT_PUBLIC_CHAIN_ID = "r3mes-testnet-1"
+  NEXT_PUBLIC_CHAIN_NAME = "R3MES Testnet"
+  NEXT_PUBLIC_DENOM = "ur3mes"
+  NEXT_PUBLIC_DENOM_DISPLAY = "R3MES"
+  NEXT_PUBLIC_FAUCET_ENABLED = "true"
 
-# Next.js plugin
+# Next.js plugin for Netlify
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+# Redirects for SPA routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  conditions = {Role = ["admin"]}
+
+# API proxy to backend (optional, for development)
+# [[redirects]]
+#   from = "/api/backend/*"
+#   to = "https://api.r3mes.network/:splat"
+#   status = 200
+#   force = true
 
 # Security headers
 [[headers]]
   for = "/*"
   [headers.values]
     X-Frame-Options = "DENY"
-    X-Content-Type-Options = "nosniff"
     X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
-    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.r3mes.network https://rpc.r3mes.network https://rest.r3mes.network wss://rpc.r3mes.network;"
 
 # Cache static assets
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
 [[headers]]
   for = "/_next/static/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-[[headers]]
-  for = "/fonts/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
-# API proxy to backend (r3mes.network)
-[[redirects]]
-  from = "/api/*"
-  to = "https://api.r3mes.network/:splat"
-  status = 200
-  force = true
-  headers = {X-From = "netlify"}
+# Functions (if needed)
+[functions]
+  directory = "netlify/functions"
