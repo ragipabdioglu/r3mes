@@ -29,7 +29,29 @@
         "sig_verify_cost_ed25519": "590",
         "sig_verify_cost_secp256k1": "1000"
       },
-      "accounts": []
+      "accounts": [
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "remes1jrtxwayldq3l3wu4frt8eg9syzcdkzw7vmmsmh",
+          "pub_key": null,
+          "account_number": "0",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "remes19asaj7tyd9p698uqq74dwx5m2k6882cvq3c9lx",
+          "pub_key": null,
+          "account_number": "1",
+          "sequence": "0"
+        },
+        {
+          "@type": "/cosmos.auth.v1beta1.BaseAccount",
+          "address": "remes16kykek0kkvk803mfw4e3wukykhaccla26tvxhq",
+          "pub_key": null,
+          "account_number": "2",
+          "sequence": "0"
+        }
+      ]
     },
     "bank": {
       "params": {
