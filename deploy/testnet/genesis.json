@@ -38,7 +38,7 @@
       },
       "balances": [
         {
-          "address": "FAUCET_ADDRESS_PLACEHOLDER",
+          "address": "remes19asaj7tyd9p698uqq74dwx5m2k6882cvq3c9lx",
           "coins": [
             {
               "denom": "ur3mes",
@@ -47,7 +47,7 @@
           ]
         },
         {
-          "address": "VALIDATOR_ADDRESS_PLACEHOLDER",
+          "address": "remes1jrtxwayldq3l3wu4frt8eg9syzcdkzw7vmmsm",
           "coins": [
             {
               "denom": "ur3mes",
@@ -56,7 +56,7 @@
           ]
         },
         {
-          "address": "TREASURY_ADDRESS_PLACEHOLDER",
+          "address": "remes16kykek0kkvk803mfw4e3wukykhaccla26tvxhq",
           "coins": [
             {
               "denom": "ur3mes",
