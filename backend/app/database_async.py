@@ -295,8 +295,8 @@ class AsyncDatabase:
         """)
         
         # Apply additional recommended indexes for SQLite
-        from .database_optimization import IndexAuditor
-        index_queries = IndexAuditor.get_sqlite_index_queries()
+        from .database_optimization import get_sqlite_index_queries
+        index_queries = get_sqlite_index_queries()
         for query in index_queries:
             try:
                 await cursor.execute(query)
