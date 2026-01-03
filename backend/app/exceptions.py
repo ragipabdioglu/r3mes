@@ -326,6 +326,25 @@ class BlockchainError(R3MESException):
         )
 
 
+class InvalidBlockchainResponseError(R3MESException):
+    """Raised when blockchain returns an invalid or unexpected response."""
+    
+    def __init__(self, message: str, endpoint: Optional[str] = None, response: Optional[str] = None, cause: Optional[Exception] = None):
+        details = {}
+        if endpoint:
+            details["endpoint"] = endpoint
+        if response:
+            details["response"] = response[:500] if len(response) > 500 else response  # Truncate long responses
+        
+        super().__init__(
+            message=message,
+            error_code=ErrorCode.BLOCKCHAIN_CONNECTION_ERROR,
+            details=details,
+            cause=cause,
+            user_message="Invalid blockchain response"
+        )
+
+
 class ResourceNotFoundError(R3MESException):
     """Raised when a requested resource is not found."""
     
