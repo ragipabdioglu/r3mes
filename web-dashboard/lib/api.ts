@@ -328,53 +328,29 @@ export interface Transaction {
 
 // User API functions
 export async function getUserInfo(walletAddress: string): Promise<UserInfo> {
-  const response = await fetch(`/api/user/${walletAddress}`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch user info');
-  }
-  return response.json();
+  return apiRequest<UserInfo>(`/user/info/${walletAddress}`);
 }
 
 // Miner API functions
 export async function getMinerStats(walletAddress: string): Promise<MinerStats> {
-  const response = await fetch(`/api/miner/${walletAddress}/stats`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch miner stats');
-  }
-  return response.json();
+  return apiRequest<MinerStats>(`/miner/stats/${walletAddress}`);
 }
 
 export async function getEarningsHistory(walletAddress: string): Promise<EarningsData[]> {
-  const response = await fetch(`/api/miner/${walletAddress}/earnings`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch earnings history');
-  }
-  return response.json();
+  return apiRequest<EarningsData[]>(`/miner/earnings/${walletAddress}`);
 }
 
 export async function getHashrateHistory(walletAddress: string): Promise<HashrateData[]> {
-  const response = await fetch(`/api/miner/${walletAddress}/hashrate`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch hashrate history');
-  }
-  return response.json();
+  return apiRequest<HashrateData[]>(`/miner/hashrate/${walletAddress}`);
 }
 
 // Network API functions
 export async function getNetworkStats(): Promise<NetworkStats> {
-  const response = await fetch('/api/network/stats');
-  if (!response.ok) {
-    throw new Error('Failed to fetch network stats');
-  }
-  return response.json();
+  return apiRequest<NetworkStats>('/network/stats');
 }
 
 export async function getRecentBlocks(limit: number = 10): Promise<Block[]> {
-  const response = await fetch(`/api/network/blocks?limit=${limit}`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch recent blocks');
-  }
-  return response.json();
+  return apiRequest<Block[]>(`/blocks?limit=${limit}`);
 }
 
 // Chat API function
@@ -383,7 +359,8 @@ export async function sendChatMessage(
   walletAddress: string,
   onChunk: (chunk: string) => void
 ): Promise<void> {
-  const response = await fetch('/api/chat', {
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
