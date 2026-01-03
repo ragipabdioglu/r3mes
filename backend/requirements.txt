@@ -70,9 +70,10 @@ passlib[bcrypt]>=1.7.4  # Password hashing
 cryptography>=41.0.0  # Cryptographic operations
 
 # Cosmos SDK / Blockchain
-bip-utils>=2.9.0  # BIP39/44 key derivation
 bech32>=1.2.0  # Bech32 address encoding
 ecdsa>=0.18.0  # ECDSA signing for Cosmos transactions
+hdwallets>=0.1.2  # BIP39/44 HD wallet derivation
+mnemonic>=0.21  # BIP39 mnemonic generation
 
 # Async utilities
 anyio>=3.7.1,<4.0.0  # Async compatibility layer (FastAPI 0.104.1 requires <4.0.0)

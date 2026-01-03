@@ -24,8 +24,10 @@ from pydantic import BaseModel, Field, field_validator
 
 # Cosmos SDK imports for transaction signing
 try:
-    from bip_utils import Bip39SeedGenerator, Bip44, Bip44Coins, Bip44Changes
-    from hashlib import sha256
+    from hdwallets import BIP32DerivationError
+    from hdwallets.bip32 import BIP32
+    from mnemonic import Mnemonic
+    import hashlib
     import bech32
     HAS_CRYPTO_LIBS = True
 except ImportError:
@@ -85,31 +87,34 @@ class FaucetConfig:
             return
         
         try:
-            # Generate seed from mnemonic
-            seed = Bip39SeedGenerator(self.mnemonic).Generate()
+            # Generate seed from mnemonic using BIP39
+            mnemo = Mnemonic("english")
+            seed = mnemo.to_seed(self.mnemonic)
             
             # Derive key using Cosmos HD path (m/44'/118'/0'/0/0)
-            bip44_ctx = Bip44.FromSeed(seed, Bip44Coins.COSMOS)
-            account = bip44_ctx.Purpose().Coin().Account(0).Change(Bip44Changes.CHAIN_EXT).AddressIndex(0)
+            bip32 = BIP32.from_seed(seed)
+            # Cosmos derivation path
+            derived = bip32.derive_path("m/44'/118'/0'/0/0")
             
             # Get private key
-            self._private_key = account.PrivateKey().Raw().ToBytes()
+            self._private_key = derived.private_key
             
-            # Get public key and derive address
-            pub_key = account.PublicKey().RawCompressed().ToBytes()
+            # Get public key (compressed)
+            pub_key = derived.public_key
             
-            # SHA256 + RIPEMD160 hash of public key
+            # SHA256 + RIPEMD160 hash of public key for address
             sha256_hash = hashlib.sha256(pub_key).digest()
-            import hashlib as hl
-            ripemd160 = hl.new('ripemd160')
+            ripemd160 = hashlib.new('ripemd160')
             ripemd160.update(sha256_hash)
             address_bytes = ripemd160.digest()
             
             # Bech32 encode with prefix
-            self._faucet_address = bech32.bech32_encode(
-                self.address_prefix,
-                bech32.convertbits(address_bytes, 8, 5)
-            )
+            converted = bech32.convertbits(address_bytes, 8, 5)
+            if converted is not None:
+                self._faucet_address = bech32.bech32_encode(
+                    self.address_prefix,
+                    converted
+                )
             
             logger.info(f"Faucet address derived: {self._faucet_address}")
             
