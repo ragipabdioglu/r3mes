@@ -48,26 +48,25 @@ export interface KeplrChainInfo {
 // Get R3MES chain info with environment-aware configuration
 const getR3MESChainInfo = (): KeplrChainInfo => {
   // Get RPC URL from environment variable
-  const rpcUrl = process.env.NEXT_PUBLIC_BLOCKCHAIN_RPC_URL || 
-    (process.env.NODE_ENV === 'development' ? "http://localhost:26657" : (() => { 
-      throw new Error('NEXT_PUBLIC_BLOCKCHAIN_RPC_URL must be set in production');
-    })());
+  const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || 
+    process.env.NEXT_PUBLIC_BLOCKCHAIN_RPC_URL || 
+    (process.env.NODE_ENV === 'development' ? "http://localhost:26657" : "https://rpc.r3mes.network");
   
   // Get REST URL from environment variable
-  const restUrl = process.env.NEXT_PUBLIC_API_URL || 
+  const restUrl = process.env.NEXT_PUBLIC_REST_URL ||
     process.env.NEXT_PUBLIC_BLOCKCHAIN_REST_URL ||
-    (process.env.NODE_ENV === 'development' ? "http://localhost:1317" : (() => { 
-      throw new Error('NEXT_PUBLIC_API_URL or NEXT_PUBLIC_BLOCKCHAIN_REST_URL must be set in production');
-    })());
+    (process.env.NODE_ENV === 'development' ? "http://localhost:1317" : "https://rest.r3mes.network");
 
   // Get Chain ID from environment variable (required for testnet/mainnet distinction)
-  // Default to testnet for safety (testnet is safer than mainnet for misconfiguration)
-  const chainId = process.env.NEXT_PUBLIC_CHAIN_ID || 
-    (process.env.NODE_ENV === 'development' ? "remes-test" : "remes-testnet-1");
+  const chainId = process.env.NEXT_PUBLIC_CHAIN_ID || "r3mes-testnet-1";
+
+  // Get denom from environment variable
+  const denom = process.env.NEXT_PUBLIC_DENOM || "ur3mes";
+  const denomDisplay = process.env.NEXT_PUBLIC_DENOM_DISPLAY || "R3MES";
 
   return {
     chainId: chainId,
-    chainName: "R3MES Network",
+    chainName: "R3MES Testnet",
     rpc: rpcUrl,
     rest: restUrl,
     bip44: {
@@ -83,21 +82,21 @@ const getR3MESChainInfo = (): KeplrChainInfo => {
     },
     currencies: [
       {
-        coinDenom: "REMES",
-        coinMinimalDenom: "uremes",
+        coinDenom: denomDisplay,
+        coinMinimalDenom: denom,
         coinDecimals: 6,
       },
     ],
     feeCurrencies: [
       {
-        coinDenom: "REMES",
-        coinMinimalDenom: "uremes",
+        coinDenom: denomDisplay,
+        coinMinimalDenom: denom,
         coinDecimals: 6,
       },
     ],
     stakeCurrency: {
-      coinDenom: "REMES",
-      coinMinimalDenom: "uremes",
+      coinDenom: denomDisplay,
+      coinMinimalDenom: denom,
       coinDecimals: 6,
     },
   };
@@ -153,9 +152,10 @@ export async function getKeplrBalance(address: string): Promise<string> {
     }
     
     const data = await response.json();
-    // Find the balance for 'uremes' or 'stake' denom
+    // Find the balance for 'ur3mes' denom
+    const denom = process.env.NEXT_PUBLIC_DENOM || 'ur3mes';
     const balance = data.balances?.find(
-      (b: any) => b.denom === 'uremes' || b.denom === 'stake'
+      (b: any) => b.denom === denom || b.denom === 'ur3mes' || b.denom === 'stake'
     );
     
     return balance?.amount || "0";
