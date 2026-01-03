@@ -24,14 +24,20 @@ from pydantic import BaseModel, Field, field_validator
 
 # Cosmos SDK imports for transaction signing
 try:
-    from hdwallets import BIP32DerivationError
-    from hdwallets.bip32 import BIP32
     from mnemonic import Mnemonic
     import hashlib
     import bech32
+    # hdwallets kütüphanesi
+    try:
+        from hdwallets import BIP32
+        HAS_HDWALLETS = True
+    except ImportError:
+        HAS_HDWALLETS = False
     HAS_CRYPTO_LIBS = True
-except ImportError:
+except ImportError as e:
     HAS_CRYPTO_LIBS = False
+    HAS_HDWALLETS = False
+    logger.warning(f"Crypto libraries import failed: {e}")
 
 logger = logging.getLogger(__name__)
 
@@ -92,15 +98,14 @@ class FaucetConfig:
             seed = mnemo.to_seed(self.mnemonic)
             
             # Derive key using Cosmos HD path (m/44'/118'/0'/0/0)
-            bip32 = BIP32.from_seed(seed)
-            # Cosmos derivation path
-            derived = bip32.derive_path("m/44'/118'/0'/0/0")
-            
-            # Get private key
-            self._private_key = derived.private_key
-            
-            # Get public key (compressed)
-            pub_key = derived.public_key
+            if HAS_HDWALLETS:
+                bip32 = BIP32.from_seed(seed)
+                # hdwallets uses get_privkey_from_path
+                self._private_key = bip32.get_privkey_from_path("m/44'/118'/0'/0/0")
+                pub_key = bip32.get_pubkey_from_path("m/44'/118'/0'/0/0")
+            else:
+                logger.warning("hdwallets not available, using fallback")
+                return
             
             # SHA256 + RIPEMD160 hash of public key for address
             sha256_hash = hashlib.sha256(pub_key).digest()
@@ -119,7 +124,7 @@ class FaucetConfig:
             logger.info(f"Faucet address derived: {self._faucet_address}")
             
         except Exception as e:
-            logger.error(f"Failed to derive faucet keys: {e}")
+            logger.error(f"Failed to derive faucet keys: {e}", exc_info=True)
 
 
 # Global config instance
