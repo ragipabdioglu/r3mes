@@ -328,7 +328,16 @@ export interface Transaction {
 
 // User API functions
 export async function getUserInfo(walletAddress: string): Promise<UserInfo> {
-  return apiRequest<UserInfo>(`/user/info/${walletAddress}`);
+  try {
+    return await apiRequest<UserInfo>(`/chat/user/info/${walletAddress}`);
+  } catch (error) {
+    // If user not found, return default values
+    return {
+      wallet_address: walletAddress,
+      credits: 0,
+      is_miner: false,
+    };
+  }
 }
 
 // Miner API functions
