@@ -22,6 +22,9 @@ from fastapi import APIRouter, HTTPException, Request
 from slowapi.util import get_remote_address
 from pydantic import BaseModel, Field, field_validator
 
+# Setup logger first (before conditional imports)
+logger = logging.getLogger(__name__)
+
 # Cosmos SDK imports for transaction signing
 try:
     from mnemonic import Mnemonic
@@ -38,8 +41,6 @@ except ImportError as e:
     HAS_CRYPTO_LIBS = False
     HAS_HDWALLETS = False
     logger.warning(f"Crypto libraries import failed: {e}")
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/faucet", tags=["faucet"])
 

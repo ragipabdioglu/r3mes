@@ -15,25 +15,39 @@ const DOC_PATH_MAP: Record<string, string> = {
   "": "00_home.md",
   "home": "00_home.md",
   "quick-start": "01_get_started.md",
+  "installation": "INSTALLATION.md",
   
   // Learn
   "how-it-works": "00_project_summary.md",
+  "architecture": "ARCHITECTURE_OVERVIEW.md",
   "tokenomics": "TOKENOMICS.md",
   "security": "03_security_verification.md",
   "governance": "06_governance_system.md",
+  "economics": "04_economic_incentives.md",
   
   // Participate
   "mining-guide": "02_mining.md",
+  "mining": "02_mining.md",
   "staking-guide": "staking.md",
+  "staking": "staking.md",
   "validators": "03_validating.md",
+  "validating": "03_validating.md",
+  "serving": "04_serving.md",
+  "proposing": "05_proposing.md",
   
   // Build
   "api-reference": "13_api_reference.md",
+  "api": "13_api_reference.md",
   "sdk": "PROJECT_STRUCTURE.md",
+  "backend": "14_backend_inference_service.md",
+  "frontend": "15_frontend_user_interface.md",
   
   // Reference
   "faucet": "faucet.md",
   "troubleshooting": "TROUBLESHOOTING.md",
+  "environment-variables": "16_environment_variables.md",
+  "monitoring": "MONITORING.md",
+  "production": "12_production_deployment.md",
 };
 
 export default function DocsContent({ docPath }: DocsContentProps) {

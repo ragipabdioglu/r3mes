@@ -578,6 +578,10 @@ app.include_router(validator_router)
 from .miner_endpoints import router as miner_router
 app.include_router(miner_router)
 
+# Include dashboard endpoints (network status, miner locations, blocks)
+from .dashboard_endpoints import router as dashboard_router
+app.include_router(dashboard_router)
+
 # Note: Components (model_manager, database, cache_manager) are initialized above for lifespan function
 # Model manager, task queue, and semantic router are now lazy-loaded based on inference mode
 

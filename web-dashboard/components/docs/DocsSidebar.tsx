@@ -23,13 +23,16 @@ const navigation: NavSection[] = [
     items: [
       { path: "", label: "Welcome" },
       { path: "quick-start", label: "Quick Start" },
+      { path: "installation", label: "Installation" },
     ],
   },
   {
     title: "Learn",
     items: [
       { path: "how-it-works", label: "How It Works" },
+      { path: "architecture", label: "Architecture" },
       { path: "tokenomics", label: "Tokenomics" },
+      { path: "economics", label: "Economics" },
       { path: "security", label: "Security" },
       { path: "governance", label: "Governance" },
     ],
@@ -37,23 +40,30 @@ const navigation: NavSection[] = [
   {
     title: "Participate",
     items: [
-      { path: "mining-guide", label: "Mining" },
-      { path: "staking-guide", label: "Staking" },
-      { path: "validators", label: "Validating" },
+      { path: "mining", label: "Mining" },
+      { path: "staking", label: "Staking" },
+      { path: "validating", label: "Validating" },
+      { path: "serving", label: "Serving" },
+      { path: "proposing", label: "Proposing" },
     ],
   },
   {
     title: "Build",
     items: [
       { path: "api-reference", label: "API Reference" },
-      { path: "sdk", label: "SDK" },
+      { path: "backend", label: "Backend Service" },
+      { path: "frontend", label: "Frontend UI" },
+      { path: "sdk", label: "Project Structure" },
     ],
   },
   {
     title: "Reference",
     items: [
       { path: "faucet", label: "Testnet Faucet" },
+      { path: "environment-variables", label: "Environment Variables" },
+      { path: "monitoring", label: "Monitoring" },
       { path: "troubleshooting", label: "Troubleshooting" },
+      { path: "production", label: "Production Deployment" },
     ],
   },
 ];

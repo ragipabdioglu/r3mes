@@ -2,6 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+// API base URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.r3mes.network';
+
 interface Block {
   height: number;
   hash: string;
@@ -15,7 +18,7 @@ export default function RecentBlocks() {
   const { data: blocks, isLoading, error } = useQuery<Block[]>({
     queryKey: ["explorer", "blocks"],
     queryFn: async () => {
-      const response = await fetch("/api/blockchain/dashboard/blocks?limit=20");
+      const response = await fetch(`${API_BASE_URL}/api/blockchain/dashboard/blocks?limit=20`);
       if (!response.ok) {
         throw new Error("Failed to fetch blocks");
       }
@@ -23,6 +26,8 @@ export default function RecentBlocks() {
       return data.blocks || [];
     },
     refetchInterval: 10000,
+    retry: 3,
+    retryDelay: 1000,
   });
 
   const formatTime = (time: string) => {

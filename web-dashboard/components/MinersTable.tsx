@@ -2,6 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+// API base URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.r3mes.network';
+
 interface Miner {
   address: string;
   moniker: string;
@@ -60,12 +63,14 @@ export default function MinersTable() {
   const { data: miners, isLoading, error } = useQuery<Miner[]>({
     queryKey: ["explorer", "miners"],
     queryFn: async () => {
-      const response = await fetch("/api/blockchain/dashboard/miners");
+      const response = await fetch(`${API_BASE_URL}/api/blockchain/dashboard/miners`);
       if (!response.ok) throw new Error("Failed to fetch miners");
       const data = await response.json();
       return data.miners || [];
     },
     refetchInterval: 30000,
+    retry: 3,
+    retryDelay: 1000,
   });
 
   const formatStake = (stake: string) => {

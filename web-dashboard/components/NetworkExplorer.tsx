@@ -19,6 +19,9 @@ const Globe = dynamic<any>(
   }
 );
 
+// API base URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.r3mes.network';
+
 interface NetworkStatus {
   active_miners: number;
   total_gradients: number;
@@ -34,6 +37,8 @@ interface MinerLocation {
   lat: number;
   lng: number;
   size: number;
+  status?: string;
+  reputation?: number;
 }
 
 interface MinerLocationsResponse {
@@ -43,11 +48,11 @@ interface MinerLocationsResponse {
 
 export default function NetworkExplorer() {
   const [globeData, setGlobeData] = useState<
-    Array<{ lat: number; lng: number; size: number }>
+    Array<{ lat: number; lng: number; size: number; color: string }>
   >([]);
   const [mounted, setMounted] = useState(false);
 
-  // Fetch network status
+  // Fetch network status from backend API
   const {
     data: networkStatus,
     isLoading: isNetworkLoading,
@@ -55,13 +60,15 @@ export default function NetworkExplorer() {
   } = useQuery<NetworkStatus>({
     queryKey: ["networkStatus"],
     queryFn: async () => {
-      const response = await fetch("/api/blockchain/dashboard/status");
+      const response = await fetch(`${API_BASE_URL}/api/blockchain/dashboard/status`);
       if (!response.ok) {
         throw new Error("Failed to fetch network status");
       }
       return response.json();
     },
     refetchInterval: 5000,
+    retry: 3,
+    retryDelay: 1000,
   });
 
   useEffect(() => {
@@ -76,13 +83,15 @@ export default function NetworkExplorer() {
   } = useQuery<MinerLocationsResponse>({
     queryKey: ["minerLocations"],
     queryFn: async () => {
-      const response = await fetch("/api/blockchain/dashboard/locations");
+      const response = await fetch(`${API_BASE_URL}/api/blockchain/dashboard/locations?limit=200`);
       if (!response.ok) {
         throw new Error("Failed to fetch miner locations");
       }
       return response.json();
     },
-    refetchInterval: 10000,
+    refetchInterval: 30000, // Refresh every 30 seconds
+    retry: 3,
+    retryDelay: 1000,
   });
 
   // Update globe data when miner locations change
@@ -91,7 +100,8 @@ export default function NetworkExplorer() {
       const points = minerLocations.locations.map((loc: MinerLocation) => ({
         lat: loc.lat,
         lng: loc.lng,
-        size: loc.size,
+        size: loc.size || 0.5,
+        color: loc.status === 'active' ? '#06b6d4' : '#64748b', // Cyan for active, gray for inactive
       }));
       setGlobeData(points);
     }
@@ -123,11 +133,7 @@ export default function NetworkExplorer() {
           )}
           {networkError && !isNetworkLoading && (
             <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-400/40 rounded-md px-3 py-2">
-              Unable to reach node API at{" "}
-              <span className="font-mono text-amber-100">
-                /api/blockchain/dashboard/status
-              </span>
-              . Make sure your `remesd` REST API is running.
+              Unable to reach backend API. Make sure the R3MES backend is running.
             </div>
           )}
           {networkStatus && !isNetworkLoading && !networkError && (
@@ -167,11 +173,7 @@ export default function NetworkExplorer() {
           <div className="h-96 rounded-2xl overflow-hidden bg-slate-950">
             {locationsError && !isLocationsLoading ? (
               <div className="h-full flex items-center justify-center text-xs text-amber-300 px-4 text-center">
-                Unable to load miner locations from{" "}
-                <span className="font-mono ml-1">
-                  /api/blockchain/dashboard/locations
-                </span>
-                . Globe visualization will be disabled until the API is online.
+                Unable to load miner locations. Globe visualization will be available when the API is online.
               </div>
             ) : mounted ? (
               <Globe

@@ -384,7 +384,32 @@ export async function sendChatMessage(
   });
 
   if (!response.ok) {
-    throw new Error('Failed to send chat message');
+    // Parse error response for better error messages
+    let errorMessage = 'Failed to send chat message';
+    try {
+      const errorData = await response.json();
+      if (errorData.detail) {
+        if (typeof errorData.detail === 'string') {
+          errorMessage = errorData.detail;
+        } else if (errorData.detail.message) {
+          errorMessage = errorData.detail.message;
+        } else if (errorData.detail.error) {
+          errorMessage = errorData.detail.error;
+        }
+      }
+    } catch {
+      // If JSON parsing fails, use status text
+      if (response.status === 503) {
+        errorMessage = 'AI inference service is currently unavailable. Please try again later.';
+      } else if (response.status === 402) {
+        errorMessage = 'Insufficient credits. Please mine blocks to earn credits.';
+      } else if (response.status === 401) {
+        errorMessage = 'Please connect your wallet to use the chat.';
+      } else if (response.status === 429) {
+        errorMessage = 'Rate limit exceeded. Please wait a moment before sending another message.';
+      }
+    }
+    throw new Error(errorMessage);
   }
 
   const reader = response.body?.getReader();
