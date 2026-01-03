@@ -55,8 +55,8 @@ class FaucetConfig:
         self.address_prefix = os.getenv("ADDRESS_PREFIX", "remes")
         
         # Blockchain endpoints (internal Docker network)
-        self.rest_url = os.getenv("BLOCKCHAIN_REST", "http://validator:1317")
-        self.rpc_url = os.getenv("BLOCKCHAIN_RPC", "http://validator:26657")
+        self.rest_url = os.getenv("BLOCKCHAIN_REST_URL", os.getenv("BLOCKCHAIN_REST", "http://validator:1317"))
+        self.rpc_url = os.getenv("BLOCKCHAIN_RPC_URL", os.getenv("BLOCKCHAIN_RPC", "http://validator:26657"))
         
         # Derived values
         self._faucet_address: Optional[str] = None
