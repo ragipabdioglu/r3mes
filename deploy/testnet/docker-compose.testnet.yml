@@ -60,7 +60,7 @@ services:
       # Security
       - SECRET_KEY=${SECRET_KEY}
       - API_KEY_SECRET=${SECRET_KEY}
-      - R3MES_ENV=production
+      - R3MES_ENV=staging
       
       # IPFS Gateway
       - IPFS_GATEWAY_URL=http://r3mes-ipfs:8080
