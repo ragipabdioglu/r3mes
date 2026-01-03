@@ -40,6 +40,56 @@ Bu rehber R3MES Testnet'in kurulumunu adım adım açıklar.
 | ipfs.r3mes.network | 38.242.246.6 | 8080 | IPFS Gateway |
 | grafana.r3mes.network | 38.242.246.6 | 3001 | Monitoring |
 
+### Wallet Adresleri (Testnet)
+
+| Wallet | Adres | Bakiye |
+|--------|-------|--------|
+| Validator | remes1jrtxwayldq3l3wu4frt8eg9syzcdkzw7vmmshm | 100,000 R3MES (staked) |
+| Faucet | remes19asaj7tyd9p698uqq74dwx5m2k6882cvq3c9lx | 1,000,000 R3MES |
+| Treasury | remes16kykek0kkvk803mfw4e3wukykhaccla26tvxhq | 8,900,000 R3MES |
+
+---
+
+## 🚀 Quick Deploy (Mevcut Kurulum)
+
+Sunucuda zaten kurulum varsa:
+
+```bash
+ssh root@38.242.246.6
+cd /opt/r3mes
+
+# Kodu güncelle
+git pull origin main
+
+# Deploy et
+bash deploy/testnet/deploy-validator.sh deploy
+
+# Durumu kontrol et
+bash deploy/testnet/deploy-validator.sh status
+```
+
+### Deploy Script Komutları
+
+```bash
+# Tam deployment
+bash deploy/testnet/deploy-validator.sh deploy
+
+# Sadece validator'ı rebuild et
+bash deploy/testnet/deploy-validator.sh rebuild
+
+# Tüm servisleri restart et
+bash deploy/testnet/deploy-validator.sh restart
+
+# Logları izle
+bash deploy/testnet/deploy-validator.sh logs [service]
+
+# Durum kontrolü
+bash deploy/testnet/deploy-validator.sh status
+
+# Faucet testi
+bash deploy/testnet/deploy-validator.sh test-faucet
+```
+
 ---
 
 ## 🌐 Step 1: DNS Configuration

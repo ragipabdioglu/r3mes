@@ -25,6 +25,9 @@
   NEXT_PUBLIC_DENOM = "ur3mes"
   NEXT_PUBLIC_DENOM_DISPLAY = "R3MES"
   NEXT_PUBLIC_FAUCET_ENABLED = "true"
+  
+  # Server-side environment variables (for API proxy)
+  BACKEND_API_URL = "https://api.r3mes.network"
 
 # Next.js plugin for Netlify
 [[plugins]]

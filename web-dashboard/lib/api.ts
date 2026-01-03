@@ -11,8 +11,25 @@
 
 import { logger } from './logger';
 
-/** Backend API base URL - uses environment variable or defaults to relative path */
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend';
+// Default API URL for production
+const DEFAULT_API_URL = 'https://api.r3mes.network';
+
+/**
+ * Get the API base URL based on environment
+ * Uses NEXT_PUBLIC_API_URL environment variable or falls back to default
+ */
+function getApiBaseUrl(): string {
+  // In browser, check for injected env or use default
+  if (typeof window !== 'undefined') {
+    // Next.js injects NEXT_PUBLIC_* vars at build time
+    // @ts-expect-error - NEXT_PUBLIC vars are injected at build time
+    const publicApiUrl = typeof NEXT_PUBLIC_API_URL !== 'undefined' ? NEXT_PUBLIC_API_URL : undefined;
+    return publicApiUrl || DEFAULT_API_URL;
+  }
+  
+  // Server-side rendering - use default
+  return DEFAULT_API_URL;
+}
 
 /**
  * Generic API request helper with error handling and logging
@@ -30,7 +47,8 @@ async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}${endpoint}`;
   
   try {
     const response = await fetch(url, {

@@ -104,16 +104,65 @@ echo "[8/9] Validating genesis..."
 remesd genesis validate-genesis --home "$REMES_HOME"
 
 echo "[9/9] Configuring node..."
-# Config.toml
+# Config.toml - RPC ve P2P ayarları
 sed -i 's|laddr = "tcp://127.0.0.1:26657"|laddr = "tcp://0.0.0.0:26657"|' "$REMES_HOME/config/config.toml"
 sed -i 's|cors_allowed_origins = \[\]|cors_allowed_origins = ["*"]|' "$REMES_HOME/config/config.toml"
+# Prometheus metrics
+sed -i 's|prometheus = false|prometheus = true|' "$REMES_HOME/config/config.toml"
 
-# App.toml
+# App.toml - API ve gRPC ayarları
+# REST API (1317) - [api] section
 sed -i 's|address = "tcp://localhost:1317"|address = "tcp://0.0.0.0:1317"|' "$REMES_HOME/config/app.toml"
+# gRPC (9090) - [grpc] section  
 sed -i 's|address = "localhost:9090"|address = "0.0.0.0:9090"|' "$REMES_HOME/config/app.toml"
-sed -i '0,/enable = false/s//enable = true/' "$REMES_HOME/config/app.toml"
+
+# REST API enable - [api] section'da enable = true yapmalıyız
+# Cosmos SDK app.toml'da [api] section'ı şu şekilde:
+# [api]
+# enable = false  <- bunu true yapmalıyız
+# swagger = false
+# address = "tcp://localhost:1317"
+#
+# Güvenilir yöntem: [api] section'ını bul ve enable'ı değiştir
+# awk ile section-aware değişiklik yapıyoruz
+awk '
+/^\[api\]/ { in_api=1 }
+/^\[/ && !/^\[api\]/ { in_api=0 }
+in_api && /^enable = false/ { print "enable = true"; next }
+{ print }
+' "$REMES_HOME/config/app.toml" > "$REMES_HOME/config/app.toml.tmp" && mv "$REMES_HOME/config/app.toml.tmp" "$REMES_HOME/config/app.toml"
+
+# gRPC enable - [grpc] section
+awk '
+/^\[grpc\]/ { in_grpc=1 }
+/^\[/ && !/^\[grpc\]/ { in_grpc=0 }
+in_grpc && /^enable = false/ { print "enable = true"; next }
+{ print }
+' "$REMES_HOME/config/app.toml" > "$REMES_HOME/config/app.toml.tmp" && mv "$REMES_HOME/config/app.toml.tmp" "$REMES_HOME/config/app.toml"
+
+# gRPC-Web enable - [grpc-web] section (frontend için gerekli)
+awk '
+/^\[grpc-web\]/ { in_grpc_web=1 }
+/^\[/ && !/^\[grpc-web\]/ { in_grpc_web=0 }
+in_grpc_web && /^enable = false/ { print "enable = true"; next }
+{ print }
+' "$REMES_HOME/config/app.toml" > "$REMES_HOME/config/app.toml.tmp" && mv "$REMES_HOME/config/app.toml.tmp" "$REMES_HOME/config/app.toml"
+
+# Swagger UI
 sed -i 's|swagger = false|swagger = true|' "$REMES_HOME/config/app.toml"
+
+# Minimum gas prices
 sed -i 's|minimum-gas-prices = ""|minimum-gas-prices = "0.025ur3mes"|' "$REMES_HOME/config/app.toml"
+
+# Verify API is enabled
+echo "Verifying API configuration..."
+if grep -A5 '^\[api\]' "$REMES_HOME/config/app.toml" | grep -q 'enable = true'; then
+    echo "✅ REST API enabled successfully"
+else
+    echo "⚠️ WARNING: REST API may not be enabled, forcing..."
+    # Fallback: brute force enable
+    sed -i '/^\[api\]/,/^\[/{s/enable = false/enable = true/}' "$REMES_HOME/config/app.toml"
+fi
 
 echo "=== Starting validator ==="
 exec remesd start --home "$REMES_HOME"
