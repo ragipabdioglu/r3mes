@@ -202,8 +202,8 @@ const nextConfig = {
     return config;
   },
 
-  // Output configuration
-  output: 'standalone',
+  // Output configuration - use default for Netlify
+  // output: 'standalone', // Disabled for Netlify compatibility
   
   // Enable SWC minification
   swcMinify: true,

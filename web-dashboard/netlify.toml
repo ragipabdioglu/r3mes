@@ -33,20 +33,6 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Redirects for SPA routing
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-  conditions = {Role = ["admin"]}
-
-# API proxy to backend (optional, for development)
-# [[redirects]]
-#   from = "/api/backend/*"
-#   to = "https://api.r3mes.network/:splat"
-#   status = 200
-#   force = true
-
 # Security headers
 [[headers]]
   for = "/*"
