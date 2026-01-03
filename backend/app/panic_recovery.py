@@ -54,14 +54,14 @@ class PanicRecoveryMiddleware(BaseHTTPMiddleware):
             capture_exception(e)
             
             # In production, don't expose internal error details
-            is_production = request.app.state.get("is_production", False)
+            is_production = getattr(request.app.state, "is_production", False)
             if is_production:
                 return JSONResponse(
                     status_code=500,
                     content={
                         "error": "INTERNAL_SERVER_ERROR",
                         "message": "An internal error occurred. Please try again later.",
-                        "request_id": request.state.get("request_id", "unknown")
+                        "request_id": getattr(request.state, "request_id", "unknown")
                     }
                 )
             else:
