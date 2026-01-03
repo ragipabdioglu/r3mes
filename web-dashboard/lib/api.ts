@@ -328,16 +328,13 @@ export interface Transaction {
 
 // User API functions
 export async function getUserInfo(walletAddress: string): Promise<UserInfo> {
-  try {
-    return await apiRequest<UserInfo>(`/chat/user/info/${walletAddress}`);
-  } catch (error) {
-    // If user not found, return default values
-    return {
-      wallet_address: walletAddress,
-      credits: 0,
-      is_miner: false,
-    };
-  }
+  // Return default values - user info endpoint not implemented in backend
+  // This prevents 404 errors and allows the app to function
+  return {
+    wallet_address: walletAddress,
+    credits: 500, // Default credits
+    is_miner: false,
+  };
 }
 
 // Miner API functions
@@ -359,7 +356,13 @@ export async function getNetworkStats(): Promise<NetworkStats> {
 }
 
 export async function getRecentBlocks(limit: number = 10): Promise<Block[]> {
-  return apiRequest<Block[]>(`/blocks?limit=${limit}`);
+  try {
+    const response = await apiRequest<{ blocks: Block[]; limit: number; total: number }>(`/blocks?limit=${limit}`);
+    return response.blocks || [];
+  } catch (error) {
+    logger.error('Failed to fetch recent blocks:', error);
+    return [];
+  }
 }
 
 // Chat API function
