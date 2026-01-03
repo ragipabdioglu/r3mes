@@ -67,7 +67,7 @@ services:
       
       # Faucet configuration
       - FAUCET_ENABLED=true
-      - FAUCET_MNEMONIC=${FAUCET_MNEMONIC}
+      - FAUCET_MNEMONIC=wasp promote level wait team soccer helmet nerve boat math pizza bring connect because match ill limit arrest isolate body age motion soup truck
       - FAUCET_AMOUNT=10000000ur3mes
       - FAUCET_DAILY_LIMIT=100000000ur3mes
       - FAUCET_DENOM=ur3mes
