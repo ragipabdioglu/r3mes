@@ -8,11 +8,6 @@ import os
 import logging
 from typing import List, Dict, Optional, Any
 
-from .network_resilience import (
-    retry_with_backoff,
-    BLOCKCHAIN_RETRY_CONFIG,
-    get_blockchain_circuit_breaker,
-)
 from .exceptions import (
     MissingEnvironmentVariableError,
     ProductionConfigurationError,
@@ -87,22 +82,33 @@ class BlockchainQueryClient:
         logger.info(f"Blockchain query client initialized (REST): {self.rest_url}")
     
     def _query_rest(self, endpoint: str, params: Optional[Dict] = None) -> Dict:
-        """Query blockchain via REST API (fallback) with retry mechanism and circuit breaker."""
+        """Query blockchain via REST API (fallback) with simple retry mechanism."""
         import requests
+        import time
         
-        @retry_with_backoff(config=BLOCKCHAIN_RETRY_CONFIG, operation_name="REST query")
-        def make_request():
-            url = f"{self.rest_url}{endpoint}"
-            circuit_breaker = get_blockchain_circuit_breaker()
-            blockchain_query_timeout = int(os.getenv("BACKEND_BLOCKCHAIN_QUERY_TIMEOUT", "10"))
-            response = requests.get(url, params=params, timeout=blockchain_query_timeout)
-            
-            if response.status_code != 200:
-                raise NetworkError(f"REST query failed: {response.status_code} - {response.text}")
-            
-            return response.json()
+        url = f"{self.rest_url}{endpoint}"
+        blockchain_query_timeout = int(os.getenv("BACKEND_BLOCKCHAIN_QUERY_TIMEOUT", "10"))
+        max_retries = 3
         
-        return make_request()
+        last_exception = None
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, params=params, timeout=blockchain_query_timeout)
+                
+                if response.status_code != 200:
+                    raise Exception(f"REST query failed: {response.status_code} - {response.text}")
+                
+                return response.json()
+            except Exception as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    delay = (attempt + 1) * 1.0  # 1s, 2s, 3s
+                    logger.warning(f"REST query failed (attempt {attempt + 1}/{max_retries}), retrying in {delay}s: {e}")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"REST query failed after {max_retries} attempts: {e}")
+        
+        raise last_exception
     
     def get_miner_score(self, miner_address: str) -> Optional[Dict[str, Any]]:
         """
