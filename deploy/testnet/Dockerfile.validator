@@ -48,44 +48,62 @@ set -e
 REMES_HOME="/root/.remes"
 CHAIN_ID="${CHAIN_ID:-r3mes-testnet-1}"
 MONIKER="${MONIKER:-r3mes-validator}"
+GENESIS_FILE="$REMES_HOME/config/genesis.json"
 
 echo "=== R3MES Validator Setup ==="
 echo "Chain ID: $CHAIN_ID"
 echo "Moniker: $MONIKER"
 echo "Home: $REMES_HOME"
 
-# Check if already initialized
+# Check if already initialized AND has valid genesis with correct denom
 if [ -f "$REMES_HOME/data/priv_validator_state.json" ] && [ -s "$REMES_HOME/data/priv_validator_state.json" ]; then
-    echo "Node already initialized, starting..."
-    exec remesd start --home "$REMES_HOME"
+    # Check if genesis has correct bond_denom
+    if grep -q '"bond_denom": "ur3mes"' "$GENESIS_FILE" 2>/dev/null; then
+        echo "Node already initialized with correct config, starting..."
+        exec remesd start --home "$REMES_HOME"
+    else
+        echo "Genesis has wrong bond_denom, reinitializing..."
+        rm -rf "$REMES_HOME"/*
+    fi
 fi
 
 # Clean start
 rm -rf "$REMES_HOME"/*
 
-echo "[1/8] Initializing node..."
+echo "[1/9] Initializing node..."
 remesd init "$MONIKER" --chain-id "$CHAIN_ID" --home "$REMES_HOME"
 
-echo "[2/8] Adding keys..."
+echo "[2/9] Fixing genesis denoms (stake -> ur3mes)..."
+# Replace all 'stake' with 'ur3mes' in genesis for staking/mint/gov modules
+sed -i 's/"bond_denom": "stake"/"bond_denom": "ur3mes"/g' "$GENESIS_FILE"
+sed -i 's/"mint_denom": "stake"/"mint_denom": "ur3mes"/g' "$GENESIS_FILE"
+sed -i 's/"denom": "stake"/"denom": "ur3mes"/g' "$GENESIS_FILE"
+
+echo "[3/9] Adding keys..."
 echo "$VALIDATOR_MNEMONIC" | remesd keys add validator --recover --keyring-backend test --home "$REMES_HOME"
 echo "$FAUCET_MNEMONIC" | remesd keys add faucet --recover --keyring-backend test --home "$REMES_HOME"
 echo "$TREASURY_MNEMONIC" | remesd keys add treasury --recover --keyring-backend test --home "$REMES_HOME"
 
-echo "[3/8] Adding genesis accounts..."
+echo "[4/9] Adding genesis accounts..."
 remesd genesis add-genesis-account validator 100000000000ur3mes --keyring-backend test --home "$REMES_HOME"
 remesd genesis add-genesis-account faucet 1000000000000ur3mes --keyring-backend test --home "$REMES_HOME"
 remesd genesis add-genesis-account treasury 8900000000000ur3mes --keyring-backend test --home "$REMES_HOME"
 
-echo "[4/8] Creating gentx..."
+echo "[5/9] Creating gentx..."
 remesd genesis gentx validator 100000000000ur3mes --chain-id "$CHAIN_ID" --keyring-backend test --home "$REMES_HOME"
 
-echo "[5/8] Collecting gentxs..."
+echo "[6/9] Collecting gentxs..."
 remesd genesis collect-gentxs --home "$REMES_HOME"
 
-echo "[6/8] Validating genesis..."
+echo "[7/9] Final genesis denom fix..."
+# Ensure all denoms are correct after gentx collection
+sed -i 's/"bond_denom": "stake"/"bond_denom": "ur3mes"/g' "$GENESIS_FILE"
+sed -i 's/"mint_denom": "stake"/"mint_denom": "ur3mes"/g' "$GENESIS_FILE"
+
+echo "[8/9] Validating genesis..."
 remesd genesis validate-genesis --home "$REMES_HOME"
 
-echo "[7/8] Configuring node..."
+echo "[9/9] Configuring node..."
 # Config.toml
 sed -i 's|laddr = "tcp://127.0.0.1:26657"|laddr = "tcp://0.0.0.0:26657"|' "$REMES_HOME/config/config.toml"
 sed -i 's|cors_allowed_origins = \[\]|cors_allowed_origins = ["*"]|' "$REMES_HOME/config/config.toml"
@@ -97,7 +115,7 @@ sed -i '0,/enable = false/s//enable = true/' "$REMES_HOME/config/app.toml"
 sed -i 's|swagger = false|swagger = true|' "$REMES_HOME/config/app.toml"
 sed -i 's|minimum-gas-prices = ""|minimum-gas-prices = "0.025ur3mes"|' "$REMES_HOME/config/app.toml"
 
-echo "[8/8] Starting validator..."
+echo "=== Starting validator ==="
 exec remesd start --home "$REMES_HOME"
 SCRIPT_EOF
 
