@@ -1,25 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Play, Copy, Download, Code2 } from "lucide-react";
 import axios from "axios";
 
-// Get API base URL for playground
+// Default API URL for production
+const DEFAULT_API_URL = 'https://api.r3mes.network';
+
+// Get API base URL for playground - lazy evaluation to avoid build-time errors
 const getApiBaseUrl = (): string => {
+  // Check for NEXT_PUBLIC_BACKEND_URL first
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
   if (backendUrl) {
     return backendUrl;
   }
-  // Only allow localhost fallback in development
+  // Check for NEXT_PUBLIC_API_URL (used by other components)
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (apiUrl) {
+    return apiUrl;
+  }
+  // Development fallback
   if (process.env.NODE_ENV === 'development') {
     return "http://localhost:8000";
   }
-  // Production: fail if not configured
-  throw new Error('NEXT_PUBLIC_BACKEND_URL environment variable must be set in production');
+  // Production fallback to default API URL
+  return DEFAULT_API_URL;
 };
-
-const API_BASE_URL = getApiBaseUrl();
 
 export default function PlaygroundPage() {
   const [endpoint, setEndpoint] = useState("/health");
@@ -28,6 +35,9 @@ export default function PlaygroundPage() {
   const [response, setResponse] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [codeFormat, setCodeFormat] = useState<"curl" | "python" | "javascript">("curl");
+
+  // Get API URL at runtime (not build time)
+  const API_BASE_URL = useMemo(() => getApiBaseUrl(), []);
 
   const handleRequest = async () => {
     setLoading(true);

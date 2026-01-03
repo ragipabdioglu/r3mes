@@ -17,6 +17,7 @@
   
   # Environment variables for build
   NEXT_PUBLIC_API_URL = "https://api.r3mes.network"
+  NEXT_PUBLIC_BACKEND_URL = "https://api.r3mes.network"
   NEXT_PUBLIC_RPC_URL = "https://rpc.r3mes.network"
   NEXT_PUBLIC_REST_URL = "https://rest.r3mes.network"
   NEXT_PUBLIC_IPFS_GATEWAY = "https://ipfs.r3mes.network"
