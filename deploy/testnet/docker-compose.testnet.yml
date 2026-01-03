@@ -52,9 +52,10 @@ services:
       - REDIS_URL=redis://redis:6379
       
       # Blockchain connections (internal Docker network)
-      - BLOCKCHAIN_RPC=http://r3mes-validator:26657
-      - BLOCKCHAIN_REST=http://r3mes-validator:1317
-      - IPFS_API=http://r3mes-ipfs:5001
+      - BLOCKCHAIN_RPC_URL=http://r3mes-validator:26657
+      - BLOCKCHAIN_GRPC_URL=r3mes-validator:9090
+      - BLOCKCHAIN_REST_URL=http://r3mes-validator:1317
+      - IPFS_API_URL=http://r3mes-ipfs:5001
       
       # Security
       - SECRET_KEY=${SECRET_KEY}
