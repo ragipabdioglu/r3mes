@@ -52,13 +52,15 @@ deploy() {
     log_info "[1/7] Pulling latest code..."
     git pull origin main || log_warn "Git pull skipped (may have local changes)"
     
-    # 2. Stop existing services
-    log_info "[2/7] Stopping existing services..."
+    # 2. Stop and remove existing services
+    log_info "[2/7] Stopping and removing existing services..."
     docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null || true
+    
+    # Force remove any leftover containers with our names
+    docker rm -f r3mes-validator r3mes-backend r3mes-nginx r3mes-postgres r3mes-redis r3mes-ipfs 2>/dev/null || true
     
     # 3. Clean up old validator data if needed
     log_info "[3/7] Checking validator data..."
-    # Only clean if explicitly requested
     if [ "$CLEAN_DATA" = "true" ]; then
         log_warn "Cleaning validator data (CLEAN_DATA=true)..."
         docker volume rm testnet_validator_data 2>/dev/null || true
