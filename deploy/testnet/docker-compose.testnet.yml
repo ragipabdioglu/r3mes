@@ -20,10 +20,12 @@ services:
       - "9090:9090"    # gRPC
     volumes:
       - validator_data:/root/.remes
-      - ./genesis.json:/root/.remes/config/genesis.json:ro
     environment:
       - MONIKER=r3mes-testnet-validator-1
       - CHAIN_ID=r3mes-testnet-1
+      - VALIDATOR_MNEMONIC=visual orchard mother post ridge gym undo sell anger weather they you kick weekend swallow patrol wise useless actual merry bottom alone foil diesel
+      - FAUCET_MNEMONIC=wasp promote level wait team soccer helmet nerve boat math pizza bring connect because match ill limit arrest isolate body age motion soup truck
+      - TREASURY_MNEMONIC=sadness umbrella enough private wreck mosquito left nature since laundry drum fossil imitate audit either rhythm blossom under snack holiday velvet target cup weird
     networks:
       - r3mes-network
     restart: always
@@ -32,6 +34,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
 
   # ===========================================
   # BACKEND API

@@ -28,7 +28,7 @@ RUN apk add --no-cache ca-certificates curl jq bash
 COPY --from=builder /remesd /usr/local/bin/remesd
 
 # Create data directory
-RUN mkdir -p /root/.remes
+RUN mkdir -p /root/.remes /scripts
 
 # Expose ports
 EXPOSE 26656 26657 1317 9090
@@ -36,26 +36,71 @@ EXPOSE 26656 26657 1317 9090
 # Set environment variables
 ENV MONIKER="r3mes-validator"
 ENV CHAIN_ID="r3mes-testnet-1"
+ENV VALIDATOR_MNEMONIC="visual orchard mother post ridge gym undo sell anger weather they you kick weekend swallow patrol wise useless actual merry bottom alone foil diesel"
+ENV FAUCET_MNEMONIC="wasp promote level wait team soccer helmet nerve boat math pizza bring connect because match ill limit arrest isolate body age motion soup truck"
+ENV TREASURY_MNEMONIC="sadness umbrella enough private wreck mosquito left nature since laundry drum fossil imitate audit either rhythm blossom under snack holiday velvet target cup weird"
 
-# Create entrypoint script inline
-RUN echo '#!/bin/bash' > /entrypoint.sh && \
-    echo 'set -e' >> /entrypoint.sh && \
-    echo 'REMES_HOME="/root/.remes"' >> /entrypoint.sh && \
-    echo 'CHAIN_ID="${CHAIN_ID:-r3mes-testnet-1}"' >> /entrypoint.sh && \
-    echo 'MONIKER="${MONIKER:-r3mes-validator}"' >> /entrypoint.sh && \
-    echo 'if [ ! -f "$REMES_HOME/config/config.toml" ]; then' >> /entrypoint.sh && \
-    echo '    echo "Initializing R3MES node..."' >> /entrypoint.sh && \
-    echo '    remesd init "$MONIKER" --chain-id "$CHAIN_ID" --home "$REMES_HOME"' >> /entrypoint.sh && \
-    echo '    sed -i "s/laddr = \"tcp:\\/\\/127.0.0.1:26657\"/laddr = \"tcp:\\/\\/0.0.0.0:26657\"/" "$REMES_HOME/config/config.toml"' >> /entrypoint.sh && \
-    echo '    sed -i "s/cors_allowed_origins = \\[\\]/cors_allowed_origins = [\"*\"]/" "$REMES_HOME/config/config.toml"' >> /entrypoint.sh && \
-    echo '    sed -i "s/enable = false/enable = true/" "$REMES_HOME/config/app.toml"' >> /entrypoint.sh && \
-    echo '    sed -i "s/swagger = false/swagger = true/" "$REMES_HOME/config/app.toml"' >> /entrypoint.sh && \
-    echo '    sed -i "s/address = \"tcp:\\/\\/localhost:1317\"/address = \"tcp:\\/\\/0.0.0.0:1317\"/" "$REMES_HOME/config/app.toml"' >> /entrypoint.sh && \
-    echo '    sed -i "s/address = \"localhost:9090\"/address = \"0.0.0.0:9090\"/" "$REMES_HOME/config/app.toml"' >> /entrypoint.sh && \
-    echo '    sed -i "s/minimum-gas-prices = \"\"/minimum-gas-prices = \"0.025ur3mes\"/" "$REMES_HOME/config/app.toml"' >> /entrypoint.sh && \
-    echo 'fi' >> /entrypoint.sh && \
-    echo 'exec "$@"' >> /entrypoint.sh && \
-    chmod +x /entrypoint.sh
+# Create startup script embedded in image (avoids mount issues)
+RUN cat > /scripts/start-validator.sh << 'SCRIPT_EOF'
+#!/bin/bash
+set -e
 
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["remesd", "start"]
+REMES_HOME="/root/.remes"
+CHAIN_ID="${CHAIN_ID:-r3mes-testnet-1}"
+MONIKER="${MONIKER:-r3mes-validator}"
+
+echo "=== R3MES Validator Setup ==="
+echo "Chain ID: $CHAIN_ID"
+echo "Moniker: $MONIKER"
+echo "Home: $REMES_HOME"
+
+# Check if already initialized
+if [ -f "$REMES_HOME/data/priv_validator_state.json" ] && [ -s "$REMES_HOME/data/priv_validator_state.json" ]; then
+    echo "Node already initialized, starting..."
+    exec remesd start --home "$REMES_HOME"
+fi
+
+# Clean start
+rm -rf "$REMES_HOME"/*
+
+echo "[1/8] Initializing node..."
+remesd init "$MONIKER" --chain-id "$CHAIN_ID" --home "$REMES_HOME"
+
+echo "[2/8] Adding keys..."
+echo "$VALIDATOR_MNEMONIC" | remesd keys add validator --recover --keyring-backend test --home "$REMES_HOME"
+echo "$FAUCET_MNEMONIC" | remesd keys add faucet --recover --keyring-backend test --home "$REMES_HOME"
+echo "$TREASURY_MNEMONIC" | remesd keys add treasury --recover --keyring-backend test --home "$REMES_HOME"
+
+echo "[3/8] Adding genesis accounts..."
+remesd genesis add-genesis-account validator 100000000000ur3mes --keyring-backend test --home "$REMES_HOME"
+remesd genesis add-genesis-account faucet 1000000000000ur3mes --keyring-backend test --home "$REMES_HOME"
+remesd genesis add-genesis-account treasury 8900000000000ur3mes --keyring-backend test --home "$REMES_HOME"
+
+echo "[4/8] Creating gentx..."
+remesd genesis gentx validator 100000000000ur3mes --chain-id "$CHAIN_ID" --keyring-backend test --home "$REMES_HOME"
+
+echo "[5/8] Collecting gentxs..."
+remesd genesis collect-gentxs --home "$REMES_HOME"
+
+echo "[6/8] Validating genesis..."
+remesd genesis validate-genesis --home "$REMES_HOME"
+
+echo "[7/8] Configuring node..."
+# Config.toml
+sed -i 's|laddr = "tcp://127.0.0.1:26657"|laddr = "tcp://0.0.0.0:26657"|' "$REMES_HOME/config/config.toml"
+sed -i 's|cors_allowed_origins = \[\]|cors_allowed_origins = ["*"]|' "$REMES_HOME/config/config.toml"
+
+# App.toml
+sed -i 's|address = "tcp://localhost:1317"|address = "tcp://0.0.0.0:1317"|' "$REMES_HOME/config/app.toml"
+sed -i 's|address = "localhost:9090"|address = "0.0.0.0:9090"|' "$REMES_HOME/config/app.toml"
+sed -i '0,/enable = false/s//enable = true/' "$REMES_HOME/config/app.toml"
+sed -i 's|swagger = false|swagger = true|' "$REMES_HOME/config/app.toml"
+sed -i 's|minimum-gas-prices = ""|minimum-gas-prices = "0.025ur3mes"|' "$REMES_HOME/config/app.toml"
+
+echo "[8/8] Starting validator..."
+exec remesd start --home "$REMES_HOME"
+SCRIPT_EOF
+
+RUN chmod +x /scripts/start-validator.sh
+
+ENTRYPOINT ["/scripts/start-validator.sh"]
