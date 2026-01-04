@@ -90,6 +90,7 @@ from .health_endpoints import router as health_router
 from .serving_endpoints import router as serving_router
 from .proposer_endpoints import router as proposer_router
 from .role_endpoints import router as role_router
+from .inference_endpoints import router as inference_router
 from .serving_node_registry import ServingNodeRegistry
 from .notifications import get_notification_service, NotificationPriority
 from .cache import get_cache_manager
@@ -563,6 +564,9 @@ app.include_router(health_router)
 
 # Include serving router
 app.include_router(serving_router)
+
+# Include inference router (FAZ 3: Backend API ↔ InferencePipeline)
+app.include_router(inference_router)
 
 # Include proposer router
 app.include_router(proposer_router)

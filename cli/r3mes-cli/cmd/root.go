@@ -62,6 +62,7 @@ Features:
 	// Add subcommands
 	rootCmd.AddCommand(newWalletCmd())
 	rootCmd.AddCommand(newMinerCmd())
+	rootCmd.AddCommand(newInferenceCmd())
 	rootCmd.AddCommand(newNodeCmd())
 	rootCmd.AddCommand(newGovernanceCmd())
 	rootCmd.AddCommand(newConfigCmd())

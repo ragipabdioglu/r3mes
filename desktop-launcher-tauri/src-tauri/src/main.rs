@@ -16,6 +16,7 @@ mod engine_downloader;
 mod config;
 mod websocket_client;
 mod debug;
+mod inference;
 
 use commands::*;
 use tauri::{Manager, SystemTray, SystemTrayEvent, SystemTrayMenu, WindowEvent};
@@ -111,7 +112,14 @@ fn main() {
             get_setup_progress,
             collect_debug_info,
             export_debug_info,
-            get_troubleshooting_recommendations
+            get_troubleshooting_recommendations,
+            // Inference commands (FAZ 6)
+            inference::run_inference,
+            inference::get_inference_health,
+            inference::check_inference_ready,
+            inference::get_inference_metrics,
+            inference::warmup_inference_pipeline,
+            inference::preload_adapters
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

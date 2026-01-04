@@ -3,6 +3,9 @@ Core training modules for R3MES miner engine.
 
 This module provides:
 - BitLinear: BitNet 1.58-bit linear layer with LoRA
+- BitLinearDoRA: DoRA (Weight-Decomposed Low-Rank Adaptation) layer
+- DoRAAdapter: Serializable DoRA adapter container
+- DoRAExpertRegistry: Registry for managing DoRA experts
 - LoRATrainer: Training utilities for LoRA adapters
 - Constants: Centralized configuration constants
 - Types: Shared dataclasses and enums
@@ -13,6 +16,26 @@ This module provides:
 
 from core.bitlinear import BitLinear
 from core.trainer import LoRATrainer
+
+# DoRA (Weight-Decomposed Low-Rank Adaptation)
+from core.dora import (
+    BitLinearDoRA,
+    DoRAAdapter,
+    DoRAExpertRegistry,
+    create_dora_from_bitlinear,
+    merge_dora_experts,
+)
+
+# Inference Backend
+from core.inference_backend import (
+    InferenceBackend,
+    BackendType,
+    BackendCapabilities,
+    InferenceResult,
+    BackendRegistry,
+    get_backend_registry,
+    get_best_backend,
+)
 
 # Constants
 from core.constants import (
@@ -64,6 +87,20 @@ __all__ = [
     # Core classes
     'BitLinear',
     'LoRATrainer',
+    # DoRA
+    'BitLinearDoRA',
+    'DoRAAdapter',
+    'DoRAExpertRegistry',
+    'create_dora_from_bitlinear',
+    'merge_dora_experts',
+    # Inference Backend
+    'InferenceBackend',
+    'BackendType',
+    'BackendCapabilities',
+    'InferenceResult',
+    'BackendRegistry',
+    'get_backend_registry',
+    'get_best_backend',
     # Constants
     'CHUNK_SIZE_TOKENS',
     'COSINE_SIMILARITY_THRESHOLD',

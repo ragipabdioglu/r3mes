@@ -1051,3 +1051,261 @@ function normalizeTransactionStatus(status?: string): "pending" | "confirmed" | 
   if (lowerStatus.includes('fail') || lowerStatus.includes('error')) return 'failed';
   return 'confirmed';
 }
+
+// ============================================================================
+// Inference API Types & Functions (FAZ 5)
+// ============================================================================
+
+/** Inference request options */
+export interface InferenceRequest {
+  /** Input prompt for inference */
+  prompt: string;
+  /** Wallet address for credit deduction */
+  wallet_address?: string;
+  /** Maximum tokens to generate (1-4096) */
+  max_tokens?: number;
+  /** Sampling temperature (0.0-2.0) */
+  temperature?: number;
+  /** Top-p sampling (0.0-1.0) */
+  top_p?: number;
+  /** Top-k sampling (0-100) */
+  top_k?: number;
+  /** Skip RAG context retrieval */
+  skip_rag?: boolean;
+  /** Force specific DoRA experts */
+  force_experts?: string[];
+  /** Enable streaming response */
+  stream?: boolean;
+}
+
+/** Expert usage info */
+export interface ExpertUsage {
+  id: string;
+  weight: number;
+}
+
+/** Inference response */
+export interface InferenceResponse {
+  request_id: string;
+  text: string;
+  tokens_generated: number;
+  latency_ms: number;
+  experts_used: ExpertUsage[];
+  rag_context_used: boolean;
+  model_version: string;
+  credits_used: number;
+}
+
+/** Inference health status */
+export interface InferenceHealth {
+  status: string;
+  inference_mode: string;
+  is_ready: boolean;
+  is_healthy: boolean;
+  pipeline_initialized: boolean;
+  model_loaded: boolean;
+  total_requests: number;
+  successful_requests: number;
+  failed_requests: number;
+  avg_latency_ms: number;
+  error_message?: string;
+}
+
+/** Inference metrics */
+export interface InferenceMetrics {
+  serving_engine_requests_total: number;
+  serving_engine_requests_success: number;
+  serving_engine_requests_failed: number;
+  serving_engine_latency_avg_ms: number;
+  serving_engine_ready: number;
+  serving_engine_healthy: number;
+  pipeline_total_requests: number;
+  pipeline_error_rate: number;
+  cache_vram_used_mb: number;
+  cache_ram_used_mb: number;
+  cache_hits: number;
+  cache_misses: number;
+}
+
+/**
+ * Generate AI inference using BitNet + DoRA + RAG pipeline
+ * Backend endpoint: POST /api/inference/generate
+ */
+export async function generateInference(request: InferenceRequest): Promise<InferenceResponse> {
+  return apiRequest<InferenceResponse>('/api/inference/generate', {
+    method: 'POST',
+    body: JSON.stringify({
+      prompt: request.prompt,
+      wallet_address: request.wallet_address,
+      max_tokens: request.max_tokens ?? 512,
+      temperature: request.temperature ?? 0.7,
+      top_p: request.top_p ?? 0.9,
+      top_k: request.top_k ?? 50,
+      skip_rag: request.skip_rag ?? false,
+      force_experts: request.force_experts,
+      stream: false,
+    }),
+  });
+}
+
+/**
+ * Generate streaming AI inference
+ * Backend endpoint: POST /api/inference/generate/stream
+ * 
+ * @param request - Inference request options
+ * @param onToken - Callback for each token received
+ * @param onDone - Callback when streaming completes
+ * @param onError - Callback on error
+ */
+export async function generateInferenceStream(
+  request: InferenceRequest,
+  onToken: (token: string) => void,
+  onDone?: () => void,
+  onError?: (error: Error) => void
+): Promise<void> {
+  const baseUrl = getApiBaseUrl();
+  
+  try {
+    const response = await fetch(`${baseUrl}/api/inference/generate/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: request.prompt,
+        wallet_address: request.wallet_address,
+        max_tokens: request.max_tokens ?? 512,
+        temperature: request.temperature ?? 0.7,
+        top_p: request.top_p ?? 0.9,
+        top_k: request.top_k ?? 50,
+        skip_rag: request.skip_rag ?? false,
+        force_experts: request.force_experts,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Inference error: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+
+    const decoder = new TextDecoder();
+    
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') {
+              onDone?.();
+              return;
+            }
+            if (data.startsWith('[ERROR]')) {
+              throw new Error(data.slice(8));
+            }
+            onToken(data);
+          }
+        }
+      }
+      onDone?.();
+    } finally {
+      reader.releaseLock();
+    }
+  } catch (error) {
+    logger.error('Streaming inference error:', error);
+    onError?.(error instanceof Error ? error : new Error(String(error)));
+    throw error;
+  }
+}
+
+/**
+ * Get inference engine health status
+ * Backend endpoint: GET /api/inference/health
+ */
+export async function getInferenceHealth(): Promise<InferenceHealth> {
+  return apiRequest<InferenceHealth>('/api/inference/health');
+}
+
+/**
+ * Check if inference is ready (K8s readiness probe)
+ * Backend endpoint: GET /api/inference/health/ready
+ */
+export async function checkInferenceReady(): Promise<boolean> {
+  try {
+    const result = await apiRequest<{ ready: boolean }>('/api/inference/health/ready');
+    return result.ready;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if inference is alive (K8s liveness probe)
+ * Backend endpoint: GET /api/inference/health/live
+ */
+export async function checkInferenceLive(): Promise<boolean> {
+  try {
+    const result = await apiRequest<{ alive: boolean }>('/api/inference/health/live');
+    return result.alive;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get inference metrics (Prometheus-compatible)
+ * Backend endpoint: GET /api/inference/metrics
+ */
+export async function getInferenceMetrics(): Promise<InferenceMetrics> {
+  return apiRequest<InferenceMetrics>('/api/inference/metrics');
+}
+
+/**
+ * Warmup inference pipeline
+ * Backend endpoint: POST /api/inference/pipeline/warmup
+ */
+export async function warmupInferencePipeline(): Promise<{ status: string; message?: string; reason?: string }> {
+  return apiRequest<{ status: string; message?: string; reason?: string }>('/api/inference/pipeline/warmup', {
+    method: 'POST',
+  });
+}
+
+/**
+ * Preload DoRA adapters into cache
+ * Backend endpoint: POST /api/inference/adapters/preload
+ */
+export async function preloadAdapters(adapterIds: string[]): Promise<{ status: string; preloaded?: string[] }> {
+  return apiRequest<{ status: string; preloaded?: string[] }>('/api/inference/adapters/preload', {
+    method: 'POST',
+    body: JSON.stringify(adapterIds),
+  });
+}
+
+/**
+ * Add document to RAG index
+ * Backend endpoint: POST /api/inference/rag/document
+ */
+export async function addRagDocument(
+  docId: string,
+  content: string,
+  metadata?: Record<string, unknown>
+): Promise<{ status: string; doc_id: string }> {
+  return apiRequest<{ status: string; doc_id: string }>('/api/inference/rag/document', {
+    method: 'POST',
+    body: JSON.stringify({
+      doc_id: docId,
+      content,
+      metadata,
+    }),
+  });
+}
