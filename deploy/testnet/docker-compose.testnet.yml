@@ -98,6 +98,39 @@ services:
       retries: 3
 
   # ===========================================
+  # PROPOSER NODE (Gradient Aggregation)
+  # ===========================================
+  proposer:
+    build:
+      context: ../..
+      dockerfile: deploy/testnet/Dockerfile.proposer
+    container_name: r3mes-proposer
+    ports:
+      - "26666:26656"  # P2P (different port to avoid conflict)
+      - "26667:26657"  # RPC
+      - "9091:9090"    # gRPC
+    volumes:
+      - proposer_data:/home/proposer/.remes
+    environment:
+      - MONIKER=r3mes-proposer-1
+      - CHAIN_ID=r3mes-testnet-1
+      - VALIDATOR_RPC=http://r3mes-validator:26657
+      - VALIDATOR_NODE_ID=${VALIDATOR_NODE_ID:-}
+      - PROPOSER_MNEMONIC=${PROPOSER_MNEMONIC:-}
+    depends_on:
+      validator:
+        condition: service_healthy
+    networks:
+      - r3mes-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:26657/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  # ===========================================
   # IPFS NODE
   # ===========================================
   ipfs:
@@ -207,6 +240,7 @@ networks:
 
 volumes:
   validator_data:
+  proposer_data:
   postgres_data:
   redis_data:
   ipfs_data:
