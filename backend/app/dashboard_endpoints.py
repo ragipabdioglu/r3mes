@@ -603,9 +603,10 @@ async def get_dashboard_statistics(request: Request) -> Dict[str, Any]:
         validators_data = blockchain_client.get_all_validators(limit=100, offset=0)
         
         # Count active validators
+        # Note: Cosmos SDK returns "BOND_STATUS_BONDED" not just "BONDED"
         active_validators = sum(
             1 for v in validators_data.get("validators", [])
-            if v.get("status") == "BONDED"
+            if "BONDED" in str(v.get("status", ""))
         )
         
         # Get inflation rate (from mint module)
