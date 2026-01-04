@@ -9,7 +9,22 @@ CHAIN_ID="${CHAIN_ID:-r3mes-testnet-1}"
 MONIKER="${MONIKER:-r3mes-proposer-1}"
 VALIDATOR_RPC="${VALIDATOR_RPC:-http://r3mes-validator:26657}"
 
-HOME_DIR="/home/proposer/.remes"
+HOME_DIR="/root/.remes"
+
+# Function to get validator node ID from RPC
+get_validator_node_id() {
+    local node_id=""
+    for i in {1..30}; do
+        node_id=$(curl -s "$VALIDATOR_RPC/status" | jq -r '.result.node_info.id' 2>/dev/null)
+        if [ -n "$node_id" ] && [ "$node_id" != "null" ]; then
+            echo "$node_id"
+            return 0
+        fi
+        echo "Waiting for validator node ID... ($i/30)" >&2
+        sleep 2
+    done
+    return 1
+}
 
 # Initialize if not already done
 if [ ! -f "$HOME_DIR/config/genesis.json" ]; then
@@ -25,27 +40,22 @@ if [ ! -f "$HOME_DIR/config/genesis.json" ]; then
                 break
             fi
         fi
-        echo "Waiting for validator... ($i/30)"
+        echo "Waiting for validator genesis... ($i/30)"
         sleep 5
     done
     
-    # Configure for proposer role
-    sed -i 's/persistent_peers = ""/persistent_peers = "'"$VALIDATOR_NODE_ID@r3mes-validator:26656"'"/' "$HOME_DIR/config/config.toml"
+    # Get validator node ID dynamically
+    echo "Getting validator node ID..."
+    VALIDATOR_NODE_ID=$(get_validator_node_id)
+    if [ -n "$VALIDATOR_NODE_ID" ]; then
+        echo "Validator node ID: $VALIDATOR_NODE_ID"
+        sed -i "s/persistent_peers = \"\"/persistent_peers = \"${VALIDATOR_NODE_ID}@r3mes-validator:26656\"/" "$HOME_DIR/config/config.toml"
+    else
+        echo "WARNING: Could not get validator node ID, peer connection may fail"
+    fi
     
-    # Enable proposer mode
-    sed -i 's/mode = "full"/mode = "full"/' "$HOME_DIR/config/config.toml"
-    
-    # Configure for gradient aggregation
-    cat >> "$HOME_DIR/config/app.toml" << EOF
-
-# Proposer Configuration
-[proposer]
-enabled = true
-aggregation_interval = "30s"
-min_gradients_for_aggregation = 2
-max_gradients_per_aggregation = 100
-ipfs_upload_enabled = true
-EOF
+    # Disable creating empty blocks
+    sed -i 's/create_empty_blocks = true/create_empty_blocks = false/' "$HOME_DIR/config/config.toml"
 fi
 
 # Import proposer key if mnemonic provided
@@ -53,7 +63,7 @@ if [ -n "$PROPOSER_MNEMONIC" ]; then
     echo "Importing proposer key..."
     echo "$PROPOSER_MNEMONIC" | remesd keys add proposer --recover --keyring-backend test --home "$HOME_DIR" 2>/dev/null || true
     
-    PROPOSER_ADDRESS=$(remesd keys show proposer -a --keyring-backend test --home "$HOME_DIR")
+    PROPOSER_ADDRESS=$(remesd keys show proposer -a --keyring-backend test --home "$HOME_DIR" 2>/dev/null || echo "unknown")
     echo "Proposer address: $PROPOSER_ADDRESS"
 fi
 

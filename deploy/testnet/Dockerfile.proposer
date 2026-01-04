@@ -25,10 +25,10 @@ FROM alpine:3.19
 
 RUN apk add --no-cache ca-certificates curl jq bash
 
-# Create non-root user
-RUN adduser -D -h /home/proposer proposer
+# Create data directory with proper permissions
+RUN mkdir -p /root/.remes && chmod 755 /root/.remes
 
-WORKDIR /home/proposer
+WORKDIR /root
 
 # Copy binary
 COPY --from=builder /remesd /usr/local/bin/remesd
@@ -36,9 +36,6 @@ COPY --from=builder /remesd /usr/local/bin/remesd
 # Copy proposer startup script
 COPY deploy/testnet/start-proposer.sh /scripts/start-proposer.sh
 RUN chmod +x /scripts/start-proposer.sh
-
-# Switch to non-root user
-USER proposer
 
 # Expose ports
 # 26656: P2P
