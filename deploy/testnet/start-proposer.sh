@@ -56,6 +56,9 @@ if [ ! -f "$HOME_DIR/config/genesis.json" ]; then
     
     # Disable creating empty blocks
     sed -i 's/create_empty_blocks = true/create_empty_blocks = false/' "$HOME_DIR/config/config.toml"
+    
+    # Set minimum gas prices in app.toml
+    sed -i 's/minimum-gas-prices = ""/minimum-gas-prices = "0.001ur3mes"/' "$HOME_DIR/config/app.toml"
 fi
 
 # Import proposer key if mnemonic provided
@@ -73,4 +76,5 @@ exec remesd start \
     --rpc.laddr "tcp://0.0.0.0:26657" \
     --grpc.address "0.0.0.0:9090" \
     --p2p.laddr "tcp://0.0.0.0:26656" \
+    --minimum-gas-prices "0.001ur3mes" \
     --log_level info
