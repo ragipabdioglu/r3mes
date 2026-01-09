@@ -627,11 +627,11 @@ fn analyze_results(
     // GPU checks
     if !gpu.available {
         warnings.push("No GPU detected".to_string());
-        recommendations.push("Mining requires NVIDIA GPU with CUDA support. Consider CPU-only mode for serving.".to_string());
+        recommendations.push("GPU recommended for faster inference. CPU-only mode available but slower.".to_string());
     } else if let Some(vram) = gpu.vram_gb {
-        if vram < 8.0 {
-            warnings.push(format!("GPU has only {:.1}GB VRAM, 8GB+ recommended", vram));
-            recommendations.push("Consider upgrading GPU for better mining performance".to_string());
+        if vram < 4.0 {
+            warnings.push(format!("GPU has only {:.1}GB VRAM, 4GB+ recommended", vram));
+            recommendations.push("Consider upgrading GPU for better performance".to_string());
         }
     }
     
@@ -710,10 +710,10 @@ pub fn get_hardware_recommendations(roles: &[String]) -> Vec<String> {
     
     if roles.contains(&"miner".to_string()) {
         recommendations.push("For Mining:".to_string());
-        recommendations.push("- NVIDIA GPU with 8GB+ VRAM (RTX 3070/4060 or better)".to_string());
-        recommendations.push("- CUDA 12.1+ installed".to_string());
-        recommendations.push("- 16GB+ RAM".to_string());
-        recommendations.push("- SSD storage with 100GB+ free space".to_string());
+        recommendations.push("- NVIDIA GPU with 4GB+ VRAM (GTX 1650 or better) - optional".to_string());
+        recommendations.push("- CUDA 12.1+ installed (for GPU acceleration)".to_string());
+        recommendations.push("- 8GB+ RAM".to_string());
+        recommendations.push("- SSD storage with 15GB+ free space".to_string());
         recommendations.push("- Stable internet connection (10+ Mbps)".to_string());
     }
     

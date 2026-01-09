@@ -196,17 +196,17 @@ impl ModelDownloader {
                         name: "bitnet-b1.58".to_string(),
                         version: "1.0.0".to_string(),
                         description: "BitNet b1.58 model for efficient inference (fallback)".to_string(),
-                        size_bytes: 28 * 1024 * 1024 * 1024,
-                        checksum: "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456".to_string(),
-                        ipfs_hash: "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG".to_string(),
+                        size_bytes: 6 * 1024 * 1024 * 1024, // ~6GB
+                        checksum: "".to_string(), // Will be fetched from blockchain
+                        ipfs_hash: "".to_string(), // Will be fetched from blockchain
                         download_urls: vec![
-                            format!("{}/ipfs/QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG", self.ipfs_gateway)
+                            "https://huggingface.co/R3MES-Network/bitnet-b1.58".to_string()
                         ],
                         model_type: ModelType::BitNet,
                         requirements: ModelRequirements {
-                            min_vram_gb: 8.0,
-                            min_ram_gb: 16.0,
-                            cuda_required: true,
+                            min_vram_gb: 4.0,
+                            min_ram_gb: 8.0,
+                            cuda_required: false, // Can run on CPU too
                             python_version: ">=3.8".to_string(),
                             dependencies: vec![
                                 "torch>=2.0.0".to_string(),
