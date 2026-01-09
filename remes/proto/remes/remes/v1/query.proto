@@ -1,0 +1,557 @@
+syntax = "proto3";
+package remes.remes.v1;
+
+import "amino/amino.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "remes/remes/v1/params.proto";
+import "remes/remes/v1/stored_gradient.proto";
+import "remes/remes/v1/dataset.proto";
+import "remes/remes/v1/node.proto";
+import "remes/remes/v1/serving.proto";
+import "remes/remes/v1/state.proto";
+import "remes/remes/v1/task_pool.proto";
+
+option go_package = "remes/x/remes/types";
+
+// Query defines the gRPC querier service.
+service Query {
+  // Parameters queries the parameters of the module.
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/remes/remes/v1/params";
+  }
+
+  // GetGradient queries a specific gradient by ID
+  rpc GetGradient(QueryGetGradientRequest) returns (QueryGetGradientResponse) {
+    option (google.api.http).get = "/remes/remes/v1/gradient/{id}";
+  }
+
+  // GetModelParams queries the current global model parameters (IPFS hash)
+  rpc GetModelParams(QueryGetModelParamsRequest) returns (QueryGetModelParamsResponse) {
+    option (google.api.http).get = "/remes/remes/v1/model_params";
+  }
+
+  // GetAggregation queries a specific aggregation by ID
+  rpc GetAggregation(QueryGetAggregationRequest) returns (QueryGetAggregationResponse) {
+    option (google.api.http).get = "/remes/remes/v1/aggregation/{id}";
+  }
+
+  // GetMinerScore queries the reputation score and statistics for a miner
+  rpc GetMinerScore(QueryGetMinerScoreRequest) returns (QueryGetMinerScoreResponse) {
+    option (google.api.http).get = "/remes/remes/v1/miner_score/{miner}";
+  }
+
+  // ListStoredGradient queries all stored gradients with pagination
+  rpc ListStoredGradient(QueryListStoredGradientRequest) returns (QueryListStoredGradientResponse) {
+    option (google.api.http).get = "/remes/remes/v1/stored_gradient";
+  }
+
+  // GetStoredGradient queries a specific stored gradient by ID
+  rpc GetStoredGradient(QueryGetStoredGradientRequest) returns (QueryGetStoredGradientResponse) {
+    option (google.api.http).get = "/remes/remes/v1/stored_gradient/{id}";
+  }
+
+  // GetDatasetProposal queries a dataset proposal by ID
+  rpc GetDatasetProposal(QueryGetDatasetProposalRequest) returns (QueryGetDatasetProposalResponse) {
+    option (google.api.http).get = "/remes/remes/v1/dataset_proposal/{proposal_id}";
+  }
+
+  // ListDatasetProposals lists all dataset proposals
+  rpc ListDatasetProposals(QueryListDatasetProposalsRequest) returns (QueryListDatasetProposalsResponse) {
+    option (google.api.http).get = "/remes/remes/v1/dataset_proposals";
+  }
+
+  // GetApprovedDataset queries an approved dataset by ID
+  rpc GetApprovedDataset(QueryGetApprovedDatasetRequest) returns (QueryGetApprovedDatasetResponse) {
+    option (google.api.http).get = "/remes/remes/v1/approved_dataset/{dataset_id}";
+  }
+
+  // ListApprovedDatasets lists all approved datasets
+  rpc ListApprovedDatasets(QueryListApprovedDatasetsRequest) returns (QueryListApprovedDatasetsResponse) {
+    option (google.api.http).get = "/remes/remes/v1/approved_datasets";
+  }
+
+  // GetNodeRegistration queries a node registration by address
+  rpc GetNodeRegistration(QueryGetNodeRegistrationRequest) returns (QueryGetNodeRegistrationResponse) {
+    option (google.api.http).get = "/remes/remes/v1/node_registration/{node_address}";
+  }
+
+  // ListNodeRegistrations lists all node registrations
+  rpc ListNodeRegistrations(QueryListNodeRegistrationsRequest) returns (QueryListNodeRegistrationsResponse) {
+    option (google.api.http).get = "/remes/remes/v1/node_registrations";
+  }
+
+  // GetInferenceRequest queries an inference request by ID
+  rpc GetInferenceRequest(QueryGetInferenceRequestRequest) returns (QueryGetInferenceRequestResponse) {
+    option (google.api.http).get = "/remes/remes/v1/inference_request/{request_id}";
+  }
+
+  // GetServingNodeStatus queries serving node status
+  rpc GetServingNodeStatus(QueryGetServingNodeStatusRequest) returns (QueryGetServingNodeStatusResponse) {
+    option (google.api.http).get = "/remes/remes/v1/serving_node_status/{node_address}";
+  }
+
+  // ListServingNodes lists all serving nodes
+  rpc ListServingNodes(QueryListServingNodesRequest) returns (QueryListServingNodesResponse) {
+    option (google.api.http).get = "/remes/remes/v1/serving_nodes";
+  }
+
+  // GetRewardFormula queries transparent reward formulas
+  rpc GetRewardFormula(QueryGetRewardFormulaRequest) returns (QueryGetRewardFormulaResponse) {
+    option (google.api.http).get = "/remes/remes/v1/reward_formula";
+  }
+
+  // GetParticipantSyncState queries a participant's synchronization state
+  rpc GetParticipantSyncState(QueryGetParticipantSyncStateRequest) returns (QueryGetParticipantSyncStateResponse) {
+    option (google.api.http).get = "/remes/remes/v1/participant_sync_state/{participant_address}";
+  }
+
+  // ListParticipantSyncStates lists all participant sync states with pagination
+  rpc ListParticipantSyncStates(QueryListParticipantSyncStatesRequest) returns (QueryListParticipantSyncStatesResponse) {
+    option (google.api.http).get = "/remes/remes/v1/participant_sync_states";
+  }
+
+  // GetGlobalModelState queries the current global model state
+  rpc GetGlobalModelState(QueryGetGlobalModelStateRequest) returns (QueryGetGlobalModelStateResponse) {
+    option (google.api.http).get = "/remes/remes/v1/global_model_state";
+  }
+
+  // GetCatchUpInfo returns information needed for a participant to catch up after network partition
+  rpc GetCatchUpInfo(QueryGetCatchUpInfoRequest) returns (QueryGetCatchUpInfoResponse) {
+    option (google.api.http).get = "/remes/remes/v1/catch_up_info/{participant_address}";
+  }
+
+  // GetGlobalSeed returns the global seed for a training round
+  rpc GetGlobalSeed(QueryGetGlobalSeedRequest) returns (QueryGetGlobalSeedResponse) {
+    option (google.api.http).get = "/remes/remes/v1/global_seed/{training_round_id}";
+  }
+
+  // QueryMiners queries all miners with pagination (for dashboard API)
+  rpc QueryMiners(QueryMinersRequest) returns (QueryMinersResponse) {
+    option (google.api.http).get = "/remes/remes/v1/dashboard/miners";
+  }
+
+  // QueryStatistics queries network statistics (for dashboard API)
+  rpc QueryStatistics(QueryStatisticsRequest) returns (QueryStatisticsResponse) {
+    option (google.api.http).get = "/remes/remes/v1/dashboard/statistics";
+  }
+
+  // QueryBlocks queries recent blocks with pagination (for dashboard API)
+  rpc QueryBlocks(QueryBlocksRequest) returns (QueryBlocksResponse) {
+    option (google.api.http).get = "/remes/remes/v1/dashboard/blocks";
+  }
+
+  // QueryBlock queries a specific block by height (for dashboard API)
+  rpc QueryBlock(QueryBlockRequest) returns (QueryBlockResponse) {
+    option (google.api.http).get = "/remes/remes/v1/dashboard/block/{height}";
+  }
+
+  // QueryVaultStats queries genesis vault statistics (admin only)
+  rpc QueryVaultStats(QueryVaultStatsRequest) returns (QueryVaultStatsResponse) {
+    option (google.api.http).get = "/remes/remes/v1/vault/stats";
+  }
+
+  // QueryMinerFraudScore queries miner's fraud score and trap statistics (admin only)
+  rpc QueryMinerFraudScore(QueryMinerFraudScoreRequest) returns (QueryMinerFraudScoreResponse) {
+    option (google.api.http).get = "/remes/remes/v1/miner_fraud_score/{miner}";
+  }
+
+  // QueryActivePool queries the currently active task pool ID
+  rpc QueryActivePool(QueryActivePoolRequest) returns (QueryActivePoolResponse) {
+    option (google.api.http).get = "/remes/remes/v1/task_pool/active";
+  }
+
+  // QueryAvailableChunks queries available chunks from a task pool
+  rpc QueryAvailableChunks(QueryAvailableChunksRequest) returns (QueryAvailableChunksResponse) {
+    option (google.api.http).get = "/remes/remes/v1/task_pool/{pool_id}/available_chunks";
+  }
+}
+
+// QueryParamsRequest is request type for the Query/Params RPC method.
+message QueryParamsRequest {}
+
+// QueryParamsResponse is response type for the Query/Params RPC method.
+message QueryParamsResponse {
+  // params holds all the parameters of this module.
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}
+
+// QueryGetGradientRequest is request type for the Query/GetGradient RPC method.
+message QueryGetGradientRequest {
+  uint64 id = 1;
+}
+
+// QueryGetGradientResponse is response type for the Query/GetGradient RPC method.
+message QueryGetGradientResponse {
+  StoredGradient gradient = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryGetModelParamsRequest is request type for the Query/GetModelParams RPC method.
+message QueryGetModelParamsRequest {}
+
+// QueryGetModelParamsResponse is response type for the Query/GetModelParams RPC method.
+message QueryGetModelParamsResponse {
+  // model_ipfs_hash is the IPFS hash of the current global model
+  string model_ipfs_hash = 1;
+  
+  // model_version is the version of the current model
+  string model_version = 2;
+  
+  // last_updated_height is the block height when the model was last updated
+  int64 last_updated_height = 3;
+}
+
+// QueryGetAggregationRequest is request type for the Query/GetAggregation RPC method.
+message QueryGetAggregationRequest {
+  uint64 id = 1;
+}
+
+// QueryGetAggregationResponse is response type for the Query/GetAggregation RPC method.
+message QueryGetAggregationResponse {
+  // aggregation_id is the unique identifier for the aggregation
+  uint64 aggregation_id = 1;
+  
+  // proposer is the address of the proposer who performed aggregation
+  string proposer = 2;
+  
+  // aggregated_gradient_ipfs_hash is the IPFS hash of the aggregated result
+  string aggregated_gradient_ipfs_hash = 3;
+  
+  // merkle_root is the Merkle root of included gradients
+  string merkle_root = 4;
+  
+  // participant_count is the number of gradients included
+  uint64 participant_count = 5;
+  
+  // training_round_id is the training round identifier
+  uint64 training_round_id = 6;
+}
+
+// QueryGetMinerScoreRequest is request type for the Query/GetMinerScore RPC method.
+message QueryGetMinerScoreRequest {
+  string miner = 1;
+}
+
+// QueryGetMinerScoreResponse is response type for the Query/GetMinerScore RPC method.
+message QueryGetMinerScoreResponse {
+  // miner is the miner address
+  string miner = 1;
+  
+  // trust_score is the reputation score (0.0 to 1.0)
+  string trust_score = 2;
+  
+  // reputation_tier is the tier (excellent, trusted, developing, new)
+  string reputation_tier = 3;
+  
+  // total_submissions is the total number of gradient submissions
+  uint64 total_submissions = 4;
+  
+  // successful_submissions is the number of successful submissions
+  uint64 successful_submissions = 5;
+  
+  // slashing_events is the number of slashing events
+  uint64 slashing_events = 6;
+}
+
+// QueryListStoredGradientRequest is request type for the Query/ListStoredGradient RPC method.
+message QueryListStoredGradientRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// QueryListStoredGradientResponse is response type for the Query/ListStoredGradient RPC method.
+message QueryListStoredGradientResponse {
+  repeated StoredGradient stored_gradients = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryGetStoredGradientRequest is request type for the Query/GetStoredGradient RPC method.
+message QueryGetStoredGradientRequest {
+  uint64 id = 1;
+}
+
+// QueryGetStoredGradientResponse is response type for the Query/GetStoredGradient RPC method.
+message QueryGetStoredGradientResponse {
+  StoredGradient stored_gradient = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryGetDatasetProposalRequest is request type for the Query/GetDatasetProposal RPC method.
+message QueryGetDatasetProposalRequest {
+  uint64 proposal_id = 1;
+}
+
+// QueryGetDatasetProposalResponse is response type for the Query/GetDatasetProposal RPC method.
+message QueryGetDatasetProposalResponse {
+  DatasetProposal proposal = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryListDatasetProposalsRequest is request type for the Query/ListDatasetProposals RPC method.
+message QueryListDatasetProposalsRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// QueryListDatasetProposalsResponse is response type for the Query/ListDatasetProposals RPC method.
+message QueryListDatasetProposalsResponse {
+  repeated DatasetProposal proposals = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryGetApprovedDatasetRequest is request type for the Query/GetApprovedDataset RPC method.
+message QueryGetApprovedDatasetRequest {
+  uint64 dataset_id = 1;
+}
+
+// QueryGetApprovedDatasetResponse is response type for the Query/GetApprovedDataset RPC method.
+message QueryGetApprovedDatasetResponse {
+  ApprovedDataset dataset = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryListApprovedDatasetsRequest is request type for the Query/ListApprovedDatasets RPC method.
+message QueryListApprovedDatasetsRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// QueryListApprovedDatasetsResponse is response type for the Query/ListApprovedDatasets RPC method.
+message QueryListApprovedDatasetsResponse {
+  repeated ApprovedDataset datasets = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryGetNodeRegistrationRequest is request type for the Query/GetNodeRegistration RPC method.
+message QueryGetNodeRegistrationRequest {
+  string node_address = 1;
+}
+
+// QueryGetNodeRegistrationResponse is response type for the Query/GetNodeRegistration RPC method.
+message QueryGetNodeRegistrationResponse {
+  NodeRegistration registration = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryListNodeRegistrationsRequest is request type for the Query/ListNodeRegistrations RPC method.
+message QueryListNodeRegistrationsRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// QueryListNodeRegistrationsResponse is response type for the Query/ListNodeRegistrations RPC method.
+message QueryListNodeRegistrationsResponse {
+  repeated NodeRegistration registrations = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryGetInferenceRequestRequest is request type for the Query/GetInferenceRequest RPC method.
+message QueryGetInferenceRequestRequest {
+  string request_id = 1;
+}
+
+// QueryGetInferenceRequestResponse is response type for the Query/GetInferenceRequest RPC method.
+message QueryGetInferenceRequestResponse {
+  InferenceRequest request = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryGetServingNodeStatusRequest is request type for the Query/GetServingNodeStatus RPC method.
+message QueryGetServingNodeStatusRequest {
+  string node_address = 1;
+}
+
+// QueryGetServingNodeStatusResponse is response type for the Query/GetServingNodeStatus RPC method.
+message QueryGetServingNodeStatusResponse {
+  ServingNodeStatus status = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryListServingNodesRequest is request type for the Query/ListServingNodes RPC method.
+message QueryListServingNodesRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// QueryListServingNodesResponse is response type for the Query/ListServingNodes RPC method.
+message QueryListServingNodesResponse {
+  repeated ServingNodeStatus serving_nodes = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryGetRewardFormulaRequest is request type for the Query/GetRewardFormula RPC method.
+message QueryGetRewardFormulaRequest {}
+
+// QueryGetRewardFormulaResponse is response type for the Query/GetRewardFormula RPC method.
+message QueryGetRewardFormulaResponse {
+  // formulas is a JSON string containing all reward formulas with bounds
+  string formulas = 1;
+}
+
+// QueryGetParticipantSyncStateRequest is request type for the Query/GetParticipantSyncState RPC method.
+message QueryGetParticipantSyncStateRequest {
+  string participant_address = 1;
+}
+
+// QueryGetParticipantSyncStateResponse is response type for the Query/GetParticipantSyncState RPC method.
+message QueryGetParticipantSyncStateResponse {
+  ParticipantSyncState sync_state = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryListParticipantSyncStatesRequest is request type for the Query/ListParticipantSyncStates RPC method.
+message QueryListParticipantSyncStatesRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// QueryListParticipantSyncStatesResponse is response type for the Query/ListParticipantSyncStates RPC method.
+message QueryListParticipantSyncStatesResponse {
+  repeated ParticipantSyncState sync_states = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryGetGlobalModelStateRequest is request type for the Query/GetGlobalModelState RPC method.
+message QueryGetGlobalModelStateRequest {}
+
+// QueryGetGlobalModelStateResponse is response type for the Query/GetGlobalModelState RPC method.
+message QueryGetGlobalModelStateResponse {
+  GlobalModelState state = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryGetCatchUpInfoRequest is request type for the Query/GetCatchUpInfo RPC method.
+message QueryGetCatchUpInfoRequest {
+  string participant_address = 1;
+}
+
+// QueryGetCatchUpInfoResponse is response type for the Query/GetCatchUpInfo RPC method.
+message QueryGetCatchUpInfoResponse {
+  GlobalModelState global_state = 1 [(gogoproto.nullable) = false];
+  repeated StoredGradient catch_up_gradients = 2 [(gogoproto.nullable) = false];
+  ParticipantSyncState sync_state = 3 [(gogoproto.nullable) = false];
+}
+
+// QueryGetGlobalSeedRequest is request type for the Query/GetGlobalSeed RPC method.
+message QueryGetGlobalSeedRequest {
+  // training_round_id is the training round ID
+  uint64 training_round_id = 1;
+}
+
+// QueryGetGlobalSeedResponse is response type for the Query/GetGlobalSeed RPC method.
+message QueryGetGlobalSeedResponse {
+  // global_seed is the deterministic seed for the training round
+  uint64 global_seed = 1;
+
+  // block_hash is the block hash used to derive the seed
+  string block_hash = 2;
+
+  // training_round_id is the training round ID
+  uint64 training_round_id = 3;
+}
+
+// QueryMinersRequest is request type for the Query/QueryMiners RPC method (dashboard API).
+message QueryMinersRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// QueryMinersResponse is response type for the Query/QueryMiners RPC method (dashboard API).
+message QueryMinersResponse {
+  repeated MinerInfo miners = 1 [(gogoproto.nullable) = false];
+  uint64 total = 2;
+  cosmos.base.query.v1beta1.PageResponse pagination = 3;
+}
+
+// MinerInfo represents miner information for dashboard API
+message MinerInfo {
+  string address = 1;
+  string status = 2; // "active" or "inactive"
+  uint64 total_submissions = 3;
+  uint64 successful_submissions = 4;
+  string trust_score = 5;
+  string reputation_tier = 6;
+  uint64 slashing_events = 7;
+  int64 last_submission_height = 8;
+  uint64 total_gradients = 9; // Total gradients submitted by this miner
+}
+
+// QueryStatisticsRequest is request type for the Query/QueryStatistics RPC method (dashboard API).
+message QueryStatisticsRequest {}
+
+// QueryStatisticsResponse is response type for the Query/QueryStatistics RPC method (dashboard API).
+message QueryStatisticsResponse {
+  uint64 total_miners = 1;
+  uint64 active_miners = 2;
+  uint64 total_gradients = 3;
+  uint64 total_aggregations = 4;
+  uint64 pending_gradients = 5;
+  uint64 pending_aggregations = 6;
+  uint64 average_gradient_size = 7;
+  int64 last_updated = 8;
+}
+
+// QueryBlocksRequest is request type for the Query/QueryBlocks RPC method (dashboard API).
+message QueryBlocksRequest {
+  uint64 limit = 1;  // Maximum number of blocks to return (default: 10, max: 100)
+  uint64 offset = 2; // Offset for pagination (default: 0)
+}
+
+// QueryBlocksResponse is response type for the Query/QueryBlocks RPC method (dashboard API).
+message QueryBlocksResponse {
+  repeated BlockInfo blocks = 1 [(gogoproto.nullable) = false];
+  uint64 total = 2;
+}
+
+// BlockInfo represents block information for dashboard API
+message BlockInfo {
+  int64 height = 1;
+  string hash = 2;
+  int64 timestamp = 3;
+  uint64 tx_count = 4;
+}
+
+// QueryBlockRequest is request type for the Query/QueryBlock RPC method (dashboard API).
+message QueryBlockRequest {
+  int64 height = 1; // Block height (0 = latest block)
+}
+
+// QueryBlockResponse is response type for the Query/QueryBlock RPC method (dashboard API).
+message QueryBlockResponse {
+  BlockInfo block = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryVaultStatsRequest is request type for the Query/QueryVaultStats RPC method (admin only).
+message QueryVaultStatsRequest {}
+
+// QueryVaultStatsResponse is response type for the Query/QueryVaultStats RPC method.
+message QueryVaultStatsResponse {
+  uint64 total_entries = 1;
+  uint64 total_usage_count = 2;
+  uint64 average_usage_per_entry = 3;
+  uint64 oldest_entry_height = 4;
+  uint64 newest_entry_height = 5;
+}
+
+// QueryMinerFraudScoreRequest is request type for the Query/QueryMinerFraudScore RPC method (admin only).
+message QueryMinerFraudScoreRequest {
+  string miner = 1;
+}
+
+// QueryMinerFraudScoreResponse is response type for the Query/QueryMinerFraudScore RPC method.
+message QueryMinerFraudScoreResponse {
+  string miner = 1;
+  uint64 traps_caught = 2;
+  uint64 traps_failed = 3;
+  string fraud_score = 4; // 0.0 to 1.0 (higher = more fraudulent)
+}
+
+// QueryActivePoolRequest is request type for the Query/QueryActivePool RPC method.
+message QueryActivePoolRequest {}
+
+// QueryActivePoolResponse is response type for the Query/QueryActivePool RPC method.
+message QueryActivePoolResponse {
+  uint64 pool_id = 1; // Active pool ID, 0 if no active pool
+  bool has_active_pool = 2; // True if there is an active pool
+}
+
+// QueryAvailableChunksRequest is request type for the Query/QueryAvailableChunks RPC method.
+message QueryAvailableChunksRequest {
+  uint64 pool_id = 1; // Task pool ID
+  uint64 limit = 2;   // Maximum number of chunks to return (default: 100, max: 1000)
+}
+
+// QueryAvailableChunksResponse is response type for the Query/QueryAvailableChunks RPC method.
+message QueryAvailableChunksResponse {
+  repeated TaskChunkResponse chunks = 1 [(gogoproto.nullable) = false]; // Available chunks (sanitized for miners)
+  uint64 total_available = 2; // Total number of available chunks in the pool
+}

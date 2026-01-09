@@ -1,0 +1,1373 @@
+syntax = "proto3";
+package remes.remes.v1;
+
+import "amino/amino.proto";
+import "cosmos/msg/v1/msg.proto";
+import "cosmos_proto/cosmos.proto";
+import "gogoproto/gogo.proto";
+import "remes/remes/v1/params.proto";
+import "remes/remes/v1/model.proto";
+import "remes/remes/v1/stored_gradient.proto";
+import "remes/remes/v1/dataset.proto";
+import "remes/remes/v1/node.proto";
+import "remes/remes/v1/pinning.proto";
+import "remes/remes/v1/serving.proto";
+import "remes/remes/v1/trap_job.proto";
+import "remes/remes/v1/slashing.proto";
+import "remes/remes/v1/execution_environment.proto";
+import "remes/remes/v1/model_version.proto";
+import "remes/remes/v1/subnet.proto";
+import "remes/remes/v1/training_window.proto";
+import "cosmos/base/v1beta1/coin.proto";
+
+option go_package = "remes/x/remes/types";
+
+// Msg defines the Msg service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // UpdateParams defines a (governance) operation for updating the module
+  // parameters. The authority defaults to the x/gov module account.
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+
+  // RegisterModel registers a new model configuration (governance-only)
+  rpc RegisterModel(MsgRegisterModel) returns (MsgRegisterModelResponse);
+
+  // ActivateModel activates a model for training (governance-only)
+  rpc ActivateModel(MsgActivateModel) returns (MsgActivateModelResponse);
+
+  // SubmitGradient submits a gradient update with IPFS hash (passive IPFS role - Go node only stores hash, not data)
+  rpc SubmitGradient(MsgSubmitGradient) returns (MsgSubmitGradientResponse);
+
+  // SubmitAggregation submits aggregated gradient results from off-chain aggregation
+  rpc SubmitAggregation(MsgSubmitAggregation) returns (MsgSubmitAggregationResponse);
+
+  // CommitAggregation commits to an aggregation result (commit-reveal scheme for multi-proposer)
+  rpc CommitAggregation(MsgCommitAggregation) returns (MsgCommitAggregationResponse);
+
+  // RevealAggregation reveals an aggregation result and verifies commitment
+  rpc RevealAggregation(MsgRevealAggregation) returns (MsgRevealAggregationResponse);
+
+  // ChallengeAggregation challenges an aggregation result for dispute resolution
+  rpc ChallengeAggregation(MsgChallengeAggregation) returns (MsgChallengeAggregationResponse);
+
+  // ProposeDataset proposes a dataset for governance approval
+  rpc ProposeDataset(MsgProposeDataset) returns (MsgProposeDatasetResponse);
+
+  // VoteDataset votes on a dataset proposal
+  rpc VoteDataset(MsgVoteDataset) returns (MsgVoteDatasetResponse);
+
+  // MarkDatasetAsOfficial marks an approved dataset as "Official Training Data"
+  rpc MarkDatasetAsOfficial(MsgMarkDatasetAsOfficial) returns (MsgMarkDatasetAsOfficialResponse);
+
+  // RemoveDataset removes an approved dataset from the registry
+  rpc RemoveDataset(MsgRemoveDataset) returns (MsgRemoveDatasetResponse);
+
+  // RegisterNode registers a node with role specification and resource quotas
+  rpc RegisterNode(MsgRegisterNode) returns (MsgRegisterNodeResponse);
+
+  // UpdateNodeRegistration updates node registration information
+  rpc UpdateNodeRegistration(MsgUpdateNodeRegistration) returns (MsgUpdateNodeRegistrationResponse);
+
+  // SubmitResourceUsage submits resource usage proof for validation
+  rpc SubmitResourceUsage(MsgSubmitResourceUsage) returns (MsgSubmitResourceUsageResponse);
+
+  // CommitPinning commits to pin IPFS content with stake
+  rpc CommitPinning(MsgCommitPinning) returns (MsgCommitPinningResponse);
+
+  // ChallengePinning challenges a pinning commitment for data availability verification
+  rpc ChallengePinning(MsgChallengePinning) returns (MsgChallengePinningResponse);
+
+  // RespondToChallenge responds to a data availability challenge
+  rpc RespondToChallenge(MsgRespondToChallenge) returns (MsgRespondToChallengeResponse);
+
+  // ResolveChallenge resolves an aggregation challenge with CPU verification results
+  rpc ResolveChallenge(MsgResolveChallenge) returns (MsgResolveChallengeResponse);
+
+  // SubmitCPUVerification submits CPU verification result for a challenge
+  rpc SubmitCPUVerification(MsgSubmitCPUVerification) returns (MsgSubmitCPUVerificationResponse);
+
+  // SubmitRandomVerifierResult submits random GPU verifier result for Layer 2 challenge
+  rpc SubmitRandomVerifierResult(MsgSubmitRandomVerifierResult) returns (MsgSubmitRandomVerifierResultResponse);
+
+  // RequestInference requests AI model inference from a serving node
+  rpc RequestInference(MsgRequestInference) returns (MsgRequestInferenceResponse);
+
+  // SubmitInferenceResult submits inference result from a serving node
+  rpc SubmitInferenceResult(MsgSubmitInferenceResult) returns (MsgSubmitInferenceResultResponse);
+
+  // UpdateServingNodeStatus updates serving node status and model version
+  rpc UpdateServingNodeStatus(MsgUpdateServingNodeStatus) returns (MsgUpdateServingNodeStatusResponse);
+
+  // CreateTrapJob creates a trap job for lazy mining detection
+  rpc CreateTrapJob(MsgCreateTrapJob) returns (MsgCreateTrapJobResponse);
+
+  // SubmitTrapJobResult submits result for a trap job
+  rpc SubmitTrapJobResult(MsgSubmitTrapJobResult) returns (MsgSubmitTrapJobResultResponse);
+
+  // AppealTrapJobSlashing appeals a trap job slashing decision
+  rpc AppealTrapJobSlashing(MsgAppealTrapJobSlashing) returns (MsgAppealTrapJobSlashingResponse);
+
+  // ReportLazyValidation reports lazy validation by a validator
+  rpc ReportLazyValidation(MsgReportLazyValidation) returns (MsgReportLazyValidationResponse);
+
+  // ReportFalseVerdict reports false verdict by a validator
+  rpc ReportFalseVerdict(MsgReportFalseVerdict) returns (MsgReportFalseVerdictResponse);
+
+  // ReportProposerCensorship reports censorship by a proposer
+  rpc ReportProposerCensorship(MsgReportProposerCensorship) returns (MsgReportProposerCensorshipResponse);
+
+  // AppealSlashing appeals a slashing decision
+  rpc AppealSlashing(MsgAppealSlashing) returns (MsgAppealSlashingResponse);
+
+  // RegisterMentorRelationship registers a mentor-mentee relationship
+  rpc RegisterMentorRelationship(MsgRegisterMentorRelationship) returns (MsgRegisterMentorRelationshipResponse);
+
+  // CreateSubnet creates a new subnet for layer-based sharding
+  rpc CreateSubnet(MsgCreateSubnet) returns (MsgCreateSubnetResponse);
+
+  // SubmitSubnetActivation submits activation data from a subnet
+  rpc SubmitSubnetActivation(MsgSubmitSubnetActivation) returns (MsgSubmitSubnetActivationResponse);
+
+  // AssignMinerToSubnet assigns a miner to a subnet
+  rpc AssignMinerToSubnet(MsgAssignMinerToSubnet) returns (MsgAssignMinerToSubnetResponse);
+
+  // CreateTrainingWindow creates a new training window
+  rpc CreateTrainingWindow(MsgCreateTrainingWindow) returns (MsgCreateTrainingWindowResponse);
+
+  // SubmitAsyncGradient submits an asynchronous gradient (non-blocking)
+  rpc SubmitAsyncGradient(MsgSubmitAsyncGradient) returns (MsgSubmitAsyncGradientResponse);
+
+  // SubmitLazyAggregation submits lazy aggregation at window boundary
+  rpc SubmitLazyAggregation(MsgSubmitLazyAggregation) returns (MsgSubmitLazyAggregationResponse);
+
+  // ClaimTask claims an available chunk from a task pool
+  rpc ClaimTask(MsgClaimTask) returns (MsgClaimTaskResponse);
+
+  // CompleteTask marks a claimed chunk as completed with gradient result
+  rpc CompleteTask(MsgCompleteTask) returns (MsgCompleteTaskResponse);
+}
+
+// MsgUpdateParams is the Msg/UpdateParams request type.
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "remes/x/remes/MsgUpdateParams";
+
+  // authority is the address that controls the module (defaults to x/gov unless overwritten).
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // params defines the module parameters to update.
+  //
+  // NOTE: All parameters must be supplied.
+  Params params = 2 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}
+
+// MsgUpdateParamsResponse defines the response structure for executing a
+// MsgUpdateParams message.
+message MsgUpdateParamsResponse {}
+
+// MsgRegisterModel registers a new model configuration (governance-only)
+message MsgRegisterModel {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "remes/x/remes/MsgRegisterModel";
+
+  // authority is the address that controls the module (defaults to x/gov)
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // config is the model configuration to register
+  ModelConfig config = 2 [(gogoproto.nullable) = false];
+
+  // proposal_id is the governance proposal ID that approved this model (0 if direct authority)
+  uint64 proposal_id = 3;
+}
+
+// MsgRegisterModelResponse defines the response structure for RegisterModel
+message MsgRegisterModelResponse {
+  // model_id is the unique identifier for the registered model
+  uint64 model_id = 1;
+}
+
+// MsgActivateModel activates a model for training (governance-only)
+message MsgActivateModel {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "remes/x/remes/MsgActivateModel";
+
+  // authority is the address that controls the module (defaults to x/gov)
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // model_id is the ID of the model to activate
+  uint64 model_id = 2;
+}
+
+// MsgActivateModelResponse defines the response structure for ActivateModel
+message MsgActivateModelResponse {}
+
+// MsgSubmitGradient submits a gradient update with IPFS hash
+// IMPORTANT: Only IPFS hash + metadata is stored on-chain, NOT gradient data
+// Python miner uploads gradient data directly to IPFS before sending this message
+message MsgSubmitGradient {
+  option (cosmos.msg.v1.signer) = "miner";
+  option (amino.name) = "remes/x/remes/MsgSubmitGradient";
+
+  // miner is the address of the miner submitting the gradient
+  string miner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // ipfs_hash is the IPFS content hash of the gradient data (LoRA adapter gradients, MB scale)
+  string ipfs_hash = 2;
+
+  // model_version is the version of the model used for training
+  string model_version = 3;
+
+  // training_round_id is the identifier for the training round
+  uint64 training_round_id = 4;
+
+  // shard_id is the deterministic shard assignment for this miner
+  uint64 shard_id = 5;
+
+  // gradient_hash is the deterministic hash of the gradient for verification
+  string gradient_hash = 6;
+
+  // gpu_architecture is the GPU architecture used (Ampere, Ada, Blackwell, etc.)
+  string gpu_architecture = 7;
+
+  // nonce is a unique identifier to prevent replay attacks
+  uint64 nonce = 8;
+
+  // signature is the cryptographic signature of the message
+  bytes signature = 9;
+
+  // proof_of_work_nonce is the nonce used for proof-of-work (anti-spam)
+  uint64 proof_of_work_nonce = 10;
+
+  // model_config_id references the ModelRegistry entry (0 = legacy BitNet)
+  // Default: 0 (backward compatibility with legacy model_version field)
+  uint64 model_config_id = 11;
+
+  // container_hash is the Docker/OCI image hash used for training
+  string container_hash = 12;
+
+  // container_signature is the cryptographic signature of the container
+  bytes container_signature = 13;
+
+  // global_seed is the deterministic seed used for training (derived from block hash + training round)
+  uint64 global_seed = 14;
+
+  // claimed_loss is the loss value claimed by the miner (BitNet integer format)
+  // Used for Loss-Based Spot Checking in Layer 2 verification
+  string claimed_loss = 15;
+
+  // porep_proof_ipfs_hash is the IPFS hash of the Proof of Replication (PoRep) proof
+  // PoRep proves that the miner actually stores the gradient data, not just the hash
+  // This is required to prevent data withholding attacks
+  string porep_proof_ipfs_hash = 16;
+
+  // token_count is the number of tokens processed in this chunk (for metadata-level validation)
+  // Protocol mandates exactly 2048 tokens per chunk for Fixed Chunk / Variable Speed Protocol
+  // This allows validation without retrieving data from IPFS
+  uint64 token_count = 17;
+}
+
+// MsgSubmitGradientResponse defines the response structure for SubmitGradient
+message MsgSubmitGradientResponse {
+  // stored_gradient_id is the unique identifier for the stored gradient
+  uint64 stored_gradient_id = 1;
+  
+  // tx_hash is the transaction hash (hex encoded)
+  // This is calculated from the transaction bytes in the SDK context
+  string tx_hash = 2;
+}
+
+// MsgSubmitAggregation submits aggregated gradient results
+message MsgSubmitAggregation {
+  option (cosmos.msg.v1.signer) = "proposer";
+  option (amino.name) = "remes/x/remes/MsgSubmitAggregation";
+
+  // proposer is the address of the proposer node performing aggregation
+  string proposer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // aggregated_gradient_ipfs_hash is the IPFS hash of the aggregated gradient result
+  string aggregated_gradient_ipfs_hash = 2;
+
+  // merkle_root is the Merkle root hash of all included gradients
+  string merkle_root = 3;
+
+  // participant_gradient_ids are the IDs of all gradients included in aggregation
+  repeated uint64 participant_gradient_ids = 4;
+
+  // training_round_id is the identifier for the training round
+  uint64 training_round_id = 5;
+
+  // model_version is the version of the model used
+  string model_version = 6;
+}
+
+// MsgSubmitAggregationResponse defines the response structure for SubmitAggregation
+message MsgSubmitAggregationResponse {
+  // aggregation_id is the unique identifier for the aggregation record
+  uint64 aggregation_id = 1;
+}
+
+// MsgCommitAggregation commits to an aggregation result (commit-reveal scheme)
+// Proposers first commit to a hash of their aggregation result to prevent collusion
+message MsgCommitAggregation {
+  option (cosmos.msg.v1.signer) = "proposer";
+  option (amino.name) = "remes/x/remes/MsgCommitAggregation";
+
+  // proposer is the address of the proposer node
+  string proposer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // commitment_hash is the hash of (aggregated_hash + merkle_root + participant_ids + salt)
+  string commitment_hash = 2;
+
+  // training_round_id is the identifier for the training round
+  uint64 training_round_id = 3;
+
+  // participant_gradient_ids are the IDs of all gradients included in aggregation
+  repeated uint64 participant_gradient_ids = 4;
+}
+
+// MsgCommitAggregationResponse defines the response structure for CommitAggregation
+message MsgCommitAggregationResponse {
+  // commitment_id is the unique identifier for the commitment
+  uint64 commitment_id = 1;
+  
+  // reveal_deadline_height is the block height when reveal period starts
+  int64 reveal_deadline_height = 2;
+}
+
+// MsgRevealAggregation reveals the aggregation result and verifies commitment
+message MsgRevealAggregation {
+  option (cosmos.msg.v1.signer) = "proposer";
+  option (amino.name) = "remes/x/remes/MsgRevealAggregation";
+
+  // proposer is the address of the proposer node
+  string proposer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // commitment_id is the ID of the commitment to reveal
+  uint64 commitment_id = 2;
+
+  // aggregated_gradient_ipfs_hash is the IPFS hash of the aggregated gradient result
+  string aggregated_gradient_ipfs_hash = 3;
+
+  // merkle_root is the Merkle root hash of all included gradients
+  string merkle_root = 4;
+
+  // participant_gradient_ids are the IDs of all gradients included in aggregation
+  repeated uint64 participant_gradient_ids = 5;
+
+  // training_round_id is the identifier for the training round
+  uint64 training_round_id = 6;
+
+  // model_version is the version of the model used
+  string model_version = 7;
+
+  // salt is the random salt used in the commitment (revealed for verification)
+  string salt = 8;
+}
+
+// MsgRevealAggregationResponse defines the response structure for RevealAggregation
+message MsgRevealAggregationResponse {
+  // aggregation_id is the unique identifier for the aggregation record
+  uint64 aggregation_id = 1;
+  
+  // commitment_verified indicates if the commitment was successfully verified
+  bool commitment_verified = 2;
+}
+
+// MsgChallengeAggregation challenges an aggregation result
+message MsgChallengeAggregation {
+  option (cosmos.msg.v1.signer) = "challenger";
+  option (amino.name) = "remes/x/remes/MsgChallengeAggregation";
+
+  // challenger is the address of the node challenging the aggregation
+  string challenger = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // aggregation_id is the ID of the aggregation being challenged
+  uint64 aggregation_id = 2;
+
+  // reason is the reason for the challenge
+  string reason = 3;
+
+  // evidence_ipfs_hash is the IPFS hash of evidence supporting the challenge
+  string evidence_ipfs_hash = 4;
+
+  // bond_amount is the bond amount for Layer 2 challenge (10x base reward)
+  // Required for high-stakes challenge
+  repeated cosmos.base.v1beta1.Coin bond_amount = 5 [(gogoproto.nullable) = false];
+}
+
+// MsgChallengeAggregationResponse defines the response structure for ChallengeAggregation
+message MsgChallengeAggregationResponse {
+  // challenge_id is the unique identifier for the challenge
+  uint64 challenge_id = 1;
+}
+
+// MsgProposeDataset proposes a dataset for governance approval
+message MsgProposeDataset {
+  option (cosmos.msg.v1.signer) = "proposer";
+  option (amino.name) = "remes/x/remes/MsgProposeDataset";
+
+  // proposer is the address of the proposer
+  string proposer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // dataset_ipfs_hash is the IPFS hash of the dataset
+  string dataset_ipfs_hash = 2;
+
+  // metadata is the dataset metadata
+  DatasetMetadata metadata = 3 [(gogoproto.nullable) = false];
+
+  // deposit is the deposit amount for the proposal
+  string deposit = 4;
+}
+
+// MsgProposeDatasetResponse defines the response structure for ProposeDataset
+message MsgProposeDatasetResponse {
+  // proposal_id is the unique identifier for the proposal
+  uint64 proposal_id = 1;
+}
+
+// MsgVoteDataset votes on a dataset proposal
+message MsgVoteDataset {
+  option (cosmos.msg.v1.signer) = "voter";
+  option (amino.name) = "remes/x/remes/MsgVoteDataset";
+
+  // voter is the address of the voter
+  string voter = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // proposal_id is the ID of the proposal being voted on
+  uint64 proposal_id = 2;
+
+  // option is the vote option ("yes", "no", "abstain")
+  string option = 3;
+
+  // quality_score is the quality assessment score (0-100)
+  uint32 quality_score = 4;
+
+  // relevance_score is the relevance assessment score (0-100)
+  uint32 relevance_score = 5;
+}
+
+// MsgVoteDatasetResponse defines the response structure for VoteDataset
+message MsgVoteDatasetResponse {
+  // vote_id is the unique identifier for the vote
+  uint64 vote_id = 1;
+}
+
+// MsgMarkDatasetAsOfficial marks an approved dataset as "Official Training Data"
+message MsgMarkDatasetAsOfficial {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "remes/x/remes/MsgMarkDatasetAsOfficial";
+
+  // authority is the address that controls the module (defaults to x/gov)
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // dataset_id is the ID of the approved dataset
+  uint64 dataset_id = 2;
+}
+
+// MsgMarkDatasetAsOfficialResponse defines the response structure for MarkDatasetAsOfficial
+message MsgMarkDatasetAsOfficialResponse {}
+
+// MsgRemoveDataset removes an approved dataset from the registry
+message MsgRemoveDataset {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "remes/x/remes/MsgRemoveDataset";
+
+  // authority is the address that controls the module (defaults to x/gov)
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // dataset_id is the ID of the dataset to remove
+  uint64 dataset_id = 2;
+
+  // reason is the reason for removal
+  string reason = 3;
+}
+
+// MsgRemoveDatasetResponse defines the response structure for RemoveDataset
+message MsgRemoveDatasetResponse {}
+
+// MsgRegisterNode registers a node with role specification and resource quotas
+message MsgRegisterNode {
+  option (cosmos.msg.v1.signer) = "node_address";
+  option (amino.name) = "remes/x/remes/MsgRegisterNode";
+
+  // node_address is the address of the node
+  string node_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // node_type is the primary node type
+  NodeType node_type = 2;
+
+  // resources is the total resource specification
+  ResourceSpec resources = 3 [(gogoproto.nullable) = false];
+
+  // stake is the staked amount
+  string stake = 4;
+
+  // roles is the list of roles this node can perform (multi-role support)
+  repeated NodeType roles = 5;
+
+  // role_allocations maps roles to resource quotas
+  repeated RoleAllocation role_allocations = 6;
+
+  // resource_proof_ipfs_hash is the IPFS hash of the resource allocation proof
+  string resource_proof_ipfs_hash = 7;
+}
+
+// MsgRegisterNodeResponse defines the response structure for RegisterNode
+message MsgRegisterNodeResponse {
+  // registration_id is the unique identifier for the registration
+  uint64 registration_id = 1;
+}
+
+// MsgUpdateNodeRegistration updates node registration information
+message MsgUpdateNodeRegistration {
+  option (cosmos.msg.v1.signer) = "node_address";
+  option (amino.name) = "remes/x/remes/MsgUpdateNodeRegistration";
+
+  // node_address is the address of the node
+  string node_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // resources is the updated resource specification (optional)
+  ResourceSpec resources = 2;
+
+  // roles is the updated list of roles (optional)
+  repeated NodeType roles = 3;
+
+  // role_allocations is the updated role allocations (optional)
+  repeated RoleAllocation role_allocations = 4;
+
+  // resource_proof_ipfs_hash is the updated resource proof IPFS hash (optional)
+  string resource_proof_ipfs_hash = 5;
+}
+
+// MsgUpdateNodeRegistrationResponse defines the response structure for UpdateNodeRegistration
+message MsgUpdateNodeRegistrationResponse {}
+
+// MsgSubmitResourceUsage submits resource usage proof for validation
+message MsgSubmitResourceUsage {
+  option (cosmos.msg.v1.signer) = "node_address";
+  option (amino.name) = "remes/x/remes/MsgSubmitResourceUsage";
+
+  // node_address is the address of the node
+  string node_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // role is the role for which resource usage is being reported
+  NodeType role = 2;
+
+  // resource_usage is the actual resource usage
+  ResourceSpec resource_usage = 3 [(gogoproto.nullable) = false];
+
+  // proof_ipfs_hash is the IPFS hash of the resource usage proof
+  string proof_ipfs_hash = 4;
+}
+
+// MsgSubmitResourceUsageResponse defines the response structure for SubmitResourceUsage
+message MsgSubmitResourceUsageResponse {
+  // is_valid indicates if the resource usage is valid
+  bool is_valid = 1;
+
+  // violation_detected indicates if a violation was detected
+  bool violation_detected = 2;
+}
+
+// MsgCommitPinning commits to pin IPFS content with stake
+message MsgCommitPinning {
+  option (cosmos.msg.v1.signer) = "node_address";
+  option (amino.name) = "remes/x/remes/MsgCommitPinning";
+
+  // node_address is the address of the node committing to pinning
+  string node_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // ipfs_hash is the IPFS hash of the content to pin
+  string ipfs_hash = 2;
+
+  // stake is the staked amount for pinning commitment
+  string stake = 3;
+
+  // commitment_duration_blocks is the duration of commitment in blocks (0 = indefinite)
+  uint64 commitment_duration_blocks = 4;
+}
+
+// MsgCommitPinningResponse defines the response structure for CommitPinning
+message MsgCommitPinningResponse {
+  // pinning_id is the unique identifier for the pinning commitment
+  string pinning_id = 1;
+}
+
+// MsgChallengePinning challenges a pinning commitment for data availability verification
+message MsgChallengePinning {
+  option (cosmos.msg.v1.signer) = "challenger";
+  option (amino.name) = "remes/x/remes/MsgChallengePinning";
+
+  // challenger is the address of the challenger
+  string challenger = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // node_address is the address of the node being challenged
+  string node_address = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // ipfs_hash is the IPFS hash being challenged
+  string ipfs_hash = 3;
+}
+
+// MsgChallengePinningResponse defines the response structure for ChallengePinning
+message MsgChallengePinningResponse {
+  // challenge_id is the unique identifier for the challenge
+  uint64 challenge_id = 1;
+}
+
+// MsgRespondToChallenge responds to a data availability challenge
+message MsgRespondToChallenge {
+  option (cosmos.msg.v1.signer) = "node_address";
+  option (amino.name) = "remes/x/remes/MsgRespondToChallenge";
+
+  // node_address is the address of the node responding
+  string node_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // challenge_id is the ID of the challenge being responded to
+  uint64 challenge_id = 2;
+
+  // proof_ipfs_hash is the IPFS hash of the proof data (content retrieval proof)
+  string proof_ipfs_hash = 3;
+}
+
+// MsgRespondToChallengeResponse defines the response structure for RespondToChallenge
+message MsgRespondToChallengeResponse {
+  // is_valid indicates if the response proof is valid
+  bool is_valid = 1;
+}
+
+// MsgResolveChallenge resolves an aggregation challenge with CPU verification results
+message MsgResolveChallenge {
+  option (cosmos.msg.v1.signer) = "resolver";
+  option (amino.name) = "remes/x/remes/MsgResolveChallenge";
+
+  // resolver is the address resolving the challenge (must be module authority or validator)
+  string resolver = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // challenge_id is the ID of the challenge to resolve
+  uint64 challenge_id = 2;
+
+  // fraud_detected indicates if fraud was detected
+  bool fraud_detected = 3;
+
+  // resolution_reason is the reason for the resolution
+  string resolution_reason = 4;
+}
+
+// MsgResolveChallengeResponse defines the response structure for ResolveChallenge
+message MsgResolveChallengeResponse {
+  // resolved indicates if the challenge was successfully resolved
+  bool resolved = 1;
+}
+
+// MsgSubmitCPUVerification submits CPU verification result for a challenge
+message MsgSubmitCPUVerification {
+  option (cosmos.msg.v1.signer) = "validator";
+  option (amino.name) = "remes/x/remes/MsgSubmitCPUVerification";
+
+  // validator is the address of the validator submitting verification
+  string validator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // challenge_id is the ID of the challenge being verified
+  uint64 challenge_id = 2;
+
+  // is_valid indicates if the gradient is valid
+  bool is_valid = 3;
+
+  // computed_hash is the hash computed by the validator
+  string computed_hash = 4;
+
+  // expected_hash is the expected hash from the aggregation
+  string expected_hash = 5;
+}
+
+// MsgSubmitCPUVerificationResponse defines the response structure for SubmitCPUVerification
+message MsgSubmitCPUVerificationResponse {
+  // accepted indicates if the verification was accepted
+  bool accepted = 1;
+}
+
+// MsgSubmitRandomVerifierResult submits random GPU verifier result for Layer 2 challenge
+message MsgSubmitRandomVerifierResult {
+  option (cosmos.msg.v1.signer) = "verifier";
+  option (amino.name) = "remes/x/remes/MsgSubmitRandomVerifierResult";
+
+  // verifier is the address of the random GPU verifier
+  string verifier = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // challenge_id is the ID of the challenge being verified
+  uint64 challenge_id = 2;
+
+  // result is the verification result ("valid", "invalid", "pending")
+  string result = 3;
+
+  // gradient_hash is the computed gradient hash from verifier's re-computation
+  string gradient_hash = 4;
+
+  // evidence_ipfs_hash is the IPFS hash of verification evidence (optional)
+  string evidence_ipfs_hash = 5;
+
+  // verifier_loss is the loss calculated by verifier through forward pass (BitNet integer format)
+  // Used for Loss-Based Spot Checking - only set if loss verification was performed
+  string verifier_loss = 6;
+
+  // loss_match indicates if miner's claimed loss matches verifier's calculated loss (within tolerance)
+  // Used for Loss-Based Spot Checking - only set if loss verification was performed
+  bool loss_match = 7;
+
+  // data_batch_seed is the VRF seed used for deterministic batch selection
+  // Used for Loss-Based Spot Checking - only set if loss verification was performed
+  uint64 data_batch_seed = 8;
+}
+
+// MsgSubmitRandomVerifierResultResponse defines the response structure for SubmitRandomVerifierResult
+message MsgSubmitRandomVerifierResultResponse {
+  // accepted indicates whether the result was accepted
+  bool accepted = 1;
+
+  // layer_3_triggered indicates whether Layer 3 CPU verification was triggered
+  bool layer_3_triggered = 2;
+}
+
+// MsgRequestInference requests AI model inference from a serving node
+message MsgRequestInference {
+  option (cosmos.msg.v1.signer) = "requester";
+  option (amino.name) = "remes/x/remes/MsgRequestInference";
+
+  // requester is the address of the requester
+  string requester = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // serving_node is the address of the serving node
+  string serving_node = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // model_version is the version of the model to use
+  string model_version = 3;
+
+  // input_data_ipfs_hash is the IPFS hash of the input data
+  string input_data_ipfs_hash = 4;
+
+  // fee is the fee paid for the inference (in R3MES tokens)
+  string fee = 5;
+}
+
+// MsgRequestInferenceResponse defines the response structure for RequestInference
+message MsgRequestInferenceResponse {
+  // request_id is the unique identifier for this request
+  string request_id = 1;
+}
+
+// MsgSubmitInferenceResult submits inference result from a serving node
+message MsgSubmitInferenceResult {
+  option (cosmos.msg.v1.signer) = "serving_node";
+  option (amino.name) = "remes/x/remes/MsgSubmitInferenceResult";
+
+  // serving_node is the address of the serving node
+  string serving_node = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // request_id is the ID of the inference request
+  string request_id = 2;
+
+  // result_ipfs_hash is the IPFS hash of the inference result
+  string result_ipfs_hash = 3;
+
+  // latency_ms is the inference latency in milliseconds
+  uint64 latency_ms = 4;
+}
+
+// MsgSubmitInferenceResultResponse defines the response structure for SubmitInferenceResult
+message MsgSubmitInferenceResultResponse {
+  // accepted indicates if the result was accepted
+  bool accepted = 1;
+}
+
+// MsgUpdateServingNodeStatus updates serving node status and model version
+message MsgUpdateServingNodeStatus {
+  option (cosmos.msg.v1.signer) = "serving_node";
+  option (amino.name) = "remes/x/remes/MsgUpdateServingNodeStatus";
+
+  // serving_node is the address of the serving node
+  string serving_node = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // model_version is the current model version loaded
+  string model_version = 2;
+
+  // model_ipfs_hash is the IPFS hash of the loaded model
+  string model_ipfs_hash = 3;
+
+  // is_available indicates if the node is available for requests
+  bool is_available = 4;
+}
+
+// MsgUpdateServingNodeStatusResponse defines the response structure for UpdateServingNodeStatus
+message MsgUpdateServingNodeStatusResponse {
+  // updated indicates if the status was updated
+  bool updated = 1;
+}
+
+// MsgCreateTrapJob creates a trap job for lazy mining detection
+message MsgCreateTrapJob {
+  option (cosmos.msg.v1.signer) = "creator";
+  option (amino.name) = "remes/x/remes/MsgCreateTrapJob";
+
+  // creator is the address creating the trap job (must be module authority or validator)
+  string creator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // target_miner is the address of the miner being tested
+  string target_miner = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // dataset_ipfs_hash is the IPFS hash of the trap dataset
+  string dataset_ipfs_hash = 3;
+
+  // expected_gradient_hash is the known correct gradient hash (from Protocol Oracle)
+  string expected_gradient_hash = 4;
+
+  // deadline_blocks is the number of blocks until trap job expires
+  uint64 deadline_blocks = 5;
+
+  // obfuscate_with_dummy_data indicates if trap job should be obfuscated
+  bool obfuscate_with_dummy_data = 6;
+
+  // federated_signatures are the signatures from top 3 validators (multi-sig, 2/3 threshold)
+  // Required for federated trap job creation (replaces single Protocol Oracle)
+  repeated bytes federated_signatures = 7;
+}
+
+// MsgCreateTrapJobResponse defines the response structure for CreateTrapJob
+message MsgCreateTrapJobResponse {
+  // trap_job_id is the unique identifier for the created trap job
+  string trap_job_id = 1;
+}
+
+// MsgSubmitTrapJobResult submits result for a trap job
+message MsgSubmitTrapJobResult {
+  option (cosmos.msg.v1.signer) = "miner";
+  option (amino.name) = "remes/x/remes/MsgSubmitTrapJobResult";
+
+  // miner is the address of the miner submitting the result
+  string miner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // trap_job_id is the ID of the trap job
+  string trap_job_id = 2;
+
+  // gradient_ipfs_hash is the IPFS hash of the computed gradient
+  string gradient_ipfs_hash = 3;
+
+  // gradient_hash is the hash of the computed gradient
+  string gradient_hash = 4;
+}
+
+// MsgSubmitTrapJobResultResponse defines the response structure for SubmitTrapJobResult
+message MsgSubmitTrapJobResultResponse {
+  // verified indicates if the result was verified
+  bool verified = 1;
+}
+
+// MsgAppealTrapJobSlashing appeals a trap job slashing decision
+message MsgAppealTrapJobSlashing {
+  option (cosmos.msg.v1.signer) = "appellant";
+  option (amino.name) = "remes/x/remes/MsgAppealTrapJobSlashing";
+
+  // appellant is the address of the miner appealing
+  string appellant = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // trap_job_id is the ID of the trap job being appealed
+  string trap_job_id = 2;
+
+  // reason is the reason for the appeal
+  string reason = 3;
+
+  // evidence_ipfs_hash is the IPFS hash of evidence supporting the appeal
+  string evidence_ipfs_hash = 4;
+}
+
+// MsgAppealTrapJobSlashingResponse defines the response structure for AppealTrapJobSlashing
+message MsgAppealTrapJobSlashingResponse {
+  // appeal_id is the unique identifier for the appeal
+  string appeal_id = 1;
+}
+
+// MsgReportLazyValidation reports lazy validation by a validator
+message MsgReportLazyValidation {
+  option (cosmos.msg.v1.signer) = "reporter";
+  option (amino.name) = "remes/x/remes/MsgReportLazyValidation";
+
+  // reporter is the address reporting the lazy validation
+  string reporter = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // validator_address is the address of the lazy validator
+  string validator_address = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // evidence_ipfs_hash is the IPFS hash of evidence
+  string evidence_ipfs_hash = 3;
+}
+
+// MsgReportLazyValidationResponse defines the response structure for ReportLazyValidation
+message MsgReportLazyValidationResponse {
+  // reported indicates if the report was accepted
+  bool reported = 1;
+}
+
+// MsgReportFalseVerdict reports false verdict by a validator
+message MsgReportFalseVerdict {
+  option (cosmos.msg.v1.signer) = "reporter";
+  option (amino.name) = "remes/x/remes/MsgReportFalseVerdict";
+
+  // reporter is the address reporting the false verdict
+  string reporter = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // validator_address is the address of the validator with false verdict
+  string validator_address = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // challenge_id is the ID of the challenge where false verdict occurred
+  uint64 challenge_id = 3;
+
+  // evidence_ipfs_hash is the IPFS hash of evidence
+  string evidence_ipfs_hash = 4;
+}
+
+// MsgReportFalseVerdictResponse defines the response structure for ReportFalseVerdict
+message MsgReportFalseVerdictResponse {
+  // reported indicates if the report was accepted
+  bool reported = 1;
+}
+
+// MsgReportProposerCensorship reports censorship by a proposer
+message MsgReportProposerCensorship {
+  option (cosmos.msg.v1.signer) = "reporter";
+  option (amino.name) = "remes/x/remes/MsgReportProposerCensorship";
+
+  // reporter is the address reporting the censorship
+  string reporter = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // proposer_address is the address of the censoring proposer
+  string proposer_address = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // aggregation_id is the ID of the aggregation where censorship occurred
+  uint64 aggregation_id = 3;
+
+  // excluded_gradient_ids are the IDs of valid gradients that were excluded
+  repeated uint64 excluded_gradient_ids = 4;
+
+  // evidence_ipfs_hash is the IPFS hash of evidence
+  string evidence_ipfs_hash = 5;
+}
+
+// MsgReportProposerCensorshipResponse defines the response structure for ReportProposerCensorship
+message MsgReportProposerCensorshipResponse {
+  // reported indicates if the report was accepted
+  bool reported = 1;
+}
+
+// MsgAppealSlashing appeals a slashing decision
+message MsgAppealSlashing {
+  option (cosmos.msg.v1.signer) = "appellant";
+  option (amino.name) = "remes/x/remes/MsgAppealSlashing";
+
+  // appellant is the address of the slashed node appealing
+  string appellant = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // slashing_reason is the original reason for slashing
+  string slashing_reason = 2;
+
+  // appeal_reason is the reason for the appeal
+  string appeal_reason = 3;
+
+  // evidence_ipfs_hash is the IPFS hash of evidence supporting the appeal
+  string evidence_ipfs_hash = 4;
+}
+
+// MsgAppealSlashingResponse defines the response structure for AppealSlashing
+message MsgAppealSlashingResponse {
+  // appeal_id is the unique identifier for the appeal
+  string appeal_id = 1;
+}
+
+// MsgRegisterMentorRelationship registers a mentor-mentee relationship
+message MsgRegisterMentorRelationship {
+  option (cosmos.msg.v1.signer) = "mentor";
+  option (amino.name) = "remes/x/remes/MsgRegisterMentorRelationship";
+
+  // mentor is the address of the mentor
+  string mentor = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // mentee is the address of the mentee (new miner)
+  string mentee = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // reduced_stake_percentage is the reduced stake requirement (e.g., "0.5" for 50%)
+  string reduced_stake_percentage = 3;
+}
+
+// MsgRegisterMentorRelationshipResponse defines the response structure for RegisterMentorRelationship
+message MsgRegisterMentorRelationshipResponse {
+  // registered indicates if the relationship was registered
+  bool registered = 1;
+}
+
+// MsgProposeExecutionEnvironment proposes a new execution environment for governance approval
+message MsgProposeExecutionEnvironment {
+  option (cosmos.msg.v1.signer) = "proposer";
+  option (amino.name) = "remes/x/remes/MsgProposeExecutionEnvironment";
+
+  // proposer is the address of the proposer
+  string proposer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // environment is the execution environment specification
+  ExecutionEnvironment environment = 2 [(gogoproto.nullable) = false];
+
+  // deposit is the proposal deposit (required for governance)
+  string deposit = 3;
+}
+
+// MsgProposeExecutionEnvironmentResponse defines the response structure for ProposeExecutionEnvironment
+message MsgProposeExecutionEnvironmentResponse {
+  // proposal_id is the unique identifier for the proposal
+  uint64 proposal_id = 1;
+}
+
+// MsgVoteExecutionEnvironment votes on an execution environment proposal
+message MsgVoteExecutionEnvironment {
+  option (cosmos.msg.v1.signer) = "voter";
+  option (amino.name) = "remes/x/remes/MsgVoteExecutionEnvironment";
+
+  // voter is the address of the voter
+  string voter = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // proposal_id is the ID of the proposal being voted on
+  uint64 proposal_id = 2;
+
+  // vote_option is the vote option (yes, no, abstain)
+  string vote_option = 3;
+}
+
+// MsgVoteExecutionEnvironmentResponse defines the response structure for VoteExecutionEnvironment
+message MsgVoteExecutionEnvironmentResponse {
+  // vote_id is the unique identifier for the vote
+  uint64 vote_id = 1;
+}
+
+// MsgActivateExecutionEnvironment activates an approved execution environment
+message MsgActivateExecutionEnvironment {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "remes/x/remes/MsgActivateExecutionEnvironment";
+
+  // authority is the address that controls the module (defaults to x/gov)
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // environment_id is the ID of the approved execution environment
+  string environment_id = 2;
+}
+
+// MsgActivateExecutionEnvironmentResponse defines the response structure for ActivateExecutionEnvironment
+message MsgActivateExecutionEnvironmentResponse {}
+
+// MsgProposeModelUpgrade proposes a new model version upgrade
+message MsgProposeModelUpgrade {
+  option (cosmos.msg.v1.signer) = "proposer";
+  option (amino.name) = "remes/x/remes/MsgProposeModelUpgrade";
+
+  // proposer is the address proposing the upgrade
+  string proposer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // new_model_version is the proposed version number
+  uint64 new_model_version = 2;
+
+  // new_model_hash is the IPFS hash of the new model
+  string new_model_hash = 3;
+
+  // new_model_id is the ModelRegistry ID for the new model
+  uint64 new_model_id = 4;
+
+  // ipfs_path is the versioned IPFS path (e.g., "v2/")
+  string ipfs_path = 5;
+
+  // architecture is the model architecture string
+  string architecture = 6;
+
+  // compatibility_info is JSON-encoded compatibility information
+  string compatibility_info = 7;
+
+  // migration_window is the transition period in blocks (e.g., 1000)
+  int64 migration_window = 8;
+
+  // deposit is the proposal deposit amount
+  repeated cosmos.base.v1beta1.Coin deposit = 9 [(gogoproto.nullable) = false];
+}
+
+// MsgProposeModelUpgradeResponse defines the response structure
+message MsgProposeModelUpgradeResponse {
+  // proposal_id is the unique proposal identifier
+  uint64 proposal_id = 1;
+}
+
+// MsgVoteModelUpgrade votes on a model upgrade proposal
+message MsgVoteModelUpgrade {
+  option (cosmos.msg.v1.signer) = "voter";
+  option (amino.name) = "remes/x/remes/MsgVoteModelUpgrade";
+
+  // voter is the address voting
+  string voter = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // proposal_id is the proposal to vote on
+  uint64 proposal_id = 2;
+
+  // vote is the vote choice: "yes", "no", "abstain"
+  string vote = 3;
+}
+
+// MsgVoteModelUpgradeResponse defines the response structure
+message MsgVoteModelUpgradeResponse {}
+
+// MsgActivateModelUpgrade activates an approved model upgrade
+message MsgActivateModelUpgrade {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "remes/x/remes/MsgActivateModelUpgrade";
+
+  // authority is the module authority (governance)
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // proposal_id is the approved proposal to activate
+  uint64 proposal_id = 2;
+}
+
+// MsgActivateModelUpgradeResponse defines the response structure
+message MsgActivateModelUpgradeResponse {
+  // version_number is the activated version number
+  uint64 version_number = 1;
+}
+
+// MsgRollbackModelUpgrade rolls back a failed model upgrade
+message MsgRollbackModelUpgrade {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "remes/x/remes/MsgRollbackModelUpgrade";
+
+  // authority is the module authority (governance)
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // version_number is the version to rollback
+  uint64 version_number = 2;
+
+  // reason is the reason for rollback
+  string reason = 3;
+}
+
+// MsgRollbackModelUpgradeResponse defines the response structure
+message MsgRollbackModelUpgradeResponse {}
+
+// MsgCreateSubnet creates a new subnet for layer-based sharding
+message MsgCreateSubnet {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "remes/x/remes/MsgCreateSubnet";
+
+  // authority is the module authority (governance)
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // subnet_id is the unique identifier for this subnet
+  uint64 subnet_id = 2;
+
+  // layer_range defines which layers this subnet trains
+  LayerRange layer_range = 3 [(gogoproto.nullable) = false];
+
+  // next_subnet_id is the subnet ID that receives activations from this subnet
+  uint64 next_subnet_id = 4;
+
+  // window_id is the training window this subnet belongs to
+  uint64 window_id = 5;
+}
+
+// MsgCreateSubnetResponse defines the response structure
+message MsgCreateSubnetResponse {
+  // subnet_id is the created subnet ID
+  uint64 subnet_id = 1;
+}
+
+// MsgSubmitSubnetActivation submits activation data from a subnet
+message MsgSubmitSubnetActivation {
+  option (cosmos.msg.v1.signer) = "proposer";
+  option (amino.name) = "remes/x/remes/MsgSubmitSubnetActivation";
+
+  // proposer is the subnet proposer submitting activations
+  string proposer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // subnet_id is the subnet ID that produced the activations
+  uint64 subnet_id = 2;
+
+  // activation_hash is the IPFS hash of layer activations
+  string activation_hash = 3;
+
+  // next_subnet_id is the subnet ID that will receive these activations
+  uint64 next_subnet_id = 4;
+
+  // signature is the subnet proposer signature for verification
+  bytes signature = 5;
+}
+
+// MsgSubmitSubnetActivationResponse defines the response structure
+message MsgSubmitSubnetActivationResponse {
+  // transmission_id is the unique identifier for this activation transmission
+  uint64 transmission_id = 1;
+}
+
+// MsgAssignMinerToSubnet assigns a miner to a subnet
+message MsgAssignMinerToSubnet {
+  option (cosmos.msg.v1.signer) = "miner";
+  option (amino.name) = "remes/x/remes/MsgAssignMinerToSubnet";
+
+  // miner is the miner address being assigned
+  string miner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // subnet_id is the subnet ID to assign the miner to
+  uint64 subnet_id = 2;
+
+  // window_id is the training window for this assignment
+  uint64 window_id = 3;
+}
+
+// MsgAssignMinerToSubnetResponse defines the response structure
+message MsgAssignMinerToSubnetResponse {
+  // subnet_id is the assigned subnet ID
+  uint64 subnet_id = 1;
+
+  // layer_range is the layer range assigned to this miner
+  LayerRange layer_range = 2 [(gogoproto.nullable) = false];
+}
+
+// MsgCreateTrainingWindow creates a new training window
+message MsgCreateTrainingWindow {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "remes/x/remes/MsgCreateTrainingWindow";
+
+  // authority is the module authority (governance)
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // window_id is the unique identifier for this window
+  uint64 window_id = 2;
+
+  // start_height is the block height when the window starts
+  int64 start_height = 3;
+
+  // aggregator_node is the proposer address assigned to aggregate
+  string aggregator_node = 4;
+}
+
+// MsgCreateTrainingWindowResponse defines the response structure
+message MsgCreateTrainingWindowResponse {
+  // window_id is the created window ID
+  uint64 window_id = 1;
+}
+
+// MsgSubmitAsyncGradient submits an asynchronous gradient (non-blocking)
+message MsgSubmitAsyncGradient {
+  option (cosmos.msg.v1.signer) = "miner";
+  option (amino.name) = "remes/x/remes/MsgSubmitAsyncGradient";
+
+  // miner is the miner address submitting the gradient
+  string miner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // window_id is the training window this submission belongs to
+  uint64 window_id = 2;
+
+  // gradient_hash is the IPFS hash of the gradient
+  string gradient_hash = 3;
+
+  // subnet_id is the subnet ID this gradient belongs to
+  uint64 subnet_id = 4;
+
+  // layer_range is the layer range that was trained
+  LayerRange layer_range = 5 [(gogoproto.nullable) = false];
+}
+
+// MsgSubmitAsyncGradientResponse defines the response structure
+message MsgSubmitAsyncGradientResponse {
+  // submission_id is the unique identifier for this submission
+  uint64 submission_id = 1;
+}
+
+// MsgSubmitLazyAggregation submits lazy aggregation at window boundary
+message MsgSubmitLazyAggregation {
+  option (cosmos.msg.v1.signer) = "aggregator";
+  option (amino.name) = "remes/x/remes/MsgSubmitLazyAggregation";
+
+  // aggregator is the aggregator node submitting the aggregation
+  string aggregator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // window_id is the training window this aggregation belongs to
+  uint64 window_id = 2;
+
+  // collected_gradients is the list of gradient hashes collected
+  repeated string collected_gradients = 3;
+
+  // aggregation_method is the method used
+  string aggregation_method = 4;
+
+  // result_hash is the IPFS hash of the aggregated result
+  string result_hash = 5;
+
+  // merkle_root is the Merkle root for verification
+  bytes merkle_root = 6;
+}
+
+// MsgSubmitLazyAggregationResponse defines the response structure
+message MsgSubmitLazyAggregationResponse {
+  // aggregation_id is the unique identifier for this aggregation
+  uint64 aggregation_id = 1;
+}
+
+// MsgClaimTask claims an available chunk from a task pool
+message MsgClaimTask {
+  option (cosmos.msg.v1.signer) = "miner";
+  option (amino.name) = "remes/x/remes/MsgClaimTask";
+
+  // miner is the address of the miner claiming the task
+  string miner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // pool_id is the ID of the task pool
+  uint64 pool_id = 2;
+
+  // chunk_id is the ID of the chunk to claim
+  uint64 chunk_id = 3;
+}
+
+// MsgClaimTaskResponse defines the response structure for ClaimTask
+message MsgClaimTaskResponse {
+  // success indicates if the claim was successful
+  bool success = 1;
+
+  // tx_hash is the transaction hash (hex encoded)
+  string tx_hash = 2;
+}
+
+// MsgCompleteTask marks a claimed chunk as completed with gradient result
+message MsgCompleteTask {
+  option (cosmos.msg.v1.signer) = "miner";
+  option (amino.name) = "remes/x/remes/MsgCompleteTask";
+
+  // miner is the address of the miner completing the task
+  string miner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // pool_id is the ID of the task pool
+  uint64 pool_id = 2;
+
+  // chunk_id is the ID of the chunk being completed
+  uint64 chunk_id = 3;
+
+  // gradient_hash is the deterministic hash of the gradient result
+  string gradient_hash = 4;
+
+  // gradient_ipfs_hash is the IPFS hash of the gradient data
+  string gradient_ipfs_hash = 5;
+
+  // miner_gpu is the GPU architecture used (e.g., "Ada", "Ampere", "Blackwell")
+  string miner_gpu = 6;
+}
+
+// MsgCompleteTaskResponse defines the response structure for CompleteTask
+message MsgCompleteTaskResponse {
+  // success indicates if the task completion was successful
+  bool success = 1;
+
+  // tx_hash is the transaction hash (hex encoded)
+  string tx_hash = 2;
+}

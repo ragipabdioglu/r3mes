@@ -1,0 +1,71 @@
+syntax = "proto3";
+package remes.remes.v1;
+
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "remes/x/remes/types";
+
+// InferenceRequest represents an inference request to a serving node
+message InferenceRequest {
+  // request_id is the unique identifier for this request
+  string request_id = 1;
+  
+  // requester is the address of the requester
+  string requester = 2;
+  
+  // serving_node is the address of the serving node handling the request
+  string serving_node = 3;
+  
+  // model_version is the version of the model to use
+  string model_version = 4;
+  
+  // input_data_ipfs_hash is the IPFS hash of the input data
+  string input_data_ipfs_hash = 5;
+  
+  // fee is the fee paid for the inference
+  string fee = 6;
+  
+  // request_time is when the request was made
+  google.protobuf.Timestamp request_time = 7 [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+  
+  // response_time is when the response was received
+  google.protobuf.Timestamp response_time = 8 [(gogoproto.stdtime) = true];
+  
+  // result_ipfs_hash is the IPFS hash of the inference result
+  string result_ipfs_hash = 9;
+  
+  // status is the request status (pending, processing, completed, failed)
+  string status = 10;
+  
+  // latency_ms is the inference latency in milliseconds
+  uint64 latency_ms = 11;
+}
+
+// ServingNodeStatus represents the status of a serving node
+message ServingNodeStatus {
+  // node_address is the address of the serving node
+  string node_address = 1;
+  
+  // model_version is the current model version loaded
+  string model_version = 2;
+  
+  // model_ipfs_hash is the IPFS hash of the loaded model
+  string model_ipfs_hash = 3;
+  
+  // is_available indicates if the node is available for requests
+  bool is_available = 4;
+  
+  // total_requests is the total number of requests handled
+  uint64 total_requests = 5;
+  
+  // successful_requests is the number of successful requests
+  uint64 successful_requests = 6;
+  
+  // average_latency_ms is the average latency in milliseconds
+  uint64 average_latency_ms = 7;
+  
+  // last_heartbeat is the last heartbeat timestamp
+  google.protobuf.Timestamp last_heartbeat = 8 [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+}
+

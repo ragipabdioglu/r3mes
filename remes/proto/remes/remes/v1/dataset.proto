@@ -1,0 +1,168 @@
+syntax = "proto3";
+package remes.remes.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "remes/x/remes/types";
+
+// DatasetProposal represents a governance proposal for dataset approval
+message DatasetProposal {
+  // proposal_id is the unique identifier for the proposal
+  uint64 proposal_id = 1;
+  
+  // proposer is the address of the proposer
+  string proposer = 2;
+  
+  // dataset_ipfs_hash is the IPFS hash of the dataset
+  string dataset_ipfs_hash = 3;
+  
+  // dataset_metadata contains metadata about the dataset
+  DatasetMetadata metadata = 4 [(gogoproto.nullable) = false];
+  
+  // deposit is the deposit amount required for proposal
+  string deposit = 5;
+  
+  // voting_period_end is when the voting period ends
+  google.protobuf.Timestamp voting_period_end = 6 [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+  
+  // status is the proposal status
+  string status = 7; // "pending", "voting", "passed", "rejected", "executed"
+  
+  // submit_time is when the proposal was submitted
+  google.protobuf.Timestamp submit_time = 8 [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+  
+  // total_votes is the total voting power cast
+  string total_votes = 9;
+  
+  // yes_votes is the voting power for "yes"
+  string yes_votes = 10;
+  
+  // no_votes is the voting power for "no"
+  string no_votes = 11;
+  
+  // abstain_votes is the voting power for "abstain"
+  string abstain_votes = 12;
+}
+
+// DatasetVote represents an individual vote on a dataset proposal
+message DatasetVote {
+  option (amino.name) = "remes/x/remes/DatasetVote";
+  option (gogoproto.equal) = true;
+
+  // vote_id is the unique identifier for this vote
+  uint64 vote_id = 1;
+
+  // proposal_id is the ID of the proposal being voted on
+  uint64 proposal_id = 2;
+
+  // voter is the address of the voter
+  string voter = 3;
+
+  // option is the vote option ("yes", "no", "abstain")
+  string option = 4;
+
+  // voting_power is the voting power cast with this vote
+  string voting_power = 5;
+
+  // quality_score is the quality assessment score (0-100)
+  uint32 quality_score = 6;
+
+  // relevance_score is the relevance assessment score (0-100)
+  uint32 relevance_score = 7;
+
+  // voted_at_height is the block height when the vote was cast
+  int64 voted_at_height = 8;
+
+  // voted_at_time is the timestamp when the vote was cast
+  google.protobuf.Timestamp voted_at_time = 9 [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+}
+
+// DatasetMetadata contains metadata about a dataset
+message DatasetMetadata {
+  // name is the name of the dataset
+  string name = 1;
+  
+  // description is the description of the dataset
+  string description = 2;
+  
+  // data_schema is the schema of the dataset
+  string data_schema = 3;
+  
+  // size_bytes is the size of the dataset in bytes
+  uint64 size_bytes = 4;
+  
+  // num_samples is the number of samples in the dataset
+  uint64 num_samples = 5;
+  
+  // license is the license of the dataset
+  string license = 6;
+  
+  // source is the source of the dataset
+  string source = 7;
+  
+  // checksum is the cryptographic checksum of the dataset
+  string checksum = 8;
+  
+  // signature is the cryptographic signature of the proposer
+  bytes signature = 9;
+}
+
+// ApprovedDataset represents an approved dataset in the registry
+message ApprovedDataset {
+  // dataset_id is the unique identifier for the approved dataset
+  uint64 dataset_id = 1;
+  
+  // dataset_ipfs_hash is the IPFS hash of the dataset
+  string dataset_ipfs_hash = 2;
+  
+  // metadata is the dataset metadata
+  DatasetMetadata metadata = 3 [(gogoproto.nullable) = false];
+  
+  // approval_height is the block height when approved
+  int64 approval_height = 4;
+  
+  // approval_tx_hash is the transaction hash of the approval
+  string approval_tx_hash = 5;
+  
+  // proposer is the address of the original proposer
+  string proposer = 6;
+  
+  // status is the dataset status
+  string status = 7; // "active", "removed", "deprecated"
+  
+  // is_official_training_data indicates if this dataset is marked as "Official Training Data"
+  bool is_official_training_data = 10;
+  
+  // removal_height is the block height when removed (if removed)
+  int64 removal_height = 8;
+  
+  // removal_tx_hash is the transaction hash of the removal (if removed)
+  string removal_tx_hash = 9;
+  
+  // audit_trail contains cryptographic audit trail linking to approval transactions
+  repeated AuditTrailEntry audit_trail = 11;
+}
+
+// AuditTrailEntry represents an entry in the cryptographic audit trail
+message AuditTrailEntry {
+  // entry_type is the type of entry ("approval", "removal", "update", "challenge")
+  string entry_type = 1;
+  
+  // block_height is the block height when this entry was created
+  int64 block_height = 2;
+  
+  // tx_hash is the transaction hash
+  string tx_hash = 3;
+  
+  // actor is the address of the actor (proposer, voter, challenger, etc.)
+  string actor = 4;
+  
+  // description is a human-readable description
+  string description = 5;
+  
+  // timestamp is when this entry was created
+  google.protobuf.Timestamp timestamp = 6 [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+}
+

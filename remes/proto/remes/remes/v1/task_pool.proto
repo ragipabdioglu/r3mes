@@ -1,0 +1,94 @@
+syntax = "proto3";
+package remes.remes.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "remes/x/remes/types";
+
+// TaskPool represents an open buffet task pool with multiple chunks
+message TaskPool {
+  option (amino.name) = "remes/x/remes/TaskPool";
+  option (gogoproto.equal) = true;
+
+  // pool_id is the unique identifier for this task pool
+  uint64 pool_id = 1;
+
+  // window_id is the training window identifier
+  uint64 window_id = 2;
+
+  // total_chunks is the total number of chunks in this pool (e.g., 50 chunks per block)
+  uint64 total_chunks = 3;
+
+  // available_chunks is the list of available chunks
+  repeated TaskChunk available_chunks = 4 [(gogoproto.nullable) = false];
+
+  // completed_chunks is the list of IPFS hashes of completed tasks
+  repeated string completed_chunks = 5;
+
+  // status is the current status of the pool ("active", "aggregating", "closed")
+  string status = 6;
+
+  // created_height is the block height when this pool was created
+  int64 created_height = 7;
+
+  // expiry_height is the block height when this pool expires (window closes after N blocks)
+  int64 expiry_height = 8;
+}
+
+// TaskChunk represents a single chunk in the task pool
+message TaskChunk {
+  option (amino.name) = "remes/x/remes/TaskChunk";
+  option (gogoproto.equal) = true;
+
+  // chunk_id is the unique identifier for this chunk
+  uint64 chunk_id = 1;
+
+  // data_hash is the IPFS hash of chunk data
+  string data_hash = 2;
+
+  // shard_id is the shard identifier
+  uint64 shard_id = 3;
+
+  // assigned_miner is the miner address assigned to this chunk (optional, can be empty for open pool)
+  string assigned_miner = 4;
+
+  // status is the current status of the chunk ("available", "in_progress", "completed")
+  string status = 5;
+
+  // claimed_at is the timestamp when this chunk was claimed
+  int64 claimed_at = 6;
+
+  // completed_at is the timestamp when this chunk was completed
+  int64 completed_at = 7;
+
+  // gradient_hash is the IPFS hash of the result gradient
+  string gradient_hash = 8;
+
+  // is_trap indicates if this chunk is a trap job from genesis vault (internal use only, NOT exposed to miners)
+  bool is_trap = 9;
+
+  // vault_entry_id is the genesis vault entry ID if this is a trap (internal use only, NOT exposed to miners)
+  uint64 vault_entry_id = 10;
+}
+
+// TaskChunkResponse is the sanitized version of TaskChunk sent to miners
+// Does NOT include is_trap or vault_entry_id fields for security
+message TaskChunkResponse {
+  option (amino.name) = "remes/x/remes/TaskChunkResponse";
+  option (gogoproto.equal) = true;
+
+  // chunk_id is the unique identifier for this chunk
+  uint64 chunk_id = 1;
+
+  // data_hash is the IPFS hash of chunk data
+  string data_hash = 2;
+
+  // shard_id is the shard identifier
+  uint64 shard_id = 3;
+
+  // Note: is_trap and vault_entry_id are intentionally omitted for security
+  // Miners cannot distinguish between real jobs and traps
+}
+
+

@@ -1,0 +1,86 @@
+syntax = "proto3";
+package remes.remes.v1;
+
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "remes/x/remes/types";
+
+// TrapJob represents a trap job for lazy mining detection
+message TrapJob {
+  // trap_job_id is the unique identifier for this trap job
+  string trap_job_id = 1;
+  
+  // target_miner is the address of the miner being tested
+  string target_miner = 2;
+  
+  // dataset_ipfs_hash is the IPFS hash of the trap dataset (obfuscated with dummy data)
+  string dataset_ipfs_hash = 3;
+  
+  // expected_gradient_hash is the known correct gradient hash (from Protocol Oracle)
+  string expected_gradient_hash = 4;
+  
+  // created_at_height is the block height when trap job was created
+  int64 created_at_height = 5;
+  
+  // deadline_height is the block height when trap job expires
+  int64 deadline_height = 6;
+  
+  // status is the trap job status (pending, submitted, verified, failed)
+  string status = 7;
+  
+  // submitted_gradient_hash is the gradient hash submitted by miner
+  string submitted_gradient_hash = 8;
+  
+  // verification_result indicates if the submitted gradient matches expected
+  bool verification_result = 9;
+  
+  // is_obfuscated indicates if trap job was obfuscated with dummy data
+  bool is_obfuscated = 10;
+  
+  // obfuscation_seed is the seed used for dummy data injection
+  uint64 obfuscation_seed = 11;
+
+  // federated_signers are the top 3 validators who signed this trap job (multi-sig)
+  // Replaces single Protocol Oracle for decentralized security
+  repeated string federated_signers = 12;
+
+  // federated_signatures are the signatures from federated validators (2/3 threshold required)
+  repeated bytes federated_signatures = 13;
+
+  // created_by indicates who created this trap job ("federated_validators" or "protocol_oracle" for legacy)
+  string created_by = 14;
+  // blinding_factor is the random factor used to obfuscate the expected gradient hash
+  // This prevents miners from detecting trap jobs by comparing hashes
+  string blinding_factor = 15;
+  // is_blinded indicates if this trap job uses blinding factor obfuscation
+  bool is_blinded = 16;
+}
+
+// TrapJobAppeal represents an appeal for a trap job slashing
+message TrapJobAppeal {
+  // appeal_id is the unique identifier for this appeal
+  string appeal_id = 1;
+  
+  // trap_job_id is the ID of the trap job being appealed
+  string trap_job_id = 2;
+  
+  // appellant is the address of the miner appealing
+  string appellant = 3;
+  
+  // reason is the reason for the appeal
+  string reason = 4;
+  
+  // evidence_ipfs_hash is the IPFS hash of evidence supporting the appeal
+  string evidence_ipfs_hash = 5;
+  
+  // created_at_height is the block height when appeal was created
+  int64 created_at_height = 6;
+  
+  // status is the appeal status (pending, approved, rejected)
+  string status = 7;
+  
+  // cpu_verification_result is the result of CPU Iron Sandbox verification
+  bool cpu_verification_result = 8;
+}
+

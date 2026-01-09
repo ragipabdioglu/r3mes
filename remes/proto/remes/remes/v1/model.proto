@@ -1,0 +1,116 @@
+syntax = "proto3";
+package remes.remes.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "remes/x/remes/types";
+
+// ModelType identifies the neural network architecture
+enum ModelType {
+  MODEL_TYPE_UNSPECIFIED = 0;
+  MODEL_TYPE_BITNET = 1;      // BitNet 1.58-bit (current default)
+  MODEL_TYPE_MAMBA = 2;       // Mamba state-space model
+  MODEL_TYPE_RWKV = 3;        // RWKV attention-free transformer
+  MODEL_TYPE_CUSTOM = 99;     // Custom architecture (via governance)
+}
+
+// EncryptionType specifies encryption method for enterprise privacy
+enum EncryptionType {
+  ENCRYPTION_TYPE_UNSPECIFIED = 0;
+  ENCRYPTION_TYPE_PLAINTEXT = 1;      // No encryption (current default)
+  ENCRYPTION_TYPE_TEE_SGX = 2;        // Intel SGX Trusted Execution Environment
+  ENCRYPTION_TYPE_HOMOMORPHIC = 3;    // Homomorphic encryption (future)
+  ENCRYPTION_TYPE_ZERO_KNOWLEDGE = 4; // ZK proofs (future)
+}
+
+// ModelConfig represents a generic model configuration
+// This replaces BitNet-specific hard-coding
+message ModelConfig {
+  option (amino.name) = "remes/x/remes/ModelConfig";
+  option (gogoproto.equal) = true;
+
+  // model_type identifies the model architecture
+  ModelType model_type = 1;
+
+  // model_version is the version string (e.g., "b1.58", "v2.0")
+  string model_version = 2;
+
+  // architecture_config is a JSON blob containing architecture-specific parameters
+  // For BitNet: {"hidden_size": 768, "num_layers": 12, "lora_rank": 8, ...}
+  // For Mamba: {"d_model": 512, "d_state": 16, "d_conv": 4, ...}
+  // For RWKV: {"n_embd": 4096, "n_layer": 32, "n_head": 32, ...}
+  string architecture_config = 3; // JSON-encoded configuration
+
+  // container_hash is the Docker/OCI image hash for deterministic execution
+  // Format: "sha256:abc123..." (Docker image digest)
+  // This enables support for future architectures without protocol changes
+  string container_hash = 4;
+
+  // container_registry is the container registry URL (e.g., "docker.io", "ghcr.io")
+  string container_registry = 5;
+
+  // execution_environment_id references an approved execution environment
+  uint64 execution_environment_id = 6;
+
+  // encryption_type specifies encryption method
+  EncryptionType encryption_type = 7;
+
+  // encrypted_weights_ipfs_hash is the IPFS hash of encrypted model weights
+  // Only used if encryption_type != ENCRYPTION_TYPE_PLAINTEXT
+  string encrypted_weights_ipfs_hash = 8;
+
+  // decryption_key_holder is the address authorized to decrypt (if applicable)
+  // For TEE-SGX: This is the enclave address
+  string decryption_key_holder = 9;
+
+  // Hybrid Download Configuration (HuggingFace + IPFS fallback)
+  // model_name is the human-readable model name (e.g., "Llama-3-8B-R3MES-Optimized")
+  string model_name = 10;
+
+  // file_name is the local filename for the downloaded model (e.g., "Meta-Llama-3-8B-Instruct.Q4_K_M.gguf")
+  string file_name = 11;
+
+  // download_source is the primary download URL (HuggingFace direct link)
+  // Format: "https://huggingface.co/QuantFactory/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct.Q4_K_M.gguf"
+  string download_source = 12;
+
+  // verification_sha256 is the SHA256 hash of the model file for integrity verification
+  // This ensures the downloaded file is authentic and not corrupted
+  // Format: "abc123def456..." (64 hex characters)
+  string verification_sha256 = 13;
+
+  // required_disk_space_gb is the minimum disk space required in GB
+  // Used for pre-flight checks before downloading
+  double required_disk_space_gb = 14;
+
+  // ipfs_fallback_hash is the IPFS hash as a fallback if HuggingFace download fails
+  // DEPRECATED: Kept for backward compatibility. Primary download should use download_source.
+  string ipfs_fallback_hash = 15;
+}
+
+// ModelRegistry stores approved model configurations
+message ModelRegistry {
+  option (amino.name) = "remes/x/remes/ModelRegistry";
+  option (gogoproto.equal) = true;
+
+  // model_id is the unique identifier for this model
+  uint64 model_id = 1;
+
+  // config is the model configuration
+  ModelConfig config = 2 [(gogoproto.nullable) = false];
+
+  // approved_at_height is when this model was approved
+  int64 approved_at_height = 3;
+
+  // approved_by is the governance proposal ID that approved this model
+  uint64 approved_by = 4;
+
+  // is_active indicates if this model is currently active for training
+  bool is_active = 5;
+
+  // created_at is the timestamp when this model was registered
+  google.protobuf.Timestamp created_at = 6 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true];
+}
+

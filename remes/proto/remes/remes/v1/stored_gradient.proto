@@ -1,0 +1,76 @@
+syntax = "proto3";
+package remes.remes.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+import "remes/remes/v1/model.proto";
+
+option go_package = "remes/x/remes/types";
+
+// StoredGradient represents a gradient submission stored on-chain
+// Only metadata and IPFS hash are stored, NOT the actual gradient data
+message StoredGradient {
+  option (amino.name) = "remes/x/remes/StoredGradient";
+  option (gogoproto.equal) = true;
+
+  // id is the unique identifier for this gradient submission
+  uint64 id = 1;
+
+  // miner is the address of the miner who submitted the gradient
+  string miner = 2;
+
+  // ipfs_hash is the IPFS content hash of the gradient data
+  string ipfs_hash = 3;
+
+  // model_version is the version of the model used for training
+  // DEPRECATED: Use model_config_id instead. Kept for backward compatibility.
+  string model_version = 4;
+
+  // training_round_id is the identifier for the training round
+  uint64 training_round_id = 5;
+
+  // shard_id is the deterministic shard assignment for this miner
+  uint64 shard_id = 6;
+
+  // gradient_hash is the deterministic hash of the gradient for verification
+  string gradient_hash = 7;
+
+  // gpu_architecture is the GPU architecture used (Ampere, Ada, Blackwell, etc.)
+  string gpu_architecture = 8;
+
+  // submitted_at_height is the block height when this gradient was submitted
+  int64 submitted_at_height = 9;
+
+  // status is the current status of the gradient (pending, aggregated, challenged)
+  string status = 10;
+
+  // model_config_id references the ModelRegistry entry
+  // This enables model-agnostic gradient storage
+  // Default: 0 (legacy BitNet model, will be migrated automatically)
+  uint64 model_config_id = 11;
+
+  // encryption_type specifies how this gradient is encrypted
+  EncryptionType encryption_type = 12;
+
+  // encrypted_gradient_ipfs_hash is the IPFS hash of encrypted gradient
+  // Only used if encryption_type != ENCRYPTION_TYPE_PLAINTEXT
+  string encrypted_gradient_ipfs_hash = 13;
+
+  // container_hash is the Docker/OCI image hash used for training
+  string container_hash = 14;
+
+  // container_signature is the cryptographic signature of the container
+  bytes container_signature = 15;
+
+  // global_seed is the deterministic seed used for training (derived from block hash + training round)
+  uint64 global_seed = 16;
+
+  // claimed_loss is the loss value claimed by the miner (BitNet integer format)
+  // Used for Loss-Based Spot Checking in Layer 2 verification
+  string claimed_loss = 17;
+
+  // porep_proof_ipfs_hash is the IPFS hash of the Proof of Replication (PoRep) proof
+  // PoRep proves that the miner actually stores the gradient data, not just the hash
+  string porep_proof_ipfs_hash = 18;
+}
+

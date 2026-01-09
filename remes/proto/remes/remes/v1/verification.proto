@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package remes.remes.v1;
+
+option go_package = "remes/x/remes/types";
+
+// Verification Service - gRPC bridge between Go validator and Python inference engine
+service VerificationService {
+  // RunForwardPass performs a forward pass (inference) on a batch
+  // This is called by the Go validator to verify miner's claimed loss
+  rpc RunForwardPass(RunForwardPassRequest) returns (RunForwardPassResponse);
+  
+  // Health check for the verification service
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// RunForwardPassRequest contains all information needed to run a forward pass
+message RunForwardPassRequest {
+  // IPFS hash of the miner's model weights
+  string weights_ipfs_hash = 1;
+  
+  // Batch identifier (deterministic batch selection)
+  string batch_id = 2;
+  
+  // Model configuration ID
+  uint64 model_config_id = 3;
+  
+  // Dataset IPFS hash (optional, for batch retrieval)
+  string dataset_ipfs_hash = 4;
+  
+  // Timeout in seconds (default: 300)
+  uint32 timeout_seconds = 5;
+}
+
+// RunForwardPassResponse contains the calculated loss
+message RunForwardPassResponse {
+  // Calculated loss as BitNet integer
+  int64 loss_int = 1;
+  
+  // Success status
+  bool success = 2;
+  
+  // Error message if failed
+  string error_message = 3;
+  
+  // Execution time in milliseconds
+  uint64 execution_time_ms = 4;
+  
+  // GPU used for inference (if applicable)
+  string gpu_info = 5;
+}
+
+// HealthCheckRequest for service health check
+message HealthCheckRequest {
+  // Empty for now, can be extended
+}
+
+// HealthCheckResponse contains service status
+message HealthCheckResponse {
+  // Service is healthy
+  bool healthy = 1;
+  
+  // Service version
+  string version = 2;
+  
+  // Available GPUs
+  repeated string available_gpus = 3;
+  
+  // Model loaded status
+  bool model_loaded = 4;
+}
+

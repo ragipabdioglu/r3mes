@@ -1,0 +1,114 @@
+syntax = "proto3";
+package remes.remes.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "remes/x/remes/types";
+
+// LayerRange defines a range of model layers
+message LayerRange {
+  option (amino.name) = "remes/x/remes/LayerRange";
+  option (gogoproto.equal) = true;
+
+  // start_layer is the starting layer index (inclusive)
+  uint64 start_layer = 1;
+
+  // end_layer is the ending layer index (inclusive)
+  uint64 end_layer = 2;
+}
+
+// SubnetConfig represents a subnet configuration for layer-based sharding
+message SubnetConfig {
+  option (amino.name) = "remes/x/remes/SubnetConfig";
+  option (gogoproto.equal) = true;
+
+  // subnet_id is the unique identifier for this subnet
+  uint64 subnet_id = 1;
+
+  // layer_range defines which layers this subnet trains
+  LayerRange layer_range = 2 [(gogoproto.nullable) = false];
+
+  // assigned_miners is the list of miner addresses assigned to this subnet
+  repeated string assigned_miners = 3;
+
+  // activation_hash is the IPFS hash of layer activations produced by this subnet
+  string activation_hash = 4;
+
+  // next_subnet_id is the subnet ID that receives activations from this subnet
+  uint64 next_subnet_id = 5;
+
+  // status is the current status of the subnet ("active", "aggregating", "completed")
+  string status = 6;
+
+  // window_id is the training window this subnet belongs to
+  uint64 window_id = 7;
+
+  // created_at is when this subnet was created
+  google.protobuf.Timestamp created_at = 8 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true];
+
+  // updated_at is when this subnet was last updated
+  google.protobuf.Timestamp updated_at = 9 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true];
+}
+
+// ActivationTransmission represents activation data transmission between subnets
+message ActivationTransmission {
+  option (amino.name) = "remes/x/remes/ActivationTransmission";
+  option (gogoproto.equal) = true;
+
+  // transmission_id is the unique identifier for this transmission
+  uint64 transmission_id = 1;
+
+  // from_subnet_id is the subnet ID that produced the activations
+  uint64 from_subnet_id = 2;
+
+  // to_subnet_id is the subnet ID that receives the activations
+  uint64 to_subnet_id = 3;
+
+  // activation_hash is the IPFS hash of layer activations
+  string activation_hash = 4;
+
+  // layer_output is compressed activation data (optional, for verification)
+  string layer_output = 5;
+
+  // timestamp is when this transmission occurred
+  google.protobuf.Timestamp timestamp = 6 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true];
+
+  // signature is the subnet proposer signature for verification
+  bytes signature = 7;
+
+  // verified indicates whether this transmission has been verified
+  bool verified = 8;
+}
+
+// SubnetTrainingWorkflow represents a complete subnet-based training workflow
+message SubnetTrainingWorkflow {
+  option (amino.name) = "remes/x/remes/SubnetTrainingWorkflow";
+  option (gogoproto.equal) = true;
+
+  // workflow_id is the unique identifier for this workflow
+  uint64 workflow_id = 1;
+
+  // window_id is the training window this workflow belongs to
+  uint64 window_id = 2;
+
+  // subnets is the list of subnet configurations in this workflow
+  repeated SubnetConfig subnets = 3 [(gogoproto.nullable) = false];
+
+  // activation_chain is the list of IPFS hashes linking subnet outputs sequentially
+  repeated string activation_chain = 4;
+
+  // global_seed is the deterministic seed derived from block hash
+  bytes global_seed = 5;
+
+  // status is the current status of the workflow ("initializing", "active", "completed")
+  string status = 6;
+
+  // created_at is when this workflow was created
+  google.protobuf.Timestamp created_at = 7 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true];
+
+  // completed_at is when this workflow was completed (if applicable)
+  google.protobuf.Timestamp completed_at = 8 [(gogoproto.nullable) = true, (gogoproto.stdtime) = true];
+}
+

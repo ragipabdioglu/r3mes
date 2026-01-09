@@ -1,0 +1,151 @@
+syntax = "proto3";
+package remes.remes.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "remes/x/remes/types";
+
+// ModelVersion represents a specific version of a model
+message ModelVersion {
+  option (amino.name) = "remes/x/remes/ModelVersion";
+  option (gogoproto.equal) = true;
+
+  // version_number is the numeric version (e.g., 1, 2, 3)
+  uint64 version_number = 1;
+
+  // model_id references the ModelRegistry entry
+  uint64 model_id = 2;
+
+  // model_hash is the IPFS hash of the model weights
+  string model_hash = 3;
+
+  // ipfs_path is the versioned IPFS path (e.g., "v1/", "v2/")
+  string ipfs_path = 4;
+
+  // architecture is the model architecture string
+  string architecture = 5;
+
+  // compatibility_info is JSON-encoded compatibility information
+  // e.g., {"compatible_with": [1, 2], "breaking_changes": false}
+  string compatibility_info = 6;
+
+  // status is the current status: "active", "migration", "deprecated", "rollback"
+  string status = 7;
+
+  // activation_height is when this version was activated
+  int64 activation_height = 8;
+
+  // migration_window_start is when migration window started
+  int64 migration_window_start = 9;
+
+  // migration_window_end is when migration window ends
+  int64 migration_window_end = 10;
+
+  // governance_proposal_id is the proposal that approved this version
+  uint64 governance_proposal_id = 11;
+
+  // created_at is when this version was created
+  google.protobuf.Timestamp created_at = 12 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true];
+}
+
+// ModelUpgradeProposal represents a governance proposal for model upgrade
+message ModelUpgradeProposal {
+  option (amino.name) = "remes/x/remes/ModelUpgradeProposal";
+  option (gogoproto.equal) = true;
+
+  // proposal_id is the unique proposal identifier
+  uint64 proposal_id = 1;
+
+  // proposer is the address that created this proposal
+  string proposer = 2;
+
+  // new_model_version is the proposed version number
+  uint64 new_model_version = 3;
+
+  // new_model_hash is the IPFS hash of the new model
+  string new_model_hash = 4;
+
+  // new_model_id is the ModelRegistry ID for the new model
+  uint64 new_model_id = 5;
+
+  // ipfs_path is the versioned IPFS path (e.g., "v2/")
+  string ipfs_path = 6;
+
+  // architecture is the model architecture string
+  string architecture = 7;
+
+  // compatibility_info is JSON-encoded compatibility information
+  string compatibility_info = 8;
+
+  // migration_window is the transition period in blocks (e.g., 1000)
+  int64 migration_window = 9;
+
+  // status is the proposal status: "voting", "approved", "rejected", "executed"
+  string status = 10;
+
+  // voting_period contains voting period information
+  VotingPeriod voting_period = 11 [(gogoproto.nullable) = false];
+
+  // deposit is the proposal deposit amount
+  string deposit = 12;
+
+  // created_at is when this proposal was created
+  google.protobuf.Timestamp created_at = 13 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true];
+}
+
+// ModelUpgradeVote represents an individual vote on a model upgrade proposal
+message ModelUpgradeVote {
+  option (amino.name) = "remes/x/remes/ModelUpgradeVote";
+  option (gogoproto.equal) = true;
+
+  // vote_id is the unique identifier for this vote
+  uint64 vote_id = 1;
+
+  // proposal_id is the ID of the proposal being voted on
+  uint64 proposal_id = 2;
+
+  // voter is the address of the voter
+  string voter = 3;
+
+  // vote is the vote choice ("yes", "no", "abstain")
+  string vote = 4;
+
+  // voting_power is the voting power cast with this vote
+  string voting_power = 5;
+
+  // voted_at_height is the block height when the vote was cast
+  int64 voted_at_height = 6;
+
+  // voted_at_time is the timestamp when the vote was cast
+  google.protobuf.Timestamp voted_at_time = 7 [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+}
+
+// VotingPeriod represents the voting period for a proposal
+message VotingPeriod {
+  option (amino.name) = "remes/x/remes/VotingPeriod";
+  option (gogoproto.equal) = true;
+
+  // start_height is when voting started
+  int64 start_height = 1;
+
+  // end_height is when voting ends
+  int64 end_height = 2;
+}
+
+// ActiveModelVersions tracks which model versions are currently active
+message ActiveModelVersions {
+  option (amino.name) = "remes/x/remes/ActiveModelVersions";
+  option (gogoproto.equal) = true;
+
+  // version_numbers is the list of active version numbers
+  repeated uint64 version_numbers = 1;
+
+  // migration_window_active indicates if a migration window is currently active
+  bool migration_window_active = 2;
+
+  // primary_version is the primary active version (for non-migration periods)
+  uint64 primary_version = 3;
+}
+

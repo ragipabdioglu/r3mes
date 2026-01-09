@@ -1,0 +1,19 @@
+syntax = "proto3";
+package remes.remes.module.v1;
+
+import "cosmos/app/v1alpha1/module.proto";
+
+option go_package = "remes/x/remes/types";
+
+// Module is the config object for the module.
+message Module {
+  option (cosmos.app.v1alpha1.module) = {go_import: "remes/x/remes"};
+
+  // authority defines the custom module authority.
+  // If not set, defaults to the governance module.
+  string authority = 1;
+  
+  // ipfs_api_url defines the IPFS API URL for passive content retrieval.
+  // Default: http://127.0.0.1:5001
+  string ipfs_api_url = 2;
+}
