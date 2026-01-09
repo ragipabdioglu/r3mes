@@ -1,0 +1,17 @@
+[Unit]
+Description=R3MES Log Cleanup Service
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+Environment="RETENTION_DAYS=30"
+Environment="ARCHIVE_BEFORE_DELETE=true"
+Environment="S3_BUCKET=${S3_BUCKET}"
+ExecStart=/home/rabdi/R3MES/scripts/cleanup_logs.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

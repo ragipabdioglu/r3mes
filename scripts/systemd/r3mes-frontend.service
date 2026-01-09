@@ -1,0 +1,36 @@
+[Unit]
+Description=R3MES Web Dashboard (Next.js)
+After=network.target r3mes-backend.service
+Requires=network.target
+
+[Service]
+Type=simple
+User=remes
+Group=remes
+WorkingDirectory=/home/remes/R3MES/web-dashboard
+Environment="NODE_ENV=production"
+Environment="PORT=3000"
+Environment="HOSTNAME=0.0.0.0"
+# Use standalone build if available, otherwise use npm start
+ExecStart=/bin/bash -c 'if [ -f ".next/standalone/server.js" ]; then node .next/standalone/server.js; else /usr/bin/npm start; fi'
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=r3mes-frontend
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/remes/R3MES/web-dashboard
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target
+

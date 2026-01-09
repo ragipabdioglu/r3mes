@@ -1,0 +1,14 @@
+[Unit]
+Description=Certbot Certificate Renewal Service
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/home/rabdi/R3MES/scripts/renew_certificates.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

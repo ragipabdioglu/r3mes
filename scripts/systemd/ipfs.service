@@ -1,0 +1,28 @@
+[Unit]
+Description=IPFS Daemon
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ipfs
+Group=ipfs
+WorkingDirectory=/home/ipfs/.ipfs
+ExecStart=/usr/local/bin/ipfs daemon
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ipfs
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ReadWritePaths=/home/ipfs/.ipfs
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+

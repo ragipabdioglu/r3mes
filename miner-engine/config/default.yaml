@@ -1,0 +1,135 @@
+# R3MES Miner Engine - Default Configuration
+# This file contains default settings for all environments
+
+# Application Information
+app:
+  name: "R3MES Miner Engine"
+  version: "1.0.0"
+  description: "Decentralized AI Training Engine"
+
+# Blockchain Configuration
+blockchain:
+  url: "localhost:9090"
+  chain_id: "remes-test"
+  private_key: ""  # Set via environment variable R3MES_PRIVATE_KEY
+  timeout_seconds: 30
+  retry_attempts: 3
+  retry_delay_seconds: 1
+
+# Mining Configuration
+mining:
+  batch_size: 4
+  learning_rate: 0.0001
+  lora_rank: 8
+  lora_alpha: 16.0
+  max_sequence_length: 512
+  gradient_accumulation_steps: 4
+  max_prefetch_tasks: 10
+  enable_gradient_compression: true
+  compression_ratio: 0.1
+
+# Model Configuration
+model:
+  hidden_size: 768
+  use_llama3: false
+  use_gguf: false
+  model_path: ""
+  cache_dir: "models"
+  max_model_size_gb: 8
+
+# Performance Configuration
+performance:
+  max_memory_mb: 8192
+  gpu_memory_fraction: 0.8
+  enable_mixed_precision: true
+  enable_gradient_checkpointing: false
+  num_workers: 4
+  prefetch_factor: 2
+
+# Network Configuration
+network:
+  ipfs_url: "http://localhost:5001"
+  stats_port: 8080
+  monitoring_port: 8081
+  arrow_flight_port: 8082
+  timeout_seconds: 30
+  max_retries: 3
+
+# Node Roles
+roles:
+  enable_miner: true
+  enable_serving: false
+  enable_proposer: false
+
+# Serving Node Configuration
+serving:
+  model_version: "v1.0.0"
+  max_concurrent_requests: 10
+  request_timeout_seconds: 30
+  enable_batching: true
+  max_batch_size: 8
+  batch_timeout_ms: 100
+
+# Proposer Configuration
+proposer:
+  aggregation_interval_seconds: 60
+  min_gradients_for_aggregation: 5
+  max_gradients_per_aggregation: 100
+
+# Privacy Configuration
+privacy:
+  enable_sgx: false
+  sgx_enclave_path: "privacy/enclave/r3mes_enclave.signed.so"
+  sgx_debug_mode: true
+  enable_gradient_encryption: false
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "structured"
+  output: "console"
+  file_path: "logs/miner-engine.log"
+  max_file_size_mb: 100
+  backup_count: 5
+  enable_performance_logging: true
+
+# Monitoring Configuration
+monitoring:
+  enable_dashboard: false
+  dashboard_host: "127.0.0.1"
+  dashboard_port: 8080
+  collection_interval_seconds: 1.0
+  history_size: 1000
+  enable_gpu_monitoring: true
+
+# Development Configuration
+development:
+  test_mode: false
+  mock_blockchain: false
+  mock_ipfs: false
+  enable_debug_endpoints: false
+  hot_reload_config: true
+
+# Security Configuration
+security:
+  enable_tls: false
+  cert_file: ""
+  key_file: ""
+  ca_file: ""
+  verify_ssl: true
+
+# Cache Configuration
+cache:
+  lora_cache_dir: "cache/lora"
+  model_cache_dir: "cache/models"
+  max_cache_size_mb: 1024
+  max_adapters_in_memory: 10
+  cache_cleanup_interval_seconds: 3600
+
+# Task Processing Configuration
+tasks:
+  chunk_size: 1024
+  max_chunk_size: 4096
+  processing_timeout_seconds: 300
+  retry_failed_chunks: true
+  max_chunk_retries: 3

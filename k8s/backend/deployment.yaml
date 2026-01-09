@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: r3mes-backend
+  namespace: r3mes
+  labels:
+    app: r3mes-backend
+    component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: r3mes-backend
+  template:
+    metadata:
+      labels:
+        app: r3mes-backend
+        component: backend
+    spec:
+      containers:
+      - name: backend
+        image: r3mes/backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: R3MES_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: r3mes-config
+              key: R3MES_ENV
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: r3mes-config
+              key: LOG_LEVEL
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: r3mes-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: r3mes-secrets
+              key: redis-url
+        - name: API_KEY_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: r3mes-secrets
+              key: api-key-secret
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: r3mes-secrets
+              key: jwt-secret
+        - name: BLOCKCHAIN_RPC_URL
+          valueFrom:
+            secretKeyRef:
+              name: r3mes-secrets
+              key: blockchain-rpc-url
+        - name: BLOCKCHAIN_GRPC_URL
+          valueFrom:
+            secretKeyRef:
+              name: r3mes-secrets
+              key: blockchain-grpc-url
+        - name: BLOCKCHAIN_REST_URL
+          valueFrom:
+            secretKeyRef:
+              name: r3mes-secrets
+              key: blockchain-rest-url
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "1"
+          limits:
+            memory: "2Gi"
+            cpu: "2"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/database
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+

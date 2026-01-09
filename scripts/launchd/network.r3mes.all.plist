@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>network.r3mes.all</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/r3mes</string>
+        <string>start</string>
+        <string>--all</string>
+    </array>
+    
+    <key>WorkingDirectory</key>
+    <string>/usr/local/r3mes</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>R3MES_HOME</key>
+        <string>/usr/local/r3mes</string>
+        <key>R3MES_ENV</key>
+        <string>production</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+    
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    
+    <key>StandardOutPath</key>
+    <string>/usr/local/r3mes/logs/r3mes.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/usr/local/r3mes/logs/r3mes-error.log</string>
+    
+    <key>ProcessType</key>
+    <string>Background</string>
+    
+    <key>LowPriorityIO</key>
+    <false/>
+    
+    <key>Nice</key>
+    <integer>0</integer>
+    
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>65535</integer>
+    </dict>
+    
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>65535</integer>
+    </dict>
+</dict>
+</plist>

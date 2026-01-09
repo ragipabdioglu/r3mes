@@ -1,0 +1,299 @@
+groups:
+  - name: r3mes_critical_alerts
+    interval: 15s
+    rules:
+      # Database connection pool exhaustion
+      - alert: DatabaseConnectionPoolExhausted
+        expr: database_connections_active >= database_connections_max * 0.95
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "Database connection pool is {{ $value }}/{{ database_connections_max }} (95% threshold reached)"
+
+      # Redis memory exhaustion
+      - alert: RedisMemoryExhaustion
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          service: cache
+        annotations:
+          summary: "Redis memory exhaustion"
+          description: "Redis memory usage is {{ $value | humanizePercentage }} (threshold: 90%)"
+
+      # Disk space critical
+      - alert: DiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.05
+        for: 1m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "CRITICAL: Disk space extremely low"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining (threshold: 5%)"
+
+      # Pod restart loops
+      - alert: PodRestartLoop
+        expr: increase(kube_pod_container_status_restarts_total[15m]) > 5
+        for: 5m
+        labels:
+          severity: critical
+          service: kubernetes
+        annotations:
+          summary: "Pod restart loop detected"
+          description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in 15 minutes"
+
+      # Deployment replica mismatch
+      - alert: DeploymentReplicaMismatch
+        expr: kube_deployment_status_replicas != kube_deployment_spec_replicas
+        for: 10m
+        labels:
+          severity: critical
+          service: kubernetes
+        annotations:
+          summary: "Deployment replica mismatch"
+          description: "Deployment {{ $labels.deployment }} has {{ kube_deployment_status_replicas }} replicas but expects {{ kube_deployment_spec_replicas }}"
+
+      # StatefulSet replica mismatch
+      - alert: StatefulSetReplicaMismatch
+        expr: kube_statefulset_status_replicas != kube_statefulset_replicas
+        for: 10m
+        labels:
+          severity: critical
+          service: kubernetes
+        annotations:
+          summary: "StatefulSet replica mismatch"
+          description: "StatefulSet {{ $labels.statefulset }} has {{ kube_statefulset_status_replicas }} replicas but expects {{ kube_statefulset_replicas }}"
+
+      # High error rate on critical endpoints
+      - alert: CriticalEndpointErrors
+        expr: rate(api_requests_total{endpoint=~"/api/(chat|user|miner).*", status_code=~"5.."}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "Critical endpoint error rate high"
+          description: "Endpoint {{ $labels.endpoint }} error rate is {{ $value }} errors/sec (threshold: 0.05)"
+
+      # JWT secret compromise detection
+      - alert: SuspiciousJWTActivity
+        expr: rate(jwt_validation_failures_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: critical
+          service: security
+        annotations:
+          summary: "Suspicious JWT validation failures"
+          description: "JWT validation failure rate is {{ $value }} failures/sec - possible compromise"
+
+      # Mining submission failures
+      - alert: MiningSubmissionFailures
+        expr: rate(mining_submissions_failed_total[10m]) / rate(mining_submissions_total[10m]) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          service: mining
+        annotations:
+          summary: "High mining submission failure rate"
+          description: "Mining submission failure rate is {{ $value | humanizePercentage }} (threshold: 50%)"
+
+      # IPFS connectivity issues
+      - alert: IPFSConnectivityIssues
+        expr: ipfs_connectivity_status == 0
+        for: 3m
+        labels:
+          severity: critical
+          service: ipfs
+        annotations:
+          summary: "IPFS connectivity lost"
+          description: "IPFS node is not reachable for more than 3 minutes"
+
+  - name: r3mes_backend_alerts
+    interval: 30s
+    rules:
+      - alert: BackendDown
+        expr: up{job="r3mes-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "Backend service is down"
+          description: "Backend service has been down for more than 1 minute"
+
+      - alert: HighAPIErrorRate
+        expr: rate(api_requests_total{status_code=~"5.."}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "High API error rate detected"
+          description: "API error rate is {{ $value }} errors/sec (threshold: 0.1)"
+
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "High API latency detected"
+          description: "95th percentile latency is {{ $value }}s (threshold: 2s)"
+
+      - alert: LowCacheHitRate
+        expr: rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} (threshold: 50%)"
+
+      - alert: DatabaseConnectionFailure
+        expr: database_connections_active == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database connection failure"
+          description: "No active database connections detected"
+
+      - alert: SSLCertificateExpiringSoon
+        expr: ssl_certificate_expiry_days < 30
+        for: 1h
+        labels:
+          severity: warning
+          service: ssl
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "Certificate for {{ $labels.domain }} expires in {{ $value }} days"
+
+      - alert: SSLCertificateExpiringCritical
+        expr: ssl_certificate_expiry_days < 7
+        for: 30m
+        labels:
+          severity: critical
+          service: ssl
+        annotations:
+          summary: "SSL certificate expiring soon (CRITICAL)"
+          description: "Certificate for {{ $labels.domain }} expires in {{ $value }} days - RENEW IMMEDIATELY"
+
+      - alert: SSLCertificateExpired
+        expr: ssl_certificate_expiry_days < 0
+        for: 1m
+        labels:
+          severity: critical
+          service: ssl
+        annotations:
+          summary: "SSL certificate has EXPIRED"
+          description: "Certificate for {{ $labels.domain }} has EXPIRED - RENEW IMMEDIATELY"
+        annotations:
+          summary: "Database connection failure"
+          description: "No active database connections for more than 2 minutes"
+
+      - alert: HighInferenceLatency
+        expr: histogram_quantile(0.95, rate(model_inference_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "High model inference latency"
+          description: "95th percentile inference latency is {{ $value }}s (threshold: 10s)"
+
+  - name: r3mes_system_alerts
+    interval: 30s
+    rules:
+      - alert: HighMemoryUsage
+        expr: system_memory_usage_bytes / (1024^3) > 14
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }} GB (threshold: 14 GB)"
+
+      - alert: HighCPUUsage
+        expr: system_cpu_usage_percent > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% (threshold: 80%)"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is {{ $value | humanizePercentage }} available (threshold: 10%)"
+
+      - alert: GPUOverheating
+        expr: gpu_temperature_celsius > 85
+        for: 5m
+        labels:
+          severity: critical
+          service: miner
+        annotations:
+          summary: "GPU overheating"
+          description: "GPU {{ $labels.gpu_id }} temperature is {{ $value }}°C (threshold: 85°C)"
+
+  - name: r3mes_blockchain_alerts
+    interval: 30s
+    rules:
+      - alert: BlockchainNodeDown
+        expr: up{job="r3mes-blockchain"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: blockchain
+        annotations:
+          summary: "Blockchain node is down"
+          description: "Blockchain node has been down for more than 2 minutes"
+
+      - alert: NoNewBlocks
+        expr: increase(blockchain_blocks_total[10m]) == 0
+        for: 10m
+        labels:
+          severity: critical
+          service: blockchain
+        annotations:
+          summary: "No new blocks"
+          description: "No new blocks have been created in the last 10 minutes"
+
+  - name: r3mes_miner_alerts
+    interval: 30s
+    rules:
+      - alert: MinerDown
+        expr: up{job="r3mes-miner"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: miner
+        annotations:
+          summary: "Miner service is down"
+          description: "Miner service has been down for more than 5 minutes"
+
+      - alert: LowHashrate
+        expr: miner_hashrate < 1000
+        for: 10m
+        labels:
+          severity: warning
+          service: miner
+        annotations:
+          summary: "Low hashrate"
+          description: "Miner hashrate is {{ $value }} (threshold: 1000)"
+

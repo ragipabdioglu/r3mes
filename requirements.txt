@@ -1,0 +1,21 @@
+fastapi
+uvicorn
+pydantic
+cosmpy
+python-dotenv
+requests
+ipfshttpclient
+
+# JWT ve Security
+PyJWT[crypto]>=2.8.0
+cryptography>=41.0.0
+
+# Redis Cache
+redis[hiredis]>=5.0.0
+
+# Database
+psycopg2-binary>=2.9.9
+sqlalchemy>=2.0.0
+
+# Async support
+aioredis>=2.0.1

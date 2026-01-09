@@ -1,0 +1,106 @@
+# Alertmanager configuration for R3MES Production
+
+global:
+  resolve_timeout: 5m
+  # Slack webhook URL (set via SLACK_WEBHOOK_URL environment variable)
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+# Route configuration
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'cluster', 'service', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  routes:
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      continue: true
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      continue: true
+
+# Inhibition rules (prevent duplicate alerts)
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']
+  - source_match:
+      alertname: 'BackendDown'
+    target_match:
+      alertname: 'HighAPIErrorRate'
+    equal: ['service']
+
+# Receivers
+receivers:
+  - name: 'default'
+    webhook_configs:
+      - url: '${WEBHOOK_URL:-http://webhook:5000/webhook}'
+        send_resolved: true
+        http_config:
+          tls_config:
+            insecure_skip_verify: false
+
+  - name: 'critical-alerts'
+    # Slack notifications
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#r3mes-alerts-critical'
+        title: '🚨 R3MES Critical Alert'
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Service:* {{ .GroupLabels.service }}
+          *Summary:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        send_resolved: true
+        color: 'danger'
+    
+    # Email notifications
+    email_configs:
+      - to: '${ALERT_EMAIL_TO:-alerts@r3mes.network}'
+        from: '${ALERT_EMAIL_FROM:-alerts@r3mes.network}'
+        smarthost: '${SMTP_HOST:-smtp.example.com:587}'
+        auth_username: '${SMTP_USERNAME}'
+        auth_password: '${SMTP_PASSWORD}'
+        headers:
+          Subject: '🚨 R3MES Critical Alert: {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>Critical Alert</h2>
+          <p><strong>Alert:</strong> {{ .GroupLabels.alertname }}</p>
+          <p><strong>Service:</strong> {{ .GroupLabels.service }}</p>
+          <p><strong>Summary:</strong> {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}</p>
+          <p><strong>Description:</strong> {{ range .Alerts }}{{ .Annotations.description }}{{ end }}</p>
+    
+    # PagerDuty integration (optional)
+    # pagerduty_configs:
+    #   - service_key: '${PAGERDUTY_SERVICE_KEY}'
+    #     description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+
+  - name: 'warning-alerts'
+    # Slack notifications
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#r3mes-alerts-warning'
+        title: '⚠️ R3MES Warning Alert'
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Service:* {{ .GroupLabels.service }}
+          *Summary:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        send_resolved: true
+        color: 'warning'
+    
+    # Email notifications (optional, less urgent)
+    # email_configs:
+    #   - to: '${ALERT_EMAIL_TO:-alerts@r3mes.network}'
+    #     from: '${ALERT_EMAIL_FROM:-alerts@r3mes.network}'
+    #     smarthost: '${SMTP_HOST:-smtp.example.com:587}'
+    #     auth_username: '${SMTP_USERNAME}'
+    #     auth_password: '${SMTP_PASSWORD}'
+    #     headers:
+    #       Subject: '⚠️ R3MES Warning Alert: {{ .GroupLabels.alertname }}'
+

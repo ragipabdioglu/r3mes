@@ -1,0 +1,48 @@
+[Unit]
+Description=R3MES All-in-One Service (Node + Miner + Backend)
+Documentation=https://docs.r3mes.network
+After=network-online.target
+Wants=network-online.target
+Requires=ipfs.service
+
+[Service]
+Type=simple
+User=r3mes
+Group=r3mes
+WorkingDirectory=/opt/r3mes
+Environment="PATH=/opt/r3mes/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="R3MES_HOME=/opt/r3mes"
+Environment="R3MES_ENV=production"
+
+# Start all R3MES services
+ExecStartPre=/opt/r3mes/scripts/pre-start-check.sh
+ExecStart=/opt/r3mes/scripts/start_all.sh
+ExecStop=/opt/r3mes/scripts/stop_all.sh
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart configuration
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# Resource limits
+LimitNOFILE=65535
+LimitNPROC=4096
+MemoryMax=8G
+CPUQuota=80%
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/r3mes/data /opt/r3mes/logs /var/log/r3mes
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=r3mes
+
+[Install]
+WantedBy=multi-user.target

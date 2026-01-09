@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # IPFS daemon
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: r3mes-ipfs
+    ports:
+      - "4001:4001"   # Swarm
+      - "5001:5001"   # API
+      - "8080:8080"   # Gateway
+    volumes:
+      - ipfs-data:/data/ipfs
+    environment:
+      - IPFS_PROFILE=server
+    restart: unless-stopped
+
+  # Blockchain node (Go)
+  blockchain:
+    build:
+      context: ../..
+      dockerfile: miner-engine/docker/Dockerfile.go
+    working_dir: /app
+    container_name: r3mes-blockchain
+    ports:
+      - "26656:26656"  # P2P
+      - "26657:26657"  # RPC
+      - "9090:9090"    # gRPC
+      - "1317:1317"    # REST
+    volumes:
+      - blockchain-data:/app/.remesd
+    environment:
+      - CHAIN_ID=remes-test
+    depends_on:
+      - ipfs
+    restart: unless-stopped
+    command: ["start"]
+
+  # Miner engine (NVIDIA GPU)
+  miner-nvidia:
+    build:
+      context: ../..
+      dockerfile: miner-engine/docker/Dockerfile.nvidia
+    container_name: r3mes-miner-nvidia
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - BLOCKCHAIN_URL=blockchain:9090
+      - IPFS_API_URL=http://ipfs:5001
+      - CHAIN_ID=remes-test
+    volumes:
+      - miner-data:/app/miner-engine/data
+    depends_on:
+      - blockchain
+      - ipfs
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # Miner engine (AMD GPU)
+  miner-amd:
+    build:
+      context: ../..
+      dockerfile: miner-engine/docker/Dockerfile.amd
+    container_name: r3mes-miner-amd
+    environment:
+      - BLOCKCHAIN_URL=blockchain:9090
+      - IPFS_API_URL=http://ipfs:5001
+      - CHAIN_ID=remes-test
+    volumes:
+      - miner-data:/app/miner-engine/data
+    depends_on:
+      - blockchain
+      - ipfs
+    restart: unless-stopped
+    devices:
+      - /dev/kfd
+      - /dev/dri
+
+  # Miner engine (Intel XPU)
+  miner-intel:
+    build:
+      context: ../..
+      dockerfile: miner-engine/docker/Dockerfile.intel
+    container_name: r3mes-miner-intel
+    environment:
+      - BLOCKCHAIN_URL=blockchain:9090
+      - IPFS_API_URL=http://ipfs:5001
+      - CHAIN_ID=remes-test
+    volumes:
+      - miner-data:/app/miner-engine/data
+    depends_on:
+      - blockchain
+      - ipfs
+    restart: unless-stopped
+
+volumes:
+  ipfs-data:
+  blockchain-data:
+  miner-data:
+

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: r3mes-frontend
+  namespace: r3mes
+  labels:
+    app: r3mes-frontend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: r3mes-frontend
+

@@ -1,0 +1,1376 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# R3MES - KAPSAMLI SİSTEM MİMARİSİ
+# Decentralized AI Training Network with Proof of Useful Work (PoUW)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+direction: right
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GLOBAL STYLES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+classes: {
+  blockchain: {
+    style: {
+      fill: "#1a1a2e"
+      stroke: "#e94560"
+      stroke-width: 3
+      border-radius: 10
+      font-color: "#ffffff"
+    }
+  }
+  backend: {
+    style: {
+      fill: "#16213e"
+      stroke: "#0f3460"
+      stroke-width: 2
+      border-radius: 8
+      font-color: "#ffffff"
+    }
+  }
+  frontend: {
+    style: {
+      fill: "#0f3460"
+      stroke: "#00d9ff"
+      stroke-width: 2
+      border-radius: 8
+      font-color: "#ffffff"
+    }
+  }
+  miner: {
+    style: {
+      fill: "#1b4332"
+      stroke: "#40916c"
+      stroke-width: 2
+      border-radius: 8
+      font-color: "#ffffff"
+    }
+  }
+  desktop: {
+    style: {
+      fill: "#2d3436"
+      stroke: "#6c5ce7"
+      stroke-width: 2
+      border-radius: 8
+      font-color: "#ffffff"
+    }
+  }
+  cli: {
+    style: {
+      fill: "#2d3436"
+      stroke: "#fdcb6e"
+      stroke-width: 2
+      border-radius: 8
+      font-color: "#ffffff"
+    }
+  }
+  infra: {
+    style: {
+      fill: "#2d3436"
+      stroke: "#74b9ff"
+      stroke-width: 2
+      border-radius: 8
+      font-color: "#ffffff"
+    }
+  }
+  storage: {
+    style: {
+      fill: "#2d3436"
+      stroke: "#a29bfe"
+      stroke-width: 2
+      border-radius: 8
+      font-color: "#ffffff"
+    }
+  }
+  api: {
+    style: {
+      fill: "#0984e3"
+      stroke: "#74b9ff"
+      stroke-width: 1
+      border-radius: 5
+      font-color: "#ffffff"
+    }
+  }
+  page: {
+    style: {
+      fill: "#00cec9"
+      stroke: "#81ecec"
+      stroke-width: 1
+      border-radius: 5
+      font-color: "#000000"
+    }
+  }
+  keeper: {
+    style: {
+      fill: "#e17055"
+      stroke: "#fab1a0"
+      stroke-width: 1
+      border-radius: 5
+      font-color: "#ffffff"
+    }
+  }
+  module: {
+    style: {
+      fill: "#00b894"
+      stroke: "#55efc4"
+      stroke-width: 1
+      border-radius: 5
+      font-color: "#ffffff"
+    }
+  }
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ANA KATMANLAR
+# ═══════════════════════════════════════════════════════════════════════════════
+
+title: |md
+  # R3MES Sistem Mimarisi
+  **Decentralized AI Training Network**
+  *Proof of Useful Work (PoUW) Consensus*
+|
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 1. BLOCKCHAIN LAYER (Cosmos SDK)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+blockchain: "🔗 BLOCKCHAIN LAYER\n(Cosmos SDK / Go)" {
+  class: blockchain
+  
+  # Ana Keeper Orchestrator
+  keeper: "Keeper Orchestrator\nkeeper.go" {
+    class: keeper
+  }
+  
+  # Domain-Specific Keepers
+  keepers: "Domain Keepers" {
+    model_keeper: "📦 Model Keeper" {
+      class: keeper
+      adapter_approval: "AdapterApproval\nadapter_approval.go"
+      aggregation: "Aggregation\naggregation.go"
+      model_registry: "ModelRegistry"
+      model_versions: "ModelVersions"
+      upgrade_proposals: "UpgradeProposals"
+    }
+    
+    training_keeper: "🎯 Training Keeper" {
+      class: keeper
+      stored_gradients: "StoredGradients"
+      trap_verification: "TrapVerification\ntrap_verification.go"
+      training_windows: "TrainingWindows"
+      mining_contrib: "MiningContributions"
+      convergence: "ConvergenceMetrics"
+    }
+    
+    economics_keeper: "💰 Economics Keeper" {
+      class: keeper
+      mining_rewards: "MiningRewards"
+      treasury: "Treasury"
+      slashing: "Slashing"
+      buyback: "BuyBack"
+    }
+    
+    dataset_keeper: "📊 Dataset Keeper" {
+      class: keeper
+      dataset_proposals: "DatasetProposals"
+      approved_datasets: "ApprovedDatasets"
+    }
+    
+    node_keeper: "🖥️ Node Keeper" {
+      class: keeper
+      node_registrations: "NodeRegistrations"
+      serving_nodes: "ServingNodes"
+    }
+    
+    security_keeper: "🔒 Security Keeper" {
+      class: keeper
+      security_policies: "SecurityPolicies"
+    }
+    
+    infra_keeper: "⚙️ Infra Keeper" {
+      class: keeper
+      infra_config: "InfraConfig"
+    }
+    
+    core_keeper: "🔧 Core Keeper" {
+      class: keeper
+      params: "Params"
+      global_state: "GlobalState"
+    }
+  }
+  
+  # Proto Definitions
+  proto: "Proto Definitions" {
+    state_proto: "state.proto"
+    model_proto: "model.proto"
+    gradient_proto: "stored_gradient.proto"
+    task_pool_proto: "task_pool.proto"
+    trap_job_proto: "trap_job.proto"
+    training_window_proto: "training_window.proto"
+    slashing_proto: "slashing.proto"
+    subnet_proto: "subnet.proto"
+    query_proto: "query.proto\n(50+ RPC methods)"
+    tx_proto: "tx.proto"
+  }
+  
+  # Servers
+  servers: "Servers" {
+    msg_server: "MsgServer\nmsg_server.go"
+    query_server: "QueryServer\nquery_server.go"
+  }
+  
+  # IBC Module
+  ibc: "IBC Module\nibc/module.go" {
+    class: module
+  }
+}
+
+# Blockchain Internal Connections
+blockchain.keeper -> blockchain.keepers.model_keeper: orchestrates
+blockchain.keeper -> blockchain.keepers.training_keeper: orchestrates
+blockchain.keeper -> blockchain.keepers.economics_keeper: orchestrates
+blockchain.keeper -> blockchain.keepers.dataset_keeper: orchestrates
+blockchain.keeper -> blockchain.keepers.node_keeper: orchestrates
+blockchain.keeper -> blockchain.keepers.security_keeper: orchestrates
+blockchain.keeper -> blockchain.keepers.infra_keeper: orchestrates
+blockchain.keeper -> blockchain.keepers.core_keeper: orchestrates
+
+blockchain.keepers.training_keeper.trap_verification -> blockchain.keepers.economics_keeper.slashing: "SlashMiner()"
+blockchain.keepers.training_keeper.trap_verification -> blockchain.keepers.economics_keeper.mining_rewards: "AddTrapJobBonus()"
+blockchain.keepers.model_keeper.aggregation -> blockchain.keepers.training_keeper.stored_gradients: "aggregate gradients"
+
+blockchain.servers.msg_server -> blockchain.keeper: "handle transactions"
+blockchain.servers.query_server -> blockchain.keeper: "handle queries"
+blockchain.proto -> blockchain.servers: "defines messages"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2. BACKEND API (FastAPI / Python)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+backend: "🚀 BACKEND API\n(FastAPI / Python)" {
+  class: backend
+  
+  # Entry Point
+  entry: "Entry Point\nmain.py" {
+    class: api
+  }
+  
+  # API Endpoints
+  endpoints: "API Endpoints" {
+    inference: "/api/inference/*\ninference_endpoints.py" {
+      class: api
+      generate: "POST /generate"
+      stream: "POST /stream"
+      models: "GET /models"
+    }
+    
+    serving: "/api/serving/*\nserving_endpoints.py" {
+      class: api
+      register: "POST /register"
+      status: "GET /status"
+      heartbeat: "POST /heartbeat"
+    }
+    
+    proposer: "/api/proposer/*\nproposer_endpoints.py" {
+      class: api
+      submit_gradient: "POST /submit"
+      aggregation: "GET /aggregation"
+    }
+    
+    validator: "/api/validators/*\nvalidator_endpoints.py" {
+      class: api
+      trust_scores: "GET /trust-scores"
+      validate: "POST /validate"
+    }
+    
+    miner: "/api/miners/*\nminer_endpoints.py" {
+      class: api
+      stats: "GET /stats"
+      leaderboard: "GET /leaderboard"
+    }
+    
+    faucet: "/api/faucet/*\nfaucet.py" {
+      class: api
+      request: "POST /request"
+      balance: "GET /balance"
+    }
+    
+    auth: "/api/auth/*\nauth_endpoints.py" {
+      class: api
+      login: "POST /login"
+      register: "POST /register"
+      refresh: "POST /refresh"
+    }
+    
+    dashboard: "/api/dashboard/*\ndashboard_endpoints.py" {
+      class: api
+      network_stats: "GET /network"
+      overview: "GET /overview"
+    }
+    
+    analytics: "/api/analytics/*\nanalytics_endpoints.py" {
+      class: api
+      usage: "GET /usage"
+      metrics: "GET /metrics"
+    }
+    
+    websocket: "/ws/*\nwebsocket_endpoints.py" {
+      class: api
+      realtime: "WS /realtime"
+      logs: "WS /logs"
+    }
+    
+    health: "/health/*\nhealth_endpoints.py" {
+      class: api
+      liveness: "GET /live"
+      readiness: "GET /ready"
+    }
+    
+    system: "/system/*\nsystem_endpoints.py" {
+      class: api
+      version: "GET /version"
+      time: "GET /time"
+    }
+  }
+  
+  # Services Layer
+  services: "Service Layer" {
+    model_manager: "AIModelManager\nmodel_manager.py" {
+      class: module
+    }
+    semantic_router: "SemanticRouter\nsemantic_router.py" {
+      class: module
+    }
+    task_queue: "TaskQueue\ntask_queue.py" {
+      class: module
+    }
+    inference_executor: "InferenceExecutor\ninference_executor.py" {
+      class: module
+    }
+    multi_gpu: "MultiGPUManager\nmulti_gpu_manager.py" {
+      class: module
+    }
+  }
+  
+  # Blockchain Integration
+  blockchain_integration: "Blockchain Integration" {
+    rpc_client: "BlockchainRPCClient\nblockchain_rpc_client.py" {
+      class: module
+    }
+    query_client: "BlockchainQueryClient\nblockchain_query_client.py" {
+      class: module
+    }
+    event_listener: "EventListener\nblockchain_event_listener.py" {
+      class: module
+    }
+    adapter_sync: "AdapterSyncService\nadapter_sync_service.py" {
+      class: module
+    }
+    indexer: "Indexer\nindexer.py" {
+      class: module
+    }
+  }
+  
+  # Security Layer
+  security: "Security Layer" {
+    auth: "Auth\nauth.py"
+    jwt: "JWT\njwt_auth.py"
+    sanitizer: "InputSanitizer\ninput_sanitizer.py"
+    validator: "InputValidator\ninput_validation.py"
+    secrets: "SecretsProvider\nsecrets_provider.py"
+    vault: "VaultClient\nvault_client.py"
+  }
+  
+  # Middleware
+  middleware: "Middleware" {
+    error_handler: "ErrorHandler\nerror_handlers.py"
+    rate_limit: "RateLimit\n(slowapi)"
+    cors: "CORS"
+    cache: "CacheMiddleware\ncache_middleware.py"
+    trace: "TraceMiddleware\ntrace_middleware.py"
+    debug: "DebugMiddleware\ndebug_middleware.py"
+  }
+  
+  # Data Layer
+  data: "Data Layer" {
+    database: "Database\ndatabase_async.py" {
+      class: storage
+    }
+    postgres: "PostgreSQL\ndatabase_postgres.py" {
+      class: storage
+    }
+    cache: "Redis Cache\ncache.py" {
+      class: storage
+    }
+    repositories: "Repositories" {
+      base: "BaseRepository"
+      user: "UserRepository"
+      api_key: "APIKeyRepository"
+    }
+  }
+  
+  # Monitoring
+  monitoring: "Monitoring" {
+    metrics: "Prometheus\nmetrics.py"
+    health: "HealthMetrics\nhealth_metrics.py"
+    system: "SystemMetrics\nsystem_metrics_collector.py"
+    sentry: "Sentry\nsentry.py"
+    otel: "OpenTelemetry\nopentelemetry_setup.py"
+    audit: "AuditLogger\naudit_logger.py"
+  }
+}
+
+# Backend Internal Connections
+backend.entry -> backend.endpoints: "routes"
+backend.entry -> backend.middleware: "applies"
+backend.endpoints.inference -> backend.services.model_manager: "uses"
+backend.endpoints.inference -> backend.services.semantic_router: "routes"
+backend.endpoints.inference -> backend.services.task_queue: "queues"
+backend.services.model_manager -> backend.services.inference_executor: "executes"
+backend.services.inference_executor -> backend.services.multi_gpu: "manages GPUs"
+
+backend.blockchain_integration.event_listener -> backend.blockchain_integration.adapter_sync: "triggers sync"
+backend.blockchain_integration.adapter_sync -> backend.services.model_manager: "updates adapters"
+backend.blockchain_integration.query_client -> backend.blockchain_integration.rpc_client: "uses"
+
+backend.endpoints -> backend.security: "protected by"
+backend.services -> backend.data: "persists to"
+backend.data.repositories -> backend.data.database: "queries"
+backend.data.database -> backend.data.postgres: "connects"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3. WEB DASHBOARD (Next.js / React)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+web: "🌐 WEB DASHBOARD\n(Next.js / React)" {
+  class: frontend
+  
+  # Layout
+  layout: "Root Layout\nlayout.tsx" {
+    class: page
+  }
+  
+  # Marketing Pages
+  marketing: "(marketing)" {
+    home: "/ Home\npage.tsx" {
+      class: page
+    }
+    community: "/community" {
+      class: page
+    }
+    developers: "/developers" {
+      class: page
+    }
+    docs: "/docs" {
+      class: page
+    }
+    protocol: "/protocol" {
+      class: page
+    }
+  }
+  
+  # Core Application Pages
+  pages: "Application Pages" {
+    chat: "/chat\nAI Chat Interface" {
+      class: page
+      chat_interface: "ChatInterface.tsx"
+      message_list: "MessageList.tsx"
+      input_box: "InputBox.tsx"
+    }
+    
+    mine: "/mine\nMining Dashboard" {
+      class: page
+      mining_status: "MiningStatus.tsx"
+      hardware_monitor: "HardwareMonitor.tsx"
+      earnings: "EarningsChart.tsx"
+    }
+    
+    serving: "/serving\nServing Node" {
+      class: page
+      node_status: "NodeStatus.tsx"
+      request_stats: "RequestStats.tsx"
+    }
+    
+    proposer: "/proposer\nProposer Dashboard" {
+      class: page
+      gradient_queue: "GradientQueue.tsx"
+      aggregation_status: "AggregationStatus.tsx"
+    }
+    
+    staking: "/staking\nStaking Interface" {
+      class: page
+      stake_form: "StakeForm.tsx"
+      validators: "ValidatorList.tsx"
+      rewards: "RewardsPanel.tsx"
+    }
+    
+    wallet: "/wallet\nWallet Management" {
+      class: page
+      balance: "BalanceCard.tsx"
+      transactions: "TransactionHistory.tsx"
+      send: "SendForm.tsx"
+    }
+    
+    leaderboard: "/leaderboard\nRankings" {
+      class: page
+      miners_table: "MinersTable.tsx"
+      validators_table: "ValidatorsTable.tsx"
+    }
+    
+    network: "/network\nNetwork Explorer" {
+      class: page
+      network_stats: "NetworkStats.tsx"
+      block_explorer: "BlockExplorer.tsx"
+      node_map: "NodeMap.tsx"
+    }
+    
+    analytics: "/analytics\nUsage Analytics" {
+      class: page
+      usage_charts: "UsageCharts.tsx"
+      performance: "PerformanceMonitor.tsx"
+    }
+    
+    faucet: "/faucet\nToken Faucet" {
+      class: page
+      faucet_form: "FaucetForm.tsx"
+      history: "FaucetHistory.tsx"
+    }
+    
+    playground: "/playground\nModel Playground" {
+      class: page
+      model_selector: "ModelSelector.tsx"
+      prompt_editor: "PromptEditor.tsx"
+      output_viewer: "OutputViewer.tsx"
+    }
+    
+    settings: "/settings\nUser Settings" {
+      class: page
+      profile: "ProfileSettings.tsx"
+      api_keys: "APIKeyManager.tsx"
+      preferences: "Preferences.tsx"
+    }
+    
+    onboarding: "/onboarding\nUser Onboarding" {
+      class: page
+    }
+    
+    roles: "/roles\nRole Management" {
+      class: page
+    }
+    
+    debug: "/debug\nDebug Tools" {
+      class: page
+    }
+  }
+  
+  # Static Pages
+  static: "Static Pages" {
+    about: "/about" {
+      class: page
+    }
+    blog: "/blog" {
+      class: page
+    }
+    careers: "/careers" {
+      class: page
+    }
+    help: "/help" {
+      class: page
+    }
+    privacy: "/privacy" {
+      class: page
+    }
+    terms: "/terms" {
+      class: page
+    }
+  }
+  
+  # Shared Components
+  components: "Shared Components" {
+    navbar: "Navbar.tsx"
+    footer: "Footer.tsx"
+    wallet_button: "WalletButton.tsx"
+    error_boundary: "ErrorBoundary.tsx"
+    loading: "LoadingSpinner.tsx"
+    toast: "ToastNotification.tsx"
+  }
+  
+  # Contexts
+  contexts: "React Contexts" {
+    wallet_ctx: "WalletContext.tsx"
+    theme_ctx: "ThemeContext.tsx"
+    auth_ctx: "AuthContext.tsx"
+  }
+  
+  # Hooks
+  hooks: "Custom Hooks" {
+    use_inference: "useInference.ts"
+    use_miner: "useMinerData.ts"
+    use_network: "useNetworkStats.ts"
+    use_websocket: "useWebSocket.ts"
+    use_proposer: "useProposerData.ts"
+    use_serving: "useServingData.ts"
+    use_tx: "useTransactionHistory.ts"
+    use_user: "useUserInfo.ts"
+  }
+  
+  # Utilities
+  utils: "Utilities" {
+    api_client: "lib/api.ts"
+    ws_client: "lib/websocket.ts"
+    cosmos_kit: "lib/cosmos-kit.ts"
+    keplr: "lib/keplr.ts"
+    analytics: "lib/analytics.ts"
+    formatters: "utils/formatters.ts"
+  }
+}
+
+# Web Internal Connections
+web.layout -> web.components.navbar: "includes"
+web.layout -> web.components.footer: "includes"
+web.layout -> web.contexts: "provides"
+
+web.pages.chat -> web.hooks.use_inference: "uses"
+web.pages.chat -> web.hooks.use_websocket: "real-time"
+web.pages.mine -> web.hooks.use_miner: "uses"
+web.pages.serving -> web.hooks.use_serving: "uses"
+web.pages.proposer -> web.hooks.use_proposer: "uses"
+web.pages.network -> web.hooks.use_network: "uses"
+web.pages.wallet -> web.hooks.use_tx: "uses"
+web.pages.wallet -> web.contexts.wallet_ctx: "uses"
+
+web.hooks -> web.utils.api_client: "calls API"
+web.hooks.use_websocket -> web.utils.ws_client: "connects"
+web.contexts.wallet_ctx -> web.utils.cosmos_kit: "wallet integration"
+web.contexts.wallet_ctx -> web.utils.keplr: "Keplr wallet"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4. MINER ENGINE (Python)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+miner: "⛏️ MINER ENGINE\n(Python)" {
+  class: miner
+  
+  # Entry Point
+  entry: "Entry Point\nminer_engine.py" {
+    class: module
+  }
+  
+  # Core AI/ML Components
+  core: "Core AI/ML" {
+    bitlinear: "BitLinear\nbitlinear.py" {
+      class: module
+      desc: "1.58-bit quantization\n{-1, 0, +1}"
+    }
+    
+    dora: "BitLinearDoRA\ndora.py" {
+      class: module
+      desc: "W₀x + m*(V/||V||)*x"
+    }
+    
+    dora_trainer: "DoRATrainer\ndora_trainer.py" {
+      class: module
+      desc: "Training loop\nGradient hash (SHA256)"
+    }
+    
+    rag_trainer: "RAGAugmentedTrainer\nrag_augmented_trainer.py" {
+      class: module
+      desc: "RAG + DoRA integration"
+    }
+    
+    inference_backend: "InferenceBackend\ninference_backend.py" {
+      class: module
+    }
+    
+    trap_jobs: "TrapJobs\ntrap_jobs.py" {
+      class: module
+    }
+  }
+  
+  # Router Components
+  router: "Router" {
+    keyword: "KeywordRouter\nkeyword_router.py" {
+      class: module
+    }
+    semantic: "SemanticRouter\nsemantic_router.py" {
+      class: module
+    }
+    hybrid: "HybridRouter\nhybrid_router.py" {
+      class: module
+    }
+    vram_gating: "VRAMAdaptiveGating\nvram_adaptive_gating.py" {
+      class: module
+    }
+  }
+  
+  # RAG Components
+  rag: "RAG System" {
+    embedder: "Embedder\nembedder.py" {
+      class: module
+    }
+    faiss_store: "FAISSStore\nfaiss_store.py" {
+      class: module
+    }
+    retriever: "Retriever\nretriever.py" {
+      class: module
+    }
+  }
+  
+  # Cache Management
+  cache: "Cache Management" {
+    tiered_cache: "TieredCache\ntiered_cache.py" {
+      class: module
+      desc: "3-tier: VRAM/RAM/Disk"
+    }
+    vram_manager: "VRAMManager\nvram_manager.py" {
+      class: module
+    }
+  }
+  
+  # Blockchain Bridge
+  bridge: "Blockchain Bridge" {
+    blockchain_client: "BlockchainClient\nblockchain_client.py" {
+      class: module
+    }
+    blockchain_queries: "BlockchainQueries\nblockchain_queries.py" {
+      class: module
+    }
+    tx_builder: "TransactionBuilder\ntransaction_builder.py" {
+      class: module
+    }
+    crypto: "Crypto\ncrypto.py" {
+      class: module
+    }
+    pow: "ProofOfWork\nproof_of_work.py" {
+      class: module
+    }
+    tendermint: "TendermintClient\ntendermint_client.py" {
+      class: module
+    }
+    ipfs: "IPFSClient\nipfs_client.py" {
+      class: module
+    }
+  }
+  
+  # Registry Components
+  registry: "Registries" {
+    model_registry: "ModelRegistry\nmodel_registry.py" {
+      class: module
+    }
+    dataset_registry: "DatasetRegistry\ndataset_registry.py" {
+      class: module
+    }
+    adapter_registry: "AdapterRegistry\nadapter_registry.py" {
+      class: module
+    }
+    unified_registry: "UnifiedRegistry\nunified_registry.py" {
+      class: module
+    }
+  }
+  
+  # Serving Components
+  serving: "Serving" {
+    engine: "ServingEngine\nr3mes/serving/engine.py" {
+      class: module
+    }
+    aggregator: "Aggregator\nr3mes/proposer/aggregator.py" {
+      class: module
+    }
+  }
+  
+  # Pipeline
+  pipeline: "Pipeline" {
+    gradient_submission: "GradientSubmission\npipeline/gradient_submission.py" {
+      class: module
+    }
+    model_update: "ModelUpdate\npipeline/model_update.py" {
+      class: module
+    }
+  }
+  
+  # Utilities
+  utils: "Utilities" {
+    gpu_detection: "GPUDetection\ngpu_detection.py"
+    logger: "Logger\nlogger.py"
+    performance: "PerformanceMonitor\nperformance_monitor.py"
+    error_handling: "ErrorHandling\nerror_handling.py"
+    env_validator: "EnvValidator\nenvironment_validator.py"
+  }
+}
+
+# Miner Internal Connections
+miner.entry -> miner.core: "initializes"
+miner.core.dora -> miner.core.bitlinear: "wraps"
+miner.core.dora_trainer -> miner.core.dora: "trains"
+miner.core.rag_trainer -> miner.core.dora_trainer: "extends"
+miner.core.rag_trainer -> miner.rag: "augments with"
+
+miner.router.hybrid -> miner.router.keyword: "combines"
+miner.router.hybrid -> miner.router.semantic: "combines"
+miner.router.vram_gating -> miner.cache.vram_manager: "checks VRAM"
+
+miner.rag.retriever -> miner.rag.faiss_store: "searches"
+miner.rag.retriever -> miner.rag.embedder: "embeds query"
+
+miner.bridge.blockchain_client -> miner.bridge.tendermint: "RPC"
+miner.bridge.blockchain_client -> miner.bridge.tx_builder: "builds tx"
+miner.bridge.tx_builder -> miner.bridge.crypto: "signs"
+miner.bridge.blockchain_queries -> miner.bridge.blockchain_client: "uses"
+
+miner.pipeline.gradient_submission -> miner.bridge.blockchain_client: "submits"
+miner.pipeline.gradient_submission -> miner.bridge.ipfs: "uploads gradient"
+miner.pipeline.model_update -> miner.registry: "updates"
+
+miner.registry.unified_registry -> miner.registry.model_registry: "aggregates"
+miner.registry.unified_registry -> miner.registry.dataset_registry: "aggregates"
+miner.registry.unified_registry -> miner.registry.adapter_registry: "aggregates"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. DESKTOP LAUNCHER (Tauri)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+desktop: "🖥️ DESKTOP LAUNCHER\n(Tauri / Rust + React)" {
+  class: desktop
+  
+  # Rust Backend
+  rust_backend: "Rust Backend (src-tauri)" {
+    main: "main.rs\nEntry Point" {
+      class: module
+    }
+    
+    commands: "commands.rs\nTauri Commands" {
+      class: module
+      start_node: "start_node()"
+      stop_node: "stop_node()"
+      start_mining: "start_mining()"
+      stop_mining: "stop_mining()"
+      get_status: "get_mining_status()"
+      sync_model: "sync_model_from_blockchain()"
+      query_datasets: "query_approved_datasets()"
+      check_update: "check_model_update()"
+      cleanup: "cleanup_all_processes()"
+    }
+    
+    process_manager: "process_manager.rs\nProcess Lifecycle" {
+      class: module
+    }
+    
+    model_downloader: "model_downloader.rs\nBlockchain Model Sync" {
+      class: module
+      blockchain_model_info: "BlockchainModelInfo"
+      blockchain_dataset_info: "BlockchainDatasetInfo"
+    }
+    
+    engine_downloader: "engine_downloader.rs\nEngine Download" {
+      class: module
+    }
+    
+    wallet: "wallet.rs\nWallet Operations" {
+      class: module
+    }
+    
+    keychain: "keychain.rs\nSecure Storage" {
+      class: module
+    }
+    
+    config: "config.rs\nConfiguration" {
+      class: module
+    }
+    
+    hardware_check: "hardware_check.rs\nHardware Detection" {
+      class: module
+    }
+    
+    setup_checker: "setup_checker.rs\nSystem Requirements" {
+      class: module
+    }
+    
+    updater: "updater.rs\nAuto Updates" {
+      class: module
+    }
+    
+    log_reader: "log_reader.rs\nLog Streaming" {
+      class: module
+    }
+    
+    websocket_client: "websocket_client.rs\nWS Connection" {
+      class: module
+    }
+    
+    inference: "inference.rs\nLocal Inference" {
+      class: module
+    }
+    
+    platform: "platform.rs\nPlatform Specific" {
+      class: module
+    }
+    
+    ipfs_manager: "ipfs_manager.rs\nIPFS Integration" {
+      class: module
+    }
+    
+    status_monitor: "status_monitor.rs\nStatus Tracking" {
+      class: module
+    }
+  }
+  
+  # React Frontend
+  react_frontend: "React Frontend (src)" {
+    app: "App.tsx\nMain Component" {
+      class: page
+    }
+    
+    components: "Components" {
+      config_panel: "ConfigurationPanel.tsx"
+      mining_panel: "MiningPanel.tsx"
+      status_bar: "StatusBar.tsx"
+      log_viewer: "LogViewer.tsx"
+      wallet_panel: "WalletPanel.tsx"
+    }
+    
+    hooks: "Hooks" {
+      use_tauri: "useTauriCommands.ts"
+      use_status: "useStatus.ts"
+    }
+    
+    types: "Types" {
+      config_types: "config.ts"
+    }
+  }
+}
+
+# Desktop Internal Connections
+desktop.rust_backend.main -> desktop.rust_backend.commands: "registers"
+desktop.rust_backend.commands -> desktop.rust_backend.process_manager: "manages processes"
+desktop.rust_backend.commands -> desktop.rust_backend.model_downloader: "downloads models"
+desktop.rust_backend.commands -> desktop.rust_backend.wallet: "wallet ops"
+desktop.rust_backend.commands -> desktop.rust_backend.hardware_check: "checks hardware"
+
+desktop.rust_backend.model_downloader -> desktop.rust_backend.ipfs_manager: "downloads from IPFS"
+desktop.rust_backend.wallet -> desktop.rust_backend.keychain: "secure storage"
+desktop.rust_backend.process_manager -> desktop.rust_backend.log_reader: "reads logs"
+desktop.rust_backend.status_monitor -> desktop.rust_backend.websocket_client: "real-time updates"
+
+desktop.react_frontend.app -> desktop.react_frontend.components: "renders"
+desktop.react_frontend.components -> desktop.react_frontend.hooks: "uses"
+desktop.react_frontend.hooks.use_tauri -> desktop.rust_backend.commands: "IPC calls"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 6. CLI TOOLS (Go)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+cli: "⌨️ CLI TOOLS\n(Go)" {
+  class: cli
+  
+  # Entry Point
+  entry: "main.go\nEntry Point" {
+    class: module
+  }
+  
+  # Root Command
+  root: "root.go\nRoot Command" {
+    class: module
+    desc: "r3mes"
+  }
+  
+  # Commands
+  commands: "Commands" {
+    wallet: "wallet.go" {
+      class: module
+      create: "create"
+      import_cmd: "import"
+      export: "export"
+      balance: "balance"
+      send: "send"
+    }
+    
+    miner: "miner.go" {
+      class: module
+      start: "start"
+      stop: "stop"
+      status: "status"
+      stats: "stats"
+    }
+    
+    node: "node.go" {
+      class: module
+      start: "start"
+      stop: "stop"
+      status: "status"
+      sync: "sync"
+    }
+    
+    governance: "governance.go" {
+      class: module
+      vote: "vote <id> <yes|no|abstain>"
+      proposals: "proposals"
+      proposal: "proposal <id>"
+    }
+    
+    inference: "inference.go" {
+      class: module
+      generate: "generate"
+      models: "models"
+    }
+    
+    config: "config.go" {
+      class: module
+      show: "show"
+      set: "set"
+      reset: "reset"
+    }
+    
+    tx: "tx.go" {
+      class: module
+      sign: "sign"
+      broadcast: "broadcast"
+      status: "status"
+    }
+  }
+}
+
+# CLI Internal Connections
+cli.entry -> cli.root: "initializes"
+cli.root -> cli.commands: "registers"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 7. INFRASTRUCTURE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+infra: "🏗️ INFRASTRUCTURE" {
+  class: infra
+  
+  # Docker Compose Files
+  docker: "Docker Compose" {
+    main: "docker-compose.yml\nDevelopment" {
+      class: module
+    }
+    prod: "docker-compose.prod.yml\nProduction" {
+      class: module
+    }
+    monitoring: "docker-compose.monitoring.yml" {
+      class: module
+    }
+    logging: "docker-compose.logging.yml" {
+      class: module
+    }
+    tracing: "docker-compose.tracing.yml" {
+      class: module
+    }
+    vault: "docker-compose.vault.yml" {
+      class: module
+    }
+  }
+  
+  # Services
+  services: "Services" {
+    nginx: "Nginx\nReverse Proxy / SSL" {
+      class: module
+    }
+    postgres: "PostgreSQL\nDatabase" {
+      class: storage
+    }
+    redis: "Redis\nCache" {
+      class: storage
+    }
+    ipfs: "IPFS\nDistributed Storage" {
+      class: storage
+    }
+  }
+  
+  # Monitoring Stack
+  monitoring: "Monitoring Stack" {
+    prometheus: "Prometheus\nMetrics Collection" {
+      class: module
+    }
+    grafana: "Grafana\nDashboards" {
+      class: module
+    }
+    alertmanager: "Alertmanager\nAlert Routing" {
+      class: module
+    }
+  }
+  
+  # Logging Stack
+  logging: "Logging Stack" {
+    loki: "Loki\nLog Aggregation" {
+      class: module
+    }
+    promtail: "Promtail\nLog Shipping" {
+      class: module
+    }
+  }
+  
+  # Tracing
+  tracing: "Distributed Tracing" {
+    otel: "OpenTelemetry\nCollector" {
+      class: module
+    }
+    jaeger: "Jaeger\nTrace Visualization" {
+      class: module
+    }
+  }
+  
+  # Secrets
+  secrets: "Secrets Management" {
+    vault: "HashiCorp Vault" {
+      class: module
+    }
+    docker_secrets: "Docker Secrets" {
+      class: module
+    }
+  }
+}
+
+# Infrastructure Internal Connections
+infra.services.nginx -> infra.services.postgres: "proxies"
+infra.services.nginx -> infra.services.redis: "proxies"
+infra.monitoring.prometheus -> infra.monitoring.grafana: "data source"
+infra.monitoring.prometheus -> infra.monitoring.alertmanager: "alerts"
+infra.logging.promtail -> infra.logging.loki: "ships logs"
+infra.logging.loki -> infra.monitoring.grafana: "data source"
+infra.tracing.otel -> infra.tracing.jaeger: "exports traces"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INTER-DOMAIN CONNECTIONS (Ana Bağlantılar)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Web Dashboard -> Backend API
+web.pages.chat -> backend.endpoints.inference: "REST API\n/api/inference/generate" {
+  style.stroke: "#00d9ff"
+  style.stroke-width: 2
+}
+web.pages.mine -> backend.endpoints.miner: "REST API\n/api/miners/*" {
+  style.stroke: "#00d9ff"
+}
+web.pages.serving -> backend.endpoints.serving: "REST API\n/api/serving/*" {
+  style.stroke: "#00d9ff"
+}
+web.pages.proposer -> backend.endpoints.proposer: "REST API\n/api/proposer/*" {
+  style.stroke: "#00d9ff"
+}
+web.pages.staking -> backend.endpoints.validator: "REST API\n/api/validators/*" {
+  style.stroke: "#00d9ff"
+}
+web.pages.wallet -> backend.endpoints.faucet: "REST API\n/api/faucet/*" {
+  style.stroke: "#00d9ff"
+}
+web.pages.leaderboard -> backend.endpoints.miner: "REST API\n/api/miners/leaderboard" {
+  style.stroke: "#00d9ff"
+}
+web.pages.network -> backend.endpoints.dashboard: "REST API\n/api/dashboard/*" {
+  style.stroke: "#00d9ff"
+}
+web.pages.analytics -> backend.endpoints.analytics: "REST API\n/api/analytics/*" {
+  style.stroke: "#00d9ff"
+}
+web.hooks.use_websocket -> backend.endpoints.websocket: "WebSocket\n/ws/realtime" {
+  style.stroke: "#ff6b6b"
+  style.stroke-width: 2
+  style.stroke-dash: 3
+}
+
+# Desktop Launcher -> Backend API
+desktop.rust_backend.websocket_client -> backend.endpoints.websocket: "WebSocket" {
+  style.stroke: "#6c5ce7"
+  style.stroke-dash: 3
+}
+desktop.rust_backend.inference -> backend.endpoints.inference: "REST API" {
+  style.stroke: "#6c5ce7"
+}
+
+# Backend API -> Blockchain
+backend.blockchain_integration.rpc_client -> blockchain.servers.query_server: "gRPC\nQuery Service" {
+  style.stroke: "#e94560"
+  style.stroke-width: 2
+}
+backend.blockchain_integration.rpc_client -> blockchain.servers.msg_server: "gRPC\nTransaction" {
+  style.stroke: "#e94560"
+  style.stroke-width: 2
+}
+backend.blockchain_integration.event_listener -> blockchain: "WebSocket\nEvent Subscription" {
+  style.stroke: "#e94560"
+  style.stroke-dash: 3
+}
+
+# Miner Engine -> Blockchain
+miner.bridge.blockchain_client -> blockchain.servers.query_server: "gRPC\nQuery" {
+  style.stroke: "#40916c"
+  style.stroke-width: 2
+}
+miner.bridge.blockchain_client -> blockchain.servers.msg_server: "gRPC\nSubmitGradient" {
+  style.stroke: "#40916c"
+  style.stroke-width: 2
+}
+miner.bridge.tendermint -> blockchain: "HTTP REST\nTendermint RPC" {
+  style.stroke: "#40916c"
+}
+
+# CLI -> Blockchain
+cli.commands.wallet -> blockchain.servers.query_server: "gRPC\nBalance Query" {
+  style.stroke: "#fdcb6e"
+}
+cli.commands.wallet -> blockchain.servers.msg_server: "gRPC\nSend Tx" {
+  style.stroke: "#fdcb6e"
+}
+cli.commands.governance -> blockchain.servers.query_server: "gRPC\nProposals" {
+  style.stroke: "#fdcb6e"
+}
+cli.commands.governance -> blockchain.servers.msg_server: "gRPC\nVote" {
+  style.stroke: "#fdcb6e"
+}
+cli.commands.miner -> blockchain.servers.query_server: "gRPC\nMiner Stats" {
+  style.stroke: "#fdcb6e"
+}
+cli.commands.node -> blockchain: "gRPC\nNode Status" {
+  style.stroke: "#fdcb6e"
+}
+
+# Desktop Launcher -> Blockchain
+desktop.rust_backend.model_downloader -> blockchain.servers.query_server: "gRPC\nModel Query" {
+  style.stroke: "#6c5ce7"
+}
+
+# IPFS Connections
+miner.bridge.ipfs -> infra.services.ipfs: "HTTP API\nGradient Upload" {
+  style.stroke: "#a29bfe"
+}
+desktop.rust_backend.ipfs_manager -> infra.services.ipfs: "HTTP API\nModel Download" {
+  style.stroke: "#a29bfe"
+}
+backend.blockchain_integration.adapter_sync -> infra.services.ipfs: "HTTP API\nAdapter Download" {
+  style.stroke: "#a29bfe"
+}
+
+# Backend -> Infrastructure
+backend.data.postgres -> infra.services.postgres: "PostgreSQL\nConnection" {
+  style.stroke: "#74b9ff"
+}
+backend.data.cache -> infra.services.redis: "Redis\nConnection" {
+  style.stroke: "#74b9ff"
+}
+backend.monitoring.metrics -> infra.monitoring.prometheus: "Metrics\nScrape" {
+  style.stroke: "#74b9ff"
+}
+backend.monitoring.otel -> infra.tracing.otel: "Traces\nExport" {
+  style.stroke: "#74b9ff"
+}
+backend.security.vault -> infra.secrets.vault: "Secrets\nFetch" {
+  style.stroke: "#74b9ff"
+}
+
+# Nginx Proxy
+infra.services.nginx -> backend.entry: "Reverse Proxy\nHTTP/HTTPS" {
+  style.stroke: "#74b9ff"
+  style.stroke-width: 2
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DATA FLOW ANNOTATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Training Flow
+training_flow: "📊 Training Data Flow" {
+  style.fill: "#2d3436"
+  style.stroke: "#00b894"
+  style.stroke-width: 2
+  style.border-radius: 10
+  
+  step1: "1. Miner downloads dataset from IPFS"
+  step2: "2. DoRA training on BitNet backbone"
+  step3: "3. Gradient hash computed (SHA256 + Top-K)"
+  step4: "4. Gradient uploaded to IPFS"
+  step5: "5. SubmitGradient tx to blockchain"
+  step6: "6. Proposer aggregates gradients"
+  step7: "7. Model updated on-chain"
+  
+  step1 -> step2 -> step3 -> step4 -> step5 -> step6 -> step7
+}
+
+# Inference Flow
+inference_flow: "🤖 Inference Data Flow" {
+  style.fill: "#2d3436"
+  style.stroke: "#0984e3"
+  style.stroke-width: 2
+  style.border-radius: 10
+  
+  step1: "1. User sends prompt via Web/Desktop"
+  step2: "2. Backend receives request"
+  step3: "3. SemanticRouter selects adapter"
+  step4: "4. RAG retrieves context"
+  step5: "5. BitNet + DoRA inference"
+  step6: "6. Response streamed to user"
+  
+  step1 -> step2 -> step3 -> step4 -> step5 -> step6
+}
+
+# Governance Flow
+governance_flow: "🗳️ Governance Flow" {
+  style.fill: "#2d3436"
+  style.stroke: "#fdcb6e"
+  style.stroke-width: 2
+  style.border-radius: 10
+  
+  step1: "1. Proposal created (Model/Dataset/Param)"
+  step2: "2. Voting period starts"
+  step3: "3. Validators/Stakers vote"
+  step4: "4. Proposal passes/fails"
+  step5: "5. Changes applied on-chain"
+  
+  step1 -> step2 -> step3 -> step4 -> step5
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PROTOCOL LEGEND
+# ═══════════════════════════════════════════════════════════════════════════════
+
+legend: "📋 Protocol Legend" {
+  style.fill: "#1a1a2e"
+  style.stroke: "#ffffff"
+  style.border-radius: 10
+  
+  protocols: |md
+    **Communication Protocols:**
+    - 🔵 REST API (HTTP/HTTPS)
+    - 🔴 gRPC (Protobuf)
+    - 🟡 WebSocket (Real-time)
+    - 🟣 IPC (Tauri Commands)
+    - 🟢 IPFS (Content-addressed)
+    
+    **Data Formats:**
+    - JSON (REST API)
+    - Protobuf (gRPC, Blockchain)
+    - Binary (Gradients, Models)
+    
+    **Security:**
+    - JWT (API Authentication)
+    - Cosmos SDK Auth (Blockchain)
+    - TLS/SSL (Transport)
+    - Keychain (Desktop Secrets)
+  |
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TECHNOLOGY STACK
+# ═══════════════════════════════════════════════════════════════════════════════
+
+tech_stack: "🛠️ Technology Stack" {
+  style.fill: "#1a1a2e"
+  style.stroke: "#ffffff"
+  style.border-radius: 10
+  
+  stack: |md
+    **Blockchain:** Cosmos SDK, Go 1.24+, Tendermint
+    **Backend:** FastAPI, Python 3.10+, SQLAlchemy
+    **Frontend:** Next.js 14, React 18, TypeScript
+    **Desktop:** Tauri 2.0, Rust, React
+    **CLI:** Go, Cobra, Viper
+    **AI/ML:** PyTorch, BitNet, DoRA, FAISS
+    **Database:** PostgreSQL, Redis
+    **Storage:** IPFS
+    **Monitoring:** Prometheus, Grafana, Loki
+    **Tracing:** OpenTelemetry, Jaeger
+    **Secrets:** HashiCorp Vault
+    **Container:** Docker, Kubernetes
+  |
+}

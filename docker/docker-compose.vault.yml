@@ -1,0 +1,176 @@
+version: '3.8'
+
+# Docker Compose with HashiCorp Vault for Secrets Management
+# Usage:
+#   1. Start Vault: docker-compose -f docker-compose.vault.yml up -d vault
+#   2. Initialize Vault: bash scripts/init_vault.sh
+#   3. Start all services: docker-compose -f docker-compose.vault.yml up -d
+
+services:
+  # HashiCorp Vault
+  vault:
+    image: hashicorp/vault:latest
+    container_name: r3mes-vault
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_API_ADDR: http://127.0.0.1:8200
+    volumes:
+      - vault_data:/vault/data
+      - ./vault/vault-config.hcl:/vault/config/vault.hcl:ro
+    ports:
+      - "${VAULT_PORT:-8200}:8200"
+    networks:
+      - r3mes-network
+    command: server -config=/vault/config/vault.hcl
+    healthcheck:
+      test: ["CMD", "vault", "status", "-address=http://127.0.0.1:8200"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # PostgreSQL with Vault secrets
+  postgres:
+    image: postgres:16-alpine
+    container_name: r3mes-postgres-vault
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-r3mes}
+      POSTGRES_DB: ${POSTGRES_DB:-r3mes}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - r3mes-network
+    depends_on:
+      vault:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-r3mes}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    # Password is injected via Vault Agent or init container
+    entrypoint: >
+      sh -c "
+        # Wait for Vault to be ready and get password
+        until curl -s http://vault:8200/v1/sys/health | grep -q 'initialized'; do
+          echo 'Waiting for Vault...'
+          sleep 2
+        done
+        
+        # Get password from Vault (requires VAULT_TOKEN)
+        if [ -n \"$$VAULT_TOKEN\" ]; then
+          export POSTGRES_PASSWORD=$$(curl -s -H \"X-Vault-Token: $$VAULT_TOKEN\" \
+            http://vault:8200/v1/secret/data/r3mes/postgres | \
+            jq -r '.data.data.password')
+        else
+          export POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-changeme}
+        fi
+        
+        exec docker-entrypoint.sh postgres
+      "
+
+  # Redis with Vault secrets
+  redis:
+    image: redis:7-alpine
+    container_name: r3mes-redis-vault
+    volumes:
+      - redis_data:/data
+    networks:
+      - r3mes-network
+    depends_on:
+      vault:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    entrypoint: >
+      sh -c "
+        # Wait for Vault
+        until wget -q -O- http://vault:8200/v1/sys/health | grep -q 'initialized'; do
+          echo 'Waiting for Vault...'
+          sleep 2
+        done
+        
+        # Get password from Vault
+        if [ -n \"$$VAULT_TOKEN\" ]; then
+          REDIS_PASS=$$(wget -q -O- --header=\"X-Vault-Token: $$VAULT_TOKEN\" \
+            http://vault:8200/v1/secret/data/r3mes/redis | \
+            grep -o '\"password\":\"[^\"]*\"' | cut -d'\"' -f4)
+        else
+          REDIS_PASS=$${REDIS_PASSWORD:-changeme}
+        fi
+        
+        exec redis-server --appendonly yes --requirepass $$REDIS_PASS
+      "
+
+  # Backend with Vault integration
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: r3mes-backend-vault
+    environment:
+      R3MES_ENV: ${R3MES_ENV:-development}
+      DATABASE_TYPE: postgresql
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-r3mes}
+      POSTGRES_USER: ${POSTGRES_USER:-r3mes}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # Vault configuration
+      VAULT_ADDR: http://vault:8200
+      VAULT_MOUNT_POINT: secret
+      VAULT_PATH_PREFIX: r3mes
+      # Token will be provided via environment or Vault Agent
+      VAULT_TOKEN: ${VAULT_TOKEN:-}
+    networks:
+      - r3mes-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Vault Agent Sidecar (for automatic secret injection)
+  vault-agent:
+    image: hashicorp/vault:latest
+    container_name: r3mes-vault-agent
+    environment:
+      VAULT_ADDR: http://vault:8200
+    volumes:
+      - ./vault/vault-agent-config.hcl:/vault/config/agent.hcl:ro
+      - vault_agent_data:/vault/secrets
+    networks:
+      - r3mes-network
+    depends_on:
+      vault:
+        condition: service_healthy
+    command: agent -config=/vault/config/agent.hcl
+    restart: unless-stopped
+
+volumes:
+  vault_data:
+  vault_agent_data:
+  postgres_data:
+  redis_data:
+
+networks:
+  r3mes-network:
+    driver: bridge

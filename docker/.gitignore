@@ -1,0 +1,35 @@
+# Environment files (keep examples)
+.env.production
+.env.local
+.env.*.local
+!.env*.example
+!.env*.template
+
+# Docker secrets
+secrets/
+*.txt
+!*.example.txt
+!*.template.txt
+
+# SSL certificates
+nginx_certs/
+ssl/
+*.crt
+*.key
+*.pem
+!*.example
+!*.template
+
+# Docker volumes data
+data/
+volumes/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak
+*.old
+
