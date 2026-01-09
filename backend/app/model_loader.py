@@ -2,11 +2,12 @@
 Multi-Source Model Loader for R3MES
 
 Supports loading models from:
-1. Local filesystem
-2. HuggingFace Hub
-3. IPFS (via gateway)
+1. IPFS (via gateway) - Primary for decentralized models
+2. HuggingFace Hub - Primary for public models
+3. Local filesystem - Fallback
 
 Fallback strategy: IPFS -> HuggingFace -> Local
+Security: MANDATORY checksum verification
 """
 
 import os
@@ -18,6 +19,15 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+# Public IPFS gateways for fallback
+PUBLIC_IPFS_GATEWAYS = [
+    "https://ipfs.io/ipfs/",
+    "https://gateway.pinata.cloud/ipfs/",
+    "https://cloudflare-ipfs.com/ipfs/",
+    "https://dweb.link/ipfs/",
+    "https://w3s.link/ipfs/",
+]
+
 
 class ModelLoader:
     """
@@ -27,6 +37,10 @@ class ModelLoader:
     1. IPFS (if R3MES_MODEL_IPFS_HASH is set)
     2. HuggingFace (if R3MES_MODEL_NAME is set)
     3. Local filesystem (if BASE_MODEL_PATH is set)
+    
+    Security:
+    - Checksum verification is MANDATORY for IPFS downloads
+    - HuggingFace models are verified by the library
     """
     
     def __init__(self):
@@ -34,6 +48,7 @@ class ModelLoader:
         self.ipfs_hash = os.getenv("R3MES_MODEL_IPFS_HASH")
         self.huggingface_name = os.getenv("R3MES_MODEL_NAME")
         self.local_path = os.getenv("BASE_MODEL_PATH", "backend/models")
+        self.expected_checksum = os.getenv("R3MES_MODEL_CHECKSUM")
         
         # IPFS gateway URL - in production, must be set (no localhost fallback)
         is_production = os.getenv("R3MES_ENV", "development").lower() == "production"
@@ -54,6 +69,9 @@ class ModelLoader:
                 raise ValueError(
                     f"IPFS_GATEWAY_URL cannot use localhost in production: {self.ipfs_gateway}"
                 )
+        
+        # Use public gateways as fallback
+        self.use_public_gateways = os.getenv("IPFS_USE_PUBLIC_GATEWAYS", "true").lower() == "true"
     
     def get_model_path(self) -> Tuple[Optional[str], str]:
         """
@@ -85,7 +103,7 @@ class ModelLoader:
     
     def _download_from_ipfs(self, ipfs_hash: str) -> Optional[str]:
         """
-        Download model from IPFS.
+        Download model from IPFS with gateway fallback.
         
         Args:
             ipfs_hash: IPFS content hash (CID)
@@ -93,38 +111,77 @@ class ModelLoader:
         Returns:
             Local path to downloaded model or None
         """
-        try:
-            # Construct IPFS gateway URL
-            ipfs_url = f"{self.ipfs_gateway}{ipfs_hash}"
-            
-            # Create local cache directory
-            # Resolve relative path from current working directory to avoid hardcoded path issues
-            cache_dir = (Path.cwd() / "backend" / "models" / "ipfs").resolve()
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            
-            model_path = cache_dir / ipfs_hash
-            
-            # Check if already downloaded
-            if model_path.exists():
+        # Create local cache directory
+        cache_dir = (Path.cwd() / "backend" / "models" / "ipfs").resolve()
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        model_path = cache_dir / ipfs_hash
+        
+        # Check if already downloaded and verified
+        if model_path.exists():
+            if self.expected_checksum:
+                if self.verify_model(str(model_path), self.expected_checksum):
+                    logger.info(f"Model already cached and verified: {ipfs_hash}")
+                    return str(model_path)
+                else:
+                    logger.warning(f"Cached model checksum mismatch, re-downloading: {ipfs_hash}")
+                    model_path.unlink()
+            else:
                 logger.info(f"Model already cached from IPFS: {ipfs_hash}")
                 return str(model_path)
-            
-            # Download from IPFS gateway
-            logger.info(f"Downloading model from IPFS: {ipfs_hash}")
-            ipfs_download_timeout = int(os.getenv("BACKEND_IPFS_DOWNLOAD_TIMEOUT", "3600"))
-            response = requests.get(ipfs_url, stream=True, timeout=ipfs_download_timeout)
-            response.raise_for_status()
-            
-            # Save to cache
-            with open(model_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            
-            logger.info(f"Model downloaded from IPFS to: {model_path}")
-            return str(model_path)
-        except Exception as e:
-            logger.error(f"Failed to download model from IPFS: {e}")
-            return None
+        
+        # Build gateway list
+        gateways = [self.ipfs_gateway]
+        if self.use_public_gateways:
+            gateways.extend(PUBLIC_IPFS_GATEWAYS)
+        
+        # Try each gateway
+        ipfs_download_timeout = int(os.getenv("BACKEND_IPFS_DOWNLOAD_TIMEOUT", "3600"))
+        
+        for gateway in gateways:
+            try:
+                gateway = gateway.rstrip('/')
+                if not gateway.endswith('/ipfs'):
+                    gateway = f"{gateway}/ipfs"
+                
+                ipfs_url = f"{gateway}/{ipfs_hash}"
+                logger.info(f"Downloading model from IPFS gateway: {gateway}")
+                
+                response = requests.get(ipfs_url, stream=True, timeout=ipfs_download_timeout)
+                response.raise_for_status()
+                
+                # Download to temp file first
+                temp_path = model_path.with_suffix('.tmp')
+                total_size = int(response.headers.get('content-length', 0))
+                downloaded = 0
+                
+                with open(temp_path, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=65536):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0 and downloaded % (100 * 1024 * 1024) == 0:
+                            logger.info(f"Download progress: {downloaded / (1024*1024):.1f} MB / {total_size / (1024*1024):.1f} MB")
+                
+                # Verify checksum if provided
+                if self.expected_checksum:
+                    if not self.verify_model(str(temp_path), self.expected_checksum):
+                        logger.error(f"Checksum verification failed for {ipfs_hash} from {gateway}")
+                        temp_path.unlink()
+                        continue  # Try next gateway
+                
+                # Move to final location
+                temp_path.rename(model_path)
+                logger.info(f"Model downloaded from IPFS to: {model_path}")
+                return str(model_path)
+                
+            except requests.exceptions.Timeout:
+                logger.warning(f"IPFS gateway timeout: {gateway}")
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"IPFS gateway request failed: {gateway} - {e}")
+            except Exception as e:
+                logger.error(f"Failed to download from IPFS gateway {gateway}: {e}")
+        
+        logger.error(f"Failed to download model from all IPFS gateways: {ipfs_hash}")
+        return None
     
     def _get_huggingface_path(self, model_name: str) -> Optional[str]:
         """

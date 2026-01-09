@@ -1,152 +1,296 @@
-# R3MES Backend Inference Service
+# R3MES Backend API
 
-FastAPI tabanlı AI inference servisi. Multi-LoRA desteği, kredi tabanlı ekonomi ve akıllı yönlendirme özellikleri içerir.
+Production-ready FastAPI backend with JWT authentication, input sanitization, and blockchain integration.
 
-## Kurulum
+## 🚀 Features
 
-### 1. Bağımlılıkları Yükle
+### Security
+- **JWT Authentication**: RS256 asymmetric signing with token refresh
+- **Input Sanitization**: Multi-layer protection against XSS, SQL injection, NoSQL injection, command injection
+- **Secrets Management**: Support for AWS Secrets Manager, HashiCorp Vault, Azure Key Vault
+- **Rate Limiting**: Configurable rate limits per endpoint
+- **CORS Protection**: Configurable allowed origins
 
+### API Endpoints
+
+#### Public Endpoints
+- `GET /` - Health check
+- `GET /health` - Detailed health status
+- `GET /chain/status` - Blockchain status
+- `POST /auth/login` - User login (JWT token generation)
+- `POST /auth/refresh` - Token refresh
+- `POST /generate` - AI text generation (optional auth)
+
+#### Protected Endpoints (Require JWT)
+- `POST /auth/logout` - User logout
+- `POST /chat` - AI chat with conversation history
+- `GET /user/profile` - User profile
+
+## 📦 Installation
+
+### Prerequisites
+- Python 3.10+
+- Redis (for caching and JWT blacklist)
+- PostgreSQL (optional, for production)
+
+### Setup
+
+1. **Install dependencies**:
 ```bash
-cd backend
 pip install -r requirements.txt
 ```
 
-### 2. Environment Variables (Opsiyonel)
-
-`.env` dosyası oluştur:
-
+2. **Configure environment**:
 ```bash
-BASE_MODEL_PATH=checkpoints/base_model
-DATABASE_PATH=backend/database.db
-CHAIN_JSON_PATH=chain.json
-
-# Semantic Router Configuration
-USE_SEMANTIC_ROUTER=true          # Semantic router kullanılsın mı? (true/false)
-SEMANTIC_ROUTER_THRESHOLD=0.7    # Minimum similarity threshold (0.0-1.0)
-
-# Rate Limiting
-RATE_LIMIT_CHAT=10/minute         # Chat endpoint rate limit
-RATE_LIMIT_GET=30/minute           # GET endpoint rate limit
-
-# CORS Configuration
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173  # Allowed origins (comma-separated)
-CORS_ALLOW_ALL=false              # Allow all origins (development only, set to true)
+cp .env.example .env
+# Edit .env with your configuration
 ```
 
-### 3. Model Dosyalarını Hazırla
-
+3. **Generate RSA keys for JWT** (production):
 ```bash
-mkdir -p checkpoints
-# Base model ve LoRA adaptörlerini checkpoints/ klasörüne kopyala
+# Generate private key
+openssl genrsa -out private_key.pem 2048
+
+# Generate public key
+openssl rsa -in private_key.pem -pubout -out public_key.pem
+
+# Update .env
+JWT_PRIVATE_KEY_PATH=/path/to/private_key.pem
+JWT_PUBLIC_KEY_PATH=/path/to/public_key.pem
 ```
 
-## Kullanım
-
-### Sunucuyu Başlat
-
+4. **Start Redis**:
 ```bash
-# Ana dizinden
-python run_backend.py
-
-# Veya backend klasöründen
-cd backend
-python -m app.main
+redis-server
 ```
 
-### API Endpoint'leri
-
-- `POST /chat` - Chat endpoint (AI inference)
-- `GET /user/info/{wallet_address}` - Kullanıcı bilgileri
-- `GET /network/stats` - Ağ istatistikleri
-- `GET /health` - Health check
-- `GET /docs` - API dokümantasyonu (Swagger UI)
-
-#### API Key Management Endpoints
-
-- `POST /api-keys/create` - Yeni API key oluştur
-- `GET /api-keys/list/{wallet_address}` - API key'leri listele
-- `POST /api-keys/revoke` - API key'i iptal et
-- `DELETE /api-keys/delete` - API key'i sil
-
-### Örnek Kullanım
-
+5. **Run the backend**:
 ```bash
-# Chat endpoint (wallet address ile)
-curl -X POST "http://localhost:8000/chat" \
+# Development
+python main.py
+
+# Production
+uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+## 🔐 Authentication Flow
+
+### 1. Login
+```bash
+curl -X POST http://localhost:8000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"message": "How do I write a Python function?", "wallet_address": "remes1abc..."}'
-
-# Chat endpoint (API key ile)
-curl -X POST "http://localhost:8000/chat" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: r3mes_your_api_key_here" \
-  -d '{"message": "How do I write a Python function?"}'
-
-# API key oluştur
-curl -X POST "http://localhost:8000/api-keys/create" \
-  -H "Content-Type: application/json" \
-  -d '{"wallet_address": "remes1abc...", "name": "My API Key", "expires_days": 30}'
-
-# API key'leri listele
-curl "http://localhost:8000/api-keys/list/remes1abc..."
-
-# User info
-curl "http://localhost:8000/user/info/remes1abc..."
-
-# Network stats
-curl "http://localhost:8000/network/stats"
+  -d '{
+    "wallet_address": "remes1...",
+    "signature": "..."
+  }'
 ```
 
-## Semantic Router
+Response:
+```json
+{
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "token_type": "bearer",
+  "expires_in": 900
+}
+```
 
-Backend servisi, mesajları semantic similarity ile analiz ederek uygun LoRA adaptörünü seçer.
+### 2. Use Access Token
+```bash
+curl -X GET http://localhost:8000/user/profile \
+  -H "Authorization: Bearer eyJ..."
+```
 
-### Özellikler
+### 3. Refresh Token
+```bash
+curl -X POST http://localhost:8000/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refresh_token": "eyJ..."
+  }'
+```
 
-- **Embedding-based Routing**: Sentence transformers kullanarak semantic similarity hesaplar
-- **Threshold Mekanizması**: Similarity skoru belirli bir eşiğin altındaysa `default_adapter` kullanır
-- **Fallback**: Semantic router başarısız olursa keyword-based router'a düşer
-- **Performance**: <30ms inference süresi
+### 4. Logout
+```bash
+curl -X POST http://localhost:8000/auth/logout \
+  -H "Authorization: Bearer eyJ..."
+```
 
-### Test
+## 🛡️ Input Sanitization
+
+All user inputs are automatically sanitized to prevent:
+- XSS (Cross-Site Scripting)
+- SQL Injection
+- NoSQL Injection
+- Command Injection
+- Path Traversal
+
+Example:
+```python
+from backend.app.input_sanitizer import InputSanitizer
+
+# Sanitize string
+safe_input = InputSanitizer.sanitize_string(
+    user_input,
+    max_length=1000,
+    strict=True  # Reject suspicious patterns
+)
+
+# Sanitize dictionary
+safe_data = InputSanitizer.sanitize_dict(request_data)
+```
+
+## 🔑 Secrets Management
+
+### Development (Environment Variables)
+```bash
+SECRETS_PROVIDER=env
+API_SECRET_KEY=your-secret-key
+```
+
+### Production (AWS Secrets Manager)
+```bash
+SECRETS_PROVIDER=aws
+AWS_REGION=us-east-1
+AWS_SECRET_NAME=r3mes/production
+```
+
+### Production (HashiCorp Vault)
+```bash
+SECRETS_PROVIDER=vault
+VAULT_ADDR=https://vault.example.com
+VAULT_TOKEN=your-vault-token
+VAULT_SECRET_PATH=secret/r3mes
+```
+
+## 📊 Monitoring
+
+### Health Check
+```bash
+curl http://localhost:8000/health
+```
+
+Response:
+```json
+{
+  "status": "healthy",
+  "redis": "connected",
+  "timestamp": 1704672000.0
+}
+```
+
+### Logs
+```bash
+# View logs
+tail -f logs/backend.log
+
+# Log levels: DEBUG, INFO, WARNING, ERROR
+LOG_LEVEL=INFO
+```
+
+## 🧪 Testing
 
 ```bash
-# Semantic router'ı test et
-python -m backend.app.test_semantic_router
+# Run tests
+pytest tests/
+
+# Run with coverage
+pytest --cov=backend tests/
 ```
 
-### Yapılandırma
+## 🚀 Deployment
 
-- `USE_SEMANTIC_ROUTER=true`: Semantic router'ı aktif et (varsayılan: **true**)
-- `USE_SEMANTIC_ROUTER=false`: Keyword-based router kullan
-- `SEMANTIC_ROUTER_THRESHOLD=0.7`: Minimum similarity threshold (varsayılan: 0.7)
+### Docker
+```bash
+# Build image
+docker build -t r3mes-backend .
 
-**Not**: Semantic router varsayılan olarak aktiftir (`USE_SEMANTIC_ROUTER=true`). Semantic router embedding model gerektirdiği için `sentence-transformers` kütüphanesine ihtiyaç duyar. Semantic router CPU'da çalışır ve CUDA gerektirmez (sadece bitsandbytes CUDA gerektirir, semantic router için gerekli değil).
+# Run container
+docker run -d \
+  -p 8000:8000 \
+  -e R3MES_ENV=production \
+  -e REDIS_URL=redis://redis:6379/0 \
+  --name r3mes-backend \
+  r3mes-backend
+```
 
-## Troubleshooting
+### Kubernetes
+```bash
+# Apply manifests
+kubectl apply -f k8s/backend/
+```
 
-### Model Yüklenemiyor
+## 📝 Environment Variables
 
-- `BASE_MODEL_PATH` environment variable'ını kontrol et
-- Model dosyalarının `checkpoints/base_model/` klasöründe olduğundan emin ol
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `R3MES_ENV` | Environment (development/production) | `development` |
+| `RPC_URL` | Blockchain RPC endpoint | `http://localhost:26657` |
+| `REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` |
+| `DATABASE_URL` | PostgreSQL connection URL | - |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | Access token expiration | `15` |
+| `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | Refresh token expiration | `30` |
+| `CORS_ORIGINS` | Allowed CORS origins | `*` |
+| `SECRETS_PROVIDER` | Secrets provider (env/aws/vault/azure) | `env` |
 
-### Database Hatası
+## 🔧 Development
 
-- `DATABASE_PATH` klasörünün yazılabilir olduğundan emin ol
-- SQLite3 kurulu olduğundan emin ol (Python ile birlikte gelir)
+### Project Structure
+```
+backend/
+├── app/
+│   ├── __init__.py
+│   ├── jwt_auth.py          # JWT authentication
+│   ├── input_sanitizer.py   # Input sanitization
+│   ├── cache.py             # Redis cache manager
+│   ├── exceptions.py        # Custom exceptions
+│   └── secrets_provider.py  # Secrets management
+├── tests/
+│   ├── test_jwt_auth.py
+│   ├── test_sanitizer.py
+│   └── test_cache.py
+└── README.md
+```
 
-### CUDA/GPU Hatası
+### Adding New Endpoints
 
-- CUDA kurulu olduğundan emin ol
-- `bitsandbytes` CUDA desteği ile kurulmuş olmalı
+1. **Public endpoint**:
+```python
+@app.get("/public/endpoint")
+async def public_endpoint():
+    return {"message": "Public data"}
+```
 
-### Semantic Router Hatası
+2. **Protected endpoint**:
+```python
+@app.get("/protected/endpoint")
+async def protected_endpoint(
+    current_user: str = Depends(get_current_user)
+):
+    return {"user": current_user, "data": "Protected data"}
+```
 
-- `sentence-transformers` paketinin kurulu olduğundan emin ol: `pip install sentence-transformers`
-- İlk çalıştırmada embedding modeli indirilecek (~80MB)
-- Eğer semantic router çalışmazsa otomatik olarak keyword router'a düşer
+3. **Optional auth endpoint**:
+```python
+@app.get("/optional/endpoint")
+async def optional_endpoint(
+    current_user: Optional[str] = Depends(get_current_user_optional)
+):
+    if current_user:
+        return {"user": current_user, "premium": True}
+    return {"premium": False}
+```
 
-## Detaylı Dokümantasyon
+## 📚 API Documentation
 
-`docs/14_backend_inference_service.md` dosyasına bakın.
+Once the server is running, visit:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines.
+
+## 📄 License
+
+See [LICENSE](../LICENSE) for license information.

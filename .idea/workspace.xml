@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="67c622dd-3cb3-4cfc-8dd7-649ebc6dc686" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.github/dependabot.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/dependabot.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/build_engine.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/build_engine.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/cd.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/cd.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/ci.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/ci.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/docker-build.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/docker-build.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/lint.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/lint.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.github/workflows/security-scan.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/security-scan.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/COMPREHENSIVE_DOCUMENTATION.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/FINAL_IMPLEMENTATION_REPORT.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/FIXES_COMPLETED.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/IMPLEMENTATION_SUMMARY.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PRODUCTION_ANALYSIS_DETAILED_2025-12-24.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/PRODUCTION_EKSIKLER_DETAYLI_ANALIZ_2025-12-24.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/PRODUCTION_EKSIKLER_OZET.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/PRODUCTION_EKSIKLER_TAMAMLAMA_RAPORU_2025-12-24.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/PRODUCTION_FIXES_SUMMARY_2025-12-24.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/PRODUCT_LEVEL_ANALIZ.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/PROJECT_AUDIT_REPORT_DETAILED_2025-12-24.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/PROJECT_AUDIT_REPORT_DETAILED_2025-12-24_RERUN.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/PROJECT_READINESS_REPORT.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/PROJECT_REVIEW_REPORT.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/PROJECT_STATUS_REPORT.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/README_INSTALLATION.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/REFACTORING_FAZ4_SCRIPT.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SECURITY_FIXES.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/VERIFICATION_BRIDGE_SETUP.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/aws/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/aws/THIRD_PARTY_LICENSES" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/aws/install" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/awscliv2.zip" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/backend/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Dockerfile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/backend/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/advanced_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/advanced_analytics.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/blockchain_query_client.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/blockchain_query_client.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/blockchain_rpc_client.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/blockchain_rpc_client.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/cache.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/cache.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/config_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/config_manager.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/database.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/database.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/database_async.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/database_async.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/database_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/database_config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/database_models.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/database_models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/database_postgres.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/database_postgres.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/env_validator.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/env_validator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/exceptions.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/exceptions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/faucet.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/faucet.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/health_endpoints.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/health_endpoints.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/indexer.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/indexer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/logging_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/logging_config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/model_loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/model_loader.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/model_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/model_manager.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/network_resilience.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/network_resilience.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/router.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/semantic_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/semantic_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/websocket_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/websocket_manager.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/backend/database.db" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/cuda-keyring_1.1-1_all.deb" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/backend/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/tests/test_cache.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/tests/test_cache.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/tests/test_database.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/tests/test_database.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend_prod.log" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cli/r3mes-cli/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/cli/r3mes-cli/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/commands.rs" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/commands.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/debug.rs" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/debug.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/engine_downloader.rs" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/engine_downloader.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/hardware_check.rs" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/hardware_check.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/installer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/installer.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/keychain.rs" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/keychain.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/log_reader.rs" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/log_reader.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/model_downloader.rs" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/model_downloader.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/process_manager.rs" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/process_manager.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/setup_checker.rs" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/setup_checker.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/status_monitor.rs" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/status_monitor.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/updater.rs" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src-tauri/src/updater.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src/App.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop-launcher-tauri/src/components/SetupWizard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/desktop-launcher-tauri/src/components/SetupWizard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/docker-compose.logging.yml" beforeDir="false" afterPath="$PROJECT_DIR$/docker/docker-compose.logging.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/docker-compose.prod.yml" beforeDir="false" afterPath="$PROJECT_DIR$/docker/docker-compose.prod.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/docker/docker-compose.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/00_project_summary.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/00_project_summary.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/03_security_verification.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/03_security_verification.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/06_governance_system.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/06_governance_system.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/07_implementation_roadmap.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/07_implementation_roadmap.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/08_web_dashboard_command_center.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/08_web_dashboard_command_center.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/09_user_onboarding_guides.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/09_user_onboarding_guides.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/10_desktop_launcher.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/10_desktop_launcher.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/12_production_deployment.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/12_production_deployment.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/13_api_reference.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/13_api_reference.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/14_backend_inference_service.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/14_backend_inference_service.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/16_environment_variables.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/16_environment_variables.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/DOCUMENTATION_STATUS.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/DOCUMENTATION_STATUS.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/ENVIRONMENT_VARIABLES.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/INSTALLATION.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/INSTALLATION.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/MAINNET_LAUNCH_CHECKLIST.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/MAINNET_LAUNCH_CHECKLIST.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/PROJECT_STRUCTURE.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/PROJECT_STRUCTURE.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/adr/0003-semantic-router.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/adr/0003-semantic-router.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/legacy/old_doc/FEATURE_ROADMAP.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/legacy/old_doc/design.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/legacy/old_doc/economic_security.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/legacy/old_doc/gelistirmeyolharitasi.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/legacy/old_doc/refactoring_plan.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/legacy/old_doc/requirements.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/legacy/old_doc/tasks.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/eksik.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/eksikler.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend_prod.log" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/k8s/secrets.yaml.template" beforeDir="false" afterPath="$PROJECT_DIR$/k8s/secrets.yaml.template" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/legacy/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/legacy/r3mes_control_panel.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/.hypothesis/examples/49312a74416b8ca5/f0b847fdeb4fd4b7" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/.hypothesis/examples/a72463ac8e1c592d/603965b174c443b2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/.hypothesis/examples/a72463ac8e1c592d/c1aae0a6f8bc7337" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/.hypothesis/examples/e45d6a079a051ba5/98d6d7392d5c1af0" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/bridge/blockchain_client.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/bridge/blockchain_client.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/bridge/proof_of_work.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/bridge/proof_of_work.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/core/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/core/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/core/deterministic.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/core/deterministic.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/core/multi_gpu_trainer.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/core/multi_gpu_trainer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/core/serialization.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/core/serialization.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/core/trainer.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/core/trainer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/docker/Dockerfile.go" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/docker/Dockerfile.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/docker/Dockerfile.nvidia" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/docker/Dockerfile.nvidia" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/env.production.example" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/env.production.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/pyproject.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/r3mes/miner/chunk_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/r3mes/miner/chunk_processor.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/r3mes/miner/engine.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/r3mes/miner/engine.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/r3mes/miner/gguf_loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/r3mes/miner/gguf_loader.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/r3mes/miner/stats_http_server.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/r3mes/miner/stats_http_server.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/r3mes/miner/stats_server.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/r3mes/miner/stats_server.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/r3mes/miner/task_pool_client.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/r3mes/miner/task_pool_client.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/r3mes/utils/cuda_installer.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/r3mes/utils/cuda_installer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/r3mes/utils/faucet.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/r3mes/utils/faucet.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/r3mes/utils/hardware_check.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/r3mes/utils/hardware_check.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/r3mes/utils/ipfs_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/r3mes/utils/ipfs_manager.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/miner-engine/utils/deserialize_gradient.py" beforeDir="false" afterPath="$PROJECT_DIR$/miner-engine/utils/deserialize_gradient.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/monitoring/prometheus/alerts.prod.yml" beforeDir="false" afterPath="$PROJECT_DIR$/monitoring/prometheus/alerts.prod.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/monitoring/prometheus/alerts.yml" beforeDir="false" afterPath="$PROJECT_DIR$/monitoring/prometheus/alerts.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/monitoring/prometheus/prometheus.prod.yml" beforeDir="false" afterPath="$PROJECT_DIR$/monitoring/prometheus/prometheus.prod.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/monitoring/prometheus/prometheus.yml" beforeDir="false" afterPath="$PROJECT_DIR$/monitoring/prometheus/prometheus.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/remes/Makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/app/app.go" beforeDir="false" afterPath="$PROJECT_DIR$/remes/app/app.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/app/app_config.go" beforeDir="false" afterPath="$PROJECT_DIR$/remes/app/app_config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/app/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/remes/app/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/app/ibc.go" beforeDir="false" afterPath="$PROJECT_DIR$/remes/app/ibc.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/app/sim_bench_test.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/app/sim_test.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/buf.lock" beforeDir="false" afterPath="$PROJECT_DIR$/remes/buf.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/buf.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/remes/buf.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/cmd/remesd/cmd/commands.go" beforeDir="false" afterPath="$PROJECT_DIR$/remes/cmd/remesd/cmd/commands.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/cmd/remesd/cmd/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/remes/cmd/remesd/cmd/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/cmd/remesd/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/remes/cmd/remesd/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/docs/static/openapi.json" beforeDir="false" afterPath="$PROJECT_DIR$/remes/docs/static/openapi.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/remes/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/remes/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/remes/go.sum" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/finalize_genesiss.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/import_grafana_dashboards.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/import_grafana_dashboards.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/setup_monitoring.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/setup_monitoring.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sdk/javascript/src/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/sdk/javascript/src/index.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sdk/python/r3mes/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/sdk/python/r3mes/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sdk/python/r3mes/client.py" beforeDir="false" afterPath="$PROJECT_DIR$/sdk/python/r3mes/client.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sdk/python/r3mes/wallet.py" beforeDir="false" afterPath="$PROJECT_DIR$/sdk/python/r3mes/wallet.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sdk/python/setup.py" beforeDir="false" afterPath="$PROJECT_DIR$/sdk/python/setup.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/testsprite_tests/TESTSPRITE_URL.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/Dockerfile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/(dashboard)/app/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/(dashboard)/app/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/(dashboard)/app/page.tsx.bak" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/(marketing)/community/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/(marketing)/community/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/(marketing)/developers/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/(marketing)/developers/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/(marketing)/docs/[[...slug]]/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/(marketing)/docs/[[...slug]]/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/(marketing)/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/(marketing)/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/(marketing)/protocol/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/(marketing)/protocol/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/api/docs/[file]/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/api/docs/[file]/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/chat/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/chat/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/globals.css" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/globals.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/help/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/help/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/layout.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/layout.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/mine/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/mine/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/network/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/network/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/settings/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/settings/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/app/wallet/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/app/wallet/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/ChatInterface.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/ChatInterface.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/ErrorBoundary.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/ErrorBoundary.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/Footer.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/Footer.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/GovernancePanel.css" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/GovernancePanel.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/GovernancePanel.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/GovernancePanel.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/MinersTable.css" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/MinersTable.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/MinersTable.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/MinersTable.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/Navbar.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/Navbar.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/NetworkExplorer.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/NetworkExplorer.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/StakingDashboard.css" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/StakingDashboard.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/StakingDashboard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/StakingDashboard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/StatCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/StatCard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/Ticker.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/Ticker.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/ValidatorList.css" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/ValidatorList.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/ValidatorList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/ValidatorList.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/WalletButton.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/WalletButton.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/docs/DocsContent.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/docs/DocsContent.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/docs/DocsSidebar.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/docs/DocsSidebar.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/marketing/BlockchainVisualization.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/marketing/BlockchainVisualization.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/marketing/Globe3D.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/marketing/Globe3D.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/marketing/HeroScene.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/marketing/HeroScene.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/components/marketing/NeuralNetworkOverlay.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/components/marketing/NeuralNetworkOverlay.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/contexts/ThemeContext.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/contexts/ThemeContext.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/contexts/WalletContext.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/contexts/WalletContext.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/hooks/useMinerData.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/hooks/useMinerData.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/hooks/useNetworkStats.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/hooks/useNetworkStats.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/hooks/useWebSocket.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/hooks/useWebSocket.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/jest.config.js" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/jest.config.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/jest.setup.js" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/jest.setup.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/lib/api.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/lib/api.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/lib/cosmos-kit.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/lib/cosmos-kit.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/lib/docsIndex.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/lib/docsIndex.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/lib/keplr.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/lib/keplr.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/lib/logger.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/lib/logger.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/lib/toast.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/lib/toast.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/middleware.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/middleware.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/next.config.js" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/next.config.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/tailwind.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/tailwind.config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/tests/unit/logger.test.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/tests/unit/logger.test.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web-dashboard/utils/errorMessages.ts" beforeDir="false" afterPath="$PROJECT_DIR$/web-dashboard/utils/errorMessages.ts" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="ROOT_SYNC" value="SYNC" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 7
+}]]></component>
+  <component name="ProjectId" id="37hHLoUUysRgNMic4Il8kzl8MkE" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "git-widget-placeholder": "main",
+    "ignore.virus.scanning.warn.message": "true",
+    "last_opened_file_path": "C:/Users/rabdi/OneDrive/Masaüstü/Yeni klasör (3)/R3MES",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-30f59d01ecdd-26cb7f24e5b0-intellij.indexing.shared.core-IU-253.29346.138" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="67c622dd-3cb3-4cfc-8dd7-649ebc6dc686" name="Changes" comment="" />
+      <created>1767348332151</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1767348332151</updated>
+      <workItem from="1767348346048" duration="79000" />
+    </task>
+    <servers />
+  </component>
+</project>

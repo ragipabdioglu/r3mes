@@ -123,6 +123,11 @@ from .exceptions import (
     InvalidWalletAddressError,
 )
 
+# Import JWT authentication and input sanitization
+from .jwt_auth import get_jwt_manager, get_current_user, get_current_user_optional
+from .input_sanitizer import InputSanitizer, SanitizationMiddleware
+from .secrets_provider import get_secrets_manager
+
 # Initialize Sentry first (before logging)
 init_sentry()
 
@@ -147,6 +152,12 @@ serving_node_registry = ServingNodeRegistry(database)
 # Initialize authentication with database
 from .auth import init_auth
 init_auth(database)
+
+# Initialize JWT manager
+jwt_manager = get_jwt_manager()
+
+# Initialize secrets manager
+secrets_manager = get_secrets_manager()
 
 # Initialize services
 from .services import UserService, APIKeyService, ChatService
@@ -203,11 +214,35 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as e:
             logger.warning(f"Error stopping error rate monitor: {e}")
     
+    async def shutdown_adapter_sync():
+        # Stop adapter sync service if it was initialized
+        try:
+            from .adapter_sync_service import get_adapter_sync_service
+            adapter_sync_service = get_adapter_sync_service()
+            if adapter_sync_service:
+                await adapter_sync_service.stop_periodic_sync()
+                logger.info("✅ Adapter sync service stopped")
+        except Exception as e:
+            logger.warning(f"Error stopping adapter sync service: {e}")
+    
+    async def shutdown_event_listener():
+        # Stop event listener if it was initialized
+        try:
+            from .blockchain_event_listener import get_event_listener
+            event_listener = get_event_listener()
+            if event_listener:
+                await event_listener.stop()
+                logger.info("✅ Blockchain event listener stopped")
+        except Exception as e:
+            logger.warning(f"Error stopping event listener: {e}")
+    
     graceful_shutdown.register_shutdown_handler(shutdown_database)
     graceful_shutdown.register_shutdown_handler(shutdown_cache)
     graceful_shutdown.register_shutdown_handler(shutdown_inference)
     graceful_shutdown.register_shutdown_handler(shutdown_websockets)
     graceful_shutdown.register_shutdown_handler(shutdown_error_rate_monitor)
+    graceful_shutdown.register_shutdown_handler(shutdown_adapter_sync)
+    graceful_shutdown.register_shutdown_handler(shutdown_event_listener)
     
     # Store graceful shutdown in app state
     app.state.graceful_shutdown = graceful_shutdown
@@ -315,6 +350,42 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 message=f"Error loading adapters during startup: {str(e)}",
                 priority=NotificationPriority.CRITICAL
             )
+        
+        # 5.1 Start Blockchain Adapter Sync Service (KRİTİK EKSİKLİK #2 ÇÖZÜMÜ)
+        logger.info("Starting blockchain adapter sync service...")
+        try:
+            from .adapter_sync_service import init_adapter_sync_service
+            
+            # Initialize with model manager for hot-reload capability
+            adapter_sync_service = await init_adapter_sync_service(
+                model_manager=model_manager,
+                start_periodic=True,
+                sync_interval=int(os.getenv("ADAPTER_SYNC_INTERVAL", "300")),  # 5 minutes default
+            )
+            
+            # Store in app state for access from endpoints
+            app.state.adapter_sync_service = adapter_sync_service
+            
+            logger.info("✅ Blockchain adapter sync service started")
+            
+            # 5.2 Start Blockchain Event Listener (EVENT-DRIVEN ARCHITECTURE)
+            logger.info("Starting blockchain event listener...")
+            try:
+                from .blockchain_event_listener import init_event_listener_with_callbacks
+                
+                # Initialize event listener with adapter sync service for hot-reload
+                event_listener = await init_event_listener_with_callbacks(
+                    adapter_sync_service=adapter_sync_service
+                )
+                
+                # Store in app state
+                app.state.event_listener = event_listener
+                
+                logger.info("✅ Blockchain event listener started (event-driven sync enabled)")
+            except Exception as e:
+                logger.warning(f"Failed to start event listener: {e} (continuing with polling-only sync)")
+        except Exception as e:
+            logger.warning(f"Failed to start adapter sync service: {e} (continuing without blockchain sync)")
     else:
         logger.info(f"Skipping adapter loading (mode: {inference_mode.value})")
     
@@ -648,15 +719,23 @@ class ChatRequest(BaseModel):
     @field_validator("message")
     @classmethod
     def validate_message(cls, v: str) -> str:
-        """Validate and sanitize message input."""
+        """Validate and sanitize message input with advanced protection."""
         if not v or not v.strip():
             raise InvalidInputError("Message cannot be empty")
-        # Remove null bytes and control characters (except newlines and tabs)
-        v = v.replace('\x00', '')
-        # Limit message length to prevent DoS
-        if len(v) > 10000:
-            raise InvalidInputError("Message too long (max 10000 characters)")
-        return v.strip()
+        
+        # Use InputSanitizer for comprehensive protection
+        try:
+            v = InputSanitizer.sanitize_string(
+                v,
+                max_length=10000,
+                allow_html=False,
+                strict=True
+            )
+        except InvalidInputError as e:
+            # Re-raise with more context
+            raise InvalidInputError(f"Message validation failed: {str(e)}")
+        
+        return v
     
     @field_validator("wallet_address")
     @classmethod

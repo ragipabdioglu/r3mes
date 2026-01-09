@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: r3mes
-  labels:
-    name: r3mes
-    environment: production
-
